@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { searchOneWay } from '@/lib/amadeus'
+import { searchOneWay } from '@/lib/serpapi'
 import { rankAndFilter } from '@/lib/flightRanker'
 import { FlightSearchRequest, FlightSearchResponse } from '@/types/flights'
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response)
   } catch (err) {
-    console.error('Amadeus search error:', err)
+    console.error('Flight search error:', err)
     return NextResponse.json({ error: 'Flight search failed' }, { status: 502 })
   }
 }

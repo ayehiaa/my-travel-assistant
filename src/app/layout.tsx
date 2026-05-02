@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { getAuthUser } from '@/lib/auth'
 import { UserProvider } from '@/context/UserContext'
+import { ToastProvider } from '@/context/ToastContext'
 import Nav from '@/components/Nav'
 
 const geistSans = Geist({
@@ -32,8 +33,10 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-gray-50">
         {user ? (
           <UserProvider user={user}>
-            <Nav />
-            <main className="flex-1">{children}</main>
+            <ToastProvider>
+              <Nav />
+              <main className="flex-1">{children}</main>
+            </ToastProvider>
           </UserProvider>
         ) : (
           <main className="flex-1">{children}</main>
