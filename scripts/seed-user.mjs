@@ -12,9 +12,14 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-const EMAIL = process.env.SEED_EMAIL ?? 'owner@example.com'
-const PASSWORD = process.env.SEED_PASSWORD ?? 'ChangeMe2026!'
+const EMAIL = process.env.SEED_EMAIL
+const PASSWORD = process.env.SEED_PASSWORD
 const DISPLAY_NAME = process.env.SEED_DISPLAY_NAME ?? 'Owner'
+
+if (!EMAIL || !PASSWORD) {
+  console.error('Missing required env vars: SEED_EMAIL and SEED_PASSWORD must be set')
+  process.exit(1)
+}
 
 const { data: authData, error: authError } = await admin.auth.admin.createUser({
   email: EMAIL,
@@ -56,4 +61,4 @@ const { error: roleError } = await admin
 if (roleError) { console.error('Role error:', roleError.message); process.exit(1) }
 
 console.log('✓ Role set: owner')
-console.log(`\nLogin: ${EMAIL} / ${PASSWORD}`)
+console.log(`\nLogin: ${EMAIL}`)

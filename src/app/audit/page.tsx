@@ -18,6 +18,7 @@ export default async function AuditPage({
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+  if (user.role !== 'owner') redirect('/')
 
   const params = await searchParams
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
