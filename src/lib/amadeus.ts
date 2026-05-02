@@ -1,11 +1,17 @@
 import Amadeus from 'amadeus'
 import { FlightOffer } from '@/types/flights'
 
-// Singleton — SDK handles OAuth token caching internally
-const amadeus = new Amadeus({
-  clientId: process.env.AMADEUS_CLIENT_ID!,
-  clientSecret: process.env.AMADEUS_CLIENT_SECRET!,
-})
+// Lazily instantiated singleton so the build doesn't fail when env vars are absent
+let _amadeus: Amadeus | null = null
+function getClient(): Amadeus {
+  if (!_amadeus) {
+    _amadeus = new Amadeus({
+      clientId: process.env.AMADEUS_CLIENT_ID!,
+      clientSecret: process.env.AMADEUS_CLIENT_SECRET!,
+    })
+  }
+  return _amadeus
+}
 
 // ─── Raw Amadeus types ────────────────────────────────────────────────────────
 
@@ -72,7 +78,7 @@ export async function searchOneWay(params: {
   destination: string
   date: string
 }): Promise<FlightOffer[]> {
-  const response = await amadeus.shopping.flightOffersSearch.get({
+  const response = await getClient().shopping.flightOffersSearch.get({
     originLocationCode: params.origin,
     destinationLocationCode: params.destination,
     departureDate: params.date,
@@ -91,7 +97,7 @@ export async function searchOneWay(params: {
 export async function searchAirports(keyword: string): Promise<
   { iataCode: string; name: string; cityName: string }[]
 > {
-  const response = await amadeus.referenceData.locations.get({
+  const response = await getClient().referenceData.locations.get({
     keyword,
     subType: 'AIRPORT,CITY',
     view: 'LIGHT',

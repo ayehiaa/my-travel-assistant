@@ -1,5 +1,11 @@
 export type TimeSlot = 'morning' | 'evening'
 
+export type Airport = {
+  iataCode: string
+  name: string
+  cityName: string
+}
+
 export type FlightOffer = {
   id: string
   airline: string

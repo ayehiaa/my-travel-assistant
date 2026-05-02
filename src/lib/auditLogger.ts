@@ -1,0 +1,19 @@
+import { createAdminClient } from './supabase/admin'
+import { AuditAction, Trip } from '@/types/database'
+
+export async function logAudit(params: {
+  performedBy: string
+  action: AuditAction
+  tripId: string | null
+  tripSnapshot: Trip
+  changedFields?: Record<string, { before: unknown; after: unknown }>
+}) {
+  const admin = createAdminClient()
+  await admin.from('audit_log').insert({
+    performed_by: params.performedBy,
+    action: params.action,
+    trip_id: params.tripId,
+    trip_snapshot: params.tripSnapshot,
+    changed_fields: params.changedFields ?? null,
+  })
+}
