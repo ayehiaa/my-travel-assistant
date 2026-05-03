@@ -102,7 +102,7 @@ export default function AddPastTripModal({ onClose }: Props) {
                   setDepartureDate(e.target.value)
                   if (returnDate && returnDate <= e.target.value) setReturnDate('')
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -116,7 +116,7 @@ export default function AddPastTripModal({ onClose }: Props) {
                 max={today}
                 disabled={!departureDate}
                 onChange={(e) => setReturnDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
               />
             </div>
           </div>

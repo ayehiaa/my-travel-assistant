@@ -58,7 +58,7 @@ export default function SearchForm({ form, onChange, onSubmit, loading }: Props)
               onChange({ departureDate: d, returnDate: form.returnDate <= d ? '' : form.returnDate })
             }}
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -70,7 +70,7 @@ export default function SearchForm({ form, onChange, onSubmit, loading }: Props)
             value={form.returnDate}
             onChange={e => onChange({ returnDate: e.target.value })}
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
