@@ -68,24 +68,28 @@ export default function TripCard({ trip, canDelete }: Props) {
       </div>
 
       {/* Flights */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-16 text-xs font-medium text-gray-400 uppercase">Out</span>
-            <span className="font-medium text-gray-900">{trip.outbound_airline}</span>
-            <span className="text-gray-400">{trip.outbound_flight_number}</span>
+      {trip.source === 'manual' ? (
+        <p className="text-xs text-gray-400 italic">Manually added</p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-16 text-xs font-medium text-gray-400 uppercase">Out</span>
+              <span className="font-medium text-gray-900">{trip.outbound_airline}</span>
+              <span className="text-gray-400">{trip.outbound_flight_number}</span>
+            </div>
+            <span className="text-gray-600 tabular-nums">{formatTime(trip.outbound_departure_at)}</span>
           </div>
-          <span className="text-gray-600 tabular-nums">{formatTime(trip.outbound_departure_at)}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-16 text-xs font-medium text-gray-400 uppercase">Return</span>
-            <span className="font-medium text-gray-900">{trip.return_airline}</span>
-            <span className="text-gray-400">{trip.return_flight_number}</span>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-16 text-xs font-medium text-gray-400 uppercase">Return</span>
+              <span className="font-medium text-gray-900">{trip.return_airline}</span>
+              <span className="text-gray-400">{trip.return_flight_number}</span>
+            </div>
+            <span className="text-gray-600 tabular-nums">{formatTime(trip.return_departure_at)}</span>
           </div>
-          <span className="text-gray-600 tabular-nums">{formatTime(trip.return_departure_at)}</span>
         </div>
-      </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">

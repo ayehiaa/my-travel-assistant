@@ -1,8 +1,8 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.0  
-**Date**: 2026-05-02  
-**Reference**: PRD v1.2  
+**Version**: 1.1  
+**Date**: 2026-05-04  
+**Reference**: PRD v1.3  
 
 Each story is scoped to fit within a single implementation session (~50K tokens). Stories must be built in order — each one depends on the previous.
 
@@ -274,6 +274,47 @@ src/app/api/trips/[id]/route.ts
 
 ---
 
+## Story 7.5 — Manual Past Trip Entry
+
+**As a** user,  
+**I want** to log a past trip directly from the dashboard without searching for flights,  
+**so that** I can record trips that were booked outside the app or taken before I started using it.
+
+### Acceptance Criteria
+- [ ] The Past Trips section on the dashboard has a **"+ Add past trip"** button visible to all authenticated users
+- [ ] Clicking the button opens a modal with: origin airport (autocomplete), destination airport (autocomplete), departure date (date picker, max = yesterday), return date (date picker, min = departure date + 1, max = today)
+- [ ] The Save button is disabled until all fields are filled and return date > departure date
+- [ ] Clicking outside the modal or the × button closes it without saving
+- [ ] On save, the trip is posted to `POST /api/trips` with `source: "manual"`; flight detail fields are omitted
+- [ ] On success, a toast notification confirms the save and the dashboard refreshes
+- [ ] On failure, a toast error is shown and the modal stays open
+- [ ] The saved trip card displays **"Manually added"** in place of flight info
+- [ ] Days outside UK is calculated automatically from the two dates
+- [ ] The action is recorded in the audit log as `created`
+- [ ] The database allows null flight detail columns via migration `002_add_manual_trips.sql`
+
+### Technical Tasks
+- Add `source VARCHAR(10) NOT NULL DEFAULT 'search' CHECK (source IN ('search', 'manual'))` column to `trips` table
+- Make `outbound_airline`, `outbound_flight_number`, `outbound_arrival_at`, `return_airline`, `return_flight_number`, `return_arrival_at` nullable in `trips` table
+- Write `supabase/migrations/002_add_manual_trips.sql`
+- Create `src/components/dashboard/AddPastTripModal.tsx` — modal component
+- Update `src/app/api/trips/route.ts` — handle `source: "manual"` in POST handler with `ManualTripSchema` validation
+- Update `src/components/dashboard/PastTrips.tsx` — add "+" button and render modal
+- Update `src/components/dashboard/TripCard.tsx` — render "Manually added" when `source === "manual"`
+- Update `src/types/database.ts` — add `source` field and make flight detail fields optional
+
+### Files Created / Modified
+```
+supabase/migrations/002_add_manual_trips.sql
+src/components/dashboard/AddPastTripModal.tsx
+src/app/api/trips/route.ts            (modified)
+src/components/dashboard/PastTrips.tsx  (modified)
+src/components/dashboard/TripCard.tsx   (modified)
+src/types/database.ts                   (modified)
+```
+
+---
+
 ## Story 8 — Audit Log
 
 **As a** user (Owner or Assistant),  
@@ -386,11 +427,12 @@ next.config.ts
 ```
 Story 1 (Foundation)
     └── Story 2 (Auth)
-            ├── Story 3 (Amadeus API)
+            ├── Story 3 (SerpAPI Flight Search)
             │       ├── Story 4 (Search Form)
             │       │       └── Story 5 (Results UI)
             │       │               └── Story 6 (Trip Summary + Save)
             │       │                       ├── Story 7 (Dashboard)
+            │       │                       │       └── Story 7.5 (Manual Past Trip Entry)
             │       │                       └── Story 8 (Audit Log)
             │       │                               └── Story 9 (Polish)
             │       │                                       └── Story 10 (Deploy)
@@ -398,4 +440,4 @@ Story 1 (Foundation)
 
 ---
 
-## Total Estimated Stories: 10
+## Total Estimated Stories: 11

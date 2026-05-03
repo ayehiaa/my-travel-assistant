@@ -93,6 +93,7 @@ export function useFlightSearch() {
     setSaveError('')
 
     const body = {
+      source: 'search' as const,
       departure_airport: form.origin.iataCode,
       destination_airport: form.destination.iataCode,
       outbound_airline: selectedOutbound.airline,

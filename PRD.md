@@ -1,7 +1,7 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.2  
-**Date**: 2026-05-02  
+**Version**: 1.3  
+**Date**: 2026-05-04  
 **Owner**: Ziad Elsayed  
 
 ---
@@ -171,7 +171,28 @@ Trips can be deleted from the dashboard by the **Owner only**.
 
 ---
 
-### 7.6 Audit Log
+### 7.6 Manual Past Trip Entry
+
+Users can log a past trip directly from the dashboard without going through the flight search flow. This is useful for trips that were booked outside the app or taken before the app existed.
+
+A **"+ Add past trip"** button in the Past Trips section opens a modal with the following fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| Origin airport | Autocomplete | IATA code lookup (same component as search form) |
+| Destination airport | Autocomplete | IATA code lookup |
+| Departure date | Date picker | Must be in the past (before today) |
+| Return date | Date picker | Must be after departure date and no later than today |
+
+**Behaviour:**
+- Flight details (airline, flight number, times) are not required — the card displays "Manually added" in place of flight info
+- Days outside UK is calculated automatically from the two dates
+- The trip is saved via `POST /api/trips` with `source: "manual"` and audited the same as search-derived trips
+- The `trips` table schema was updated (migration `002_add_manual_trips.sql`) to make flight detail columns nullable and add a `source` column (`search` | `manual`, default `search`)
+
+---
+
+### 7.7 Audit Log
 
 Every create, update, and delete action on a trip is recorded in an `audit_log` table.
 
@@ -206,14 +227,15 @@ The audit log is append-only. No entries can be deleted.
 | id | uuid | Primary key |
 | departure_airport | varchar(3) | IATA code |
 | destination_airport | varchar(3) | IATA code |
-| outbound_airline | varchar(100) | e.g. "British Airways" |
-| outbound_flight_number | varchar(10) | e.g. BA107 |
+| source | varchar(10) | `search` or `manual`, default `search` |
+| outbound_airline | varchar(100) | Nullable — null for manual trips |
+| outbound_flight_number | varchar(10) | Nullable — null for manual trips |
 | outbound_departure_at | timestamptz | Full datetime |
-| outbound_arrival_at | timestamptz | Full datetime |
-| return_airline | varchar(100) | e.g. "British Airways" |
-| return_flight_number | varchar(10) | e.g. BA108 |
+| outbound_arrival_at | timestamptz | Nullable — null for manual trips |
+| return_airline | varchar(100) | Nullable — null for manual trips |
+| return_flight_number | varchar(10) | Nullable — null for manual trips |
 | return_departure_at | timestamptz | Full datetime |
-| return_arrival_at | timestamptz | Full datetime |
+| return_arrival_at | timestamptz | Nullable — null for manual trips |
 | days_outside_uk | integer | Pre-calculated |
 | created_by | uuid | Foreign key → auth.users |
 | last_modified_by | uuid | Foreign key → auth.users |
@@ -240,9 +262,9 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 
 | Route | Method | Description |
 |---|---|---|
-| `/api/flights/search` | POST | Calls Amadeus, returns top 3 outbound + top 3 return flights (BA prioritised) |
+| `/api/flights/search` | POST | Calls SerpAPI, returns top 3 outbound + top 3 return flights (BA prioritised) |
 | `/api/trips` | GET | Fetch all trips |
-| `/api/trips` | POST | Save a new trip (sets `created_by` from session) |
+| `/api/trips` | POST | Save a new trip (`source: search` or `source: manual`); sets `created_by` from session |
 | `/api/trips/[id]` | DELETE | Delete a trip — Owner only |
 | `/api/audit` | GET | Fetch audit log entries |
 
@@ -253,11 +275,10 @@ All write operations trigger an audit log entry server-side using the Supabase s
 ## 10. Environment Variables
 
 ```
-AMADEUS_CLIENT_ID=
-AMADEUS_CLIENT_SECRET=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+SERPAPI_KEY=
 ```
 
 ---
@@ -291,13 +312,14 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 1. **Project setup** — Supabase project, schema + RLS + audit log, environment variables
 2. **Auth** — login page (email/password + Google OAuth), middleware, role enforcement
-3. **Flight search** — Amadeus integration, `/api/flights/search` route with BA prioritisation, search form UI
+3. **Flight search** — SerpAPI integration, `/api/flights/search` route with BA prioritisation, search form UI
 4. **Results UI** — flight cards with airline branding, BA badge, selection state, top 3 per direction
 5. **Trip summary + save** — summary panel, days calculation, save to Supabase with attribution
 6. **Dashboard** — upcoming/past trips sections, trip cards with attribution, delete (owner only)
-7. **Audit log** — server-side logging on all write operations, `/audit` page
-8. **Polish** — loading states, error handling, responsive layout
-9. **Deployment** — Vercel + environment variables
+7. **Manual past trip entry** — "Add past trip" modal on dashboard, `source` column + nullable flight fields migration
+8. **Audit log** — server-side logging on all write operations, `/audit` page
+9. **Polish** — loading states, error handling, responsive layout
+10. **Deployment** — Vercel + environment variables
 
 ---
 

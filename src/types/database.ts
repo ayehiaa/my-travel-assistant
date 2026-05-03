@@ -11,16 +11,17 @@ export interface UserRoleRecord {
 
 export interface Trip {
   id: string
+  source: 'search' | 'manual'
   departure_airport: string
   destination_airport: string
-  outbound_airline: string
-  outbound_flight_number: string
+  outbound_airline: string | null
+  outbound_flight_number: string | null
   outbound_departure_at: string
-  outbound_arrival_at: string
-  return_airline: string
-  return_flight_number: string
+  outbound_arrival_at: string | null
+  return_airline: string | null
+  return_flight_number: string | null
   return_departure_at: string
-  return_arrival_at: string
+  return_arrival_at: string | null
   days_outside_uk: number
   created_by: string
   last_modified_by: string
