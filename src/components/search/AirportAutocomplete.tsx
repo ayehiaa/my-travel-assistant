@@ -18,27 +18,29 @@ export default function AirportAutocomplete({ label, placeholder, value, onChang
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (value) setQuery(`${value.cityName} (${value.iataCode})`)
-  }, [value])
+  // Derive displayed text from the selected value, falling back to raw query
+  const displayQuery = value ? `${value.cityName} (${value.iataCode})` : query
 
   useEffect(() => {
-    if (timer.current) clearTimeout(timer.current)
-    if (value || query.length < 2) { setResults([]); setOpen(false); return }
+    async function run() {
+      if (timer.current) clearTimeout(timer.current)
+      if (value || query.length < 2) { setResults([]); setOpen(false); return }
 
-    timer.current = setTimeout(async () => {
-      setFetching(true)
-      try {
-        const res = await fetch(`/api/airports?q=${encodeURIComponent(query)}`)
-        const data: Airport[] = await res.json()
-        setResults(data)
-        setOpen(data.length > 0)
-      } catch {
-        setResults([])
-      } finally {
-        setFetching(false)
-      }
-    }, 300)
+      timer.current = setTimeout(async () => {
+        setFetching(true)
+        try {
+          const res = await fetch(`/api/airports?q=${encodeURIComponent(query)}`)
+          const data: Airport[] = await res.json()
+          setResults(data)
+          setOpen(data.length > 0)
+        } catch {
+          setResults([])
+        } finally {
+          setFetching(false)
+        }
+      }, 300)
+    }
+    run()
   }, [query, value])
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function AirportAutocomplete({ label, placeholder, value, onChang
       <div className="relative">
         <input
           type="text"
-          value={query}
+          value={displayQuery}
           onChange={handleChange}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder={placeholder ?? 'City or airport…'}

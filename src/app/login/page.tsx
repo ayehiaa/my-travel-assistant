@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -8,14 +9,17 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() =>
+    searchParams.get('error') === 'auth_callback_failed'
+      ? 'Google sign-in failed. Please try again.'
+      : ''
+  )
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (searchParams.get('error') === 'auth_callback_failed') {
-      setError('Google sign-in failed. Please try again.')
-    }
-  }, [searchParams])
+  const successMessage =
+    searchParams.get('message') === 'password_updated'
+      ? 'Password updated successfully. Sign in with your new password.'
+      : ''
 
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -55,6 +59,12 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+          {successMessage && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              {successMessage}
+            </p>
+          )}
+
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -73,9 +83,17 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"

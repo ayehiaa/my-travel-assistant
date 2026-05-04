@@ -1,6 +1,6 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.3  
+**Version**: 1.4  
 **Date**: 2026-05-04  
 **Owner**: Ziad Elsayed  
 
@@ -66,6 +66,11 @@ Each user has their own **email + password** credentials managed via Supabase Au
 - User roles stored in a `user_roles` table in Supabase, keyed by `user_id`
 - Row-level security (RLS) policies enforce role permissions at the database level
 - Middleware checks role on every protected route and blocks unauthorised actions
+- Both Owner and Assistant can reset their password via a secure email link
+  - `/forgot-password` — user enters their email; Supabase sends a time-limited reset link
+  - `/reset-password` — user sets a new password after clicking the link; minimum 8 characters
+  - Both routes are public (no session required)
+  - Password reset events are not written to the app audit log (covered by Supabase's own auth logs)
 
 ---
 
@@ -291,6 +296,8 @@ SERPAPI_KEY=
 | `/search` | Flight search form + results |
 | `/audit` | Audit log — all user actions |
 | `/login` | Email/password login (+ Google OAuth for owner) |
+| `/forgot-password` | Request a password reset email (public) |
+| `/reset-password` | Set a new password after clicking the reset link (public) |
 
 ---
 

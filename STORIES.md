@@ -391,6 +391,65 @@ src/app/audit/page.tsx       (modified — metadata)
 
 ---
 
+## Story 11 — Password Reset
+
+**As a** user (Owner or Assistant),
+**I want** to reset my password via a secure email link,
+**so that** I can regain access to my account if I forget my password.
+
+### Acceptance Criteria
+- [ ] The `/login` page has a "Forgot password?" link below the password field
+- [ ] Clicking the link navigates to `/forgot-password`
+- [ ] `/forgot-password` shows a single email input and a "Send reset link" button
+- [ ] Submitting the form calls Supabase `resetPasswordForEmail` with `redirectTo` set to `${origin}/reset-password`
+- [ ] A success state is shown regardless of whether the email exists (prevents user enumeration)
+- [ ] The reset email uses the custom template configured in the Supabase dashboard (see Setup Note below)
+- [ ] Clicking the link in the email navigates the user to `/reset-password` with a Supabase `code` param
+- [ ] `/reset-password` exchanges the code for a session, then shows a "New password" field and a "Confirm password" field
+- [ ] The form is disabled and shows a clear error if the reset link is invalid or expired
+- [ ] New password must be at least 8 characters; confirm field must match
+- [ ] Inline validation errors appear before submit (no round-trip needed)
+- [ ] On successful password update, the user is redirected to `/login?message=password_updated`
+- [ ] `/login` shows a green success banner when `?message=password_updated` is present in the URL
+- [ ] Both `/forgot-password` and `/reset-password` are public routes (no auth required)
+
+### Setup Note — Supabase Email Template
+In the Supabase dashboard → Auth → Email Templates → Reset Password, set the template to:
+
+> **Subject:** Reset your Travel Assistant password
+>
+> Hi,
+>
+> We received a request to reset the password for your Travel Assistant account. Click the button below to choose a new password.
+>
+> [Reset my password] → `{{ .ConfirmationURL }}`
+>
+> This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email — your account remains secure.
+>
+> — The Travel Assistant team
+
+This is a manual one-time setup step; it is not automated by code.
+
+### Technical Tasks
+- Update `src/proxy.ts` — add `/forgot-password` and `/reset-password` to the public routes allowlist alongside `/login` and `/auth/callback`
+- Create `src/app/forgot-password/page.tsx` — email input form; calls `supabase.auth.resetPasswordForEmail`
+- Create `src/app/reset-password/page.tsx` — exchanges `code` param for session via `supabase.auth.exchangeCodeForSession`, then shows new password + confirm form; calls `supabase.auth.updateUser({ password })`
+- Update `src/app/login/page.tsx` — add "Forgot password?" link below password field; read `?message=password_updated` query param and render a green success banner
+
+### Files Created / Modified
+```
+src/app/forgot-password/page.tsx       (new)
+src/app/reset-password/page.tsx        (new)
+src/app/login/page.tsx                 (modified — forgot link + success banner)
+src/proxy.ts                           (modified — public route allowlist)
+```
+
+### Dependencies
+- Story 2 (Authentication) — requires Supabase Auth to be configured
+- No dependency on Story 10 (Vercel deploy) — can be built and tested locally
+
+---
+
 ## Story 10 — Vercel Deployment & Environment Configuration
 
 **As a** developer,  
@@ -436,8 +495,9 @@ Story 1 (Foundation)
             │       │                       └── Story 8 (Audit Log)
             │       │                               └── Story 9 (Polish)
             │       │                                       └── Story 10 (Deploy)
+            └── Story 11 (Password Reset) ← depends on Story 2 only
 ```
 
 ---
 
-## Total Estimated Stories: 11
+## Total Estimated Stories: 12
