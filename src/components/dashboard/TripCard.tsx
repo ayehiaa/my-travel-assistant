@@ -101,7 +101,7 @@ export default function TripCard({ trip, canDelete }: Props) {
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors"
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors p-2 -m-2"
           >
             {deleting ? 'Deleting…' : 'Delete'}
           </button>

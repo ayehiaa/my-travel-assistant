@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getAirportInfo } from '@/lib/airportCountry'
 import Tooltip, { TripSlice } from './Tooltip'
 
@@ -8,7 +8,6 @@ interface Props {
   trips: TripSlice[]
   today: string
 }
-
 
 function pctOf(date: string, windowStart: Date, totalDays: number) {
   const offset = (new Date(date).getTime() - windowStart.getTime()) / 86400000
@@ -37,10 +36,16 @@ function buildMonths(windowStart: Date, windowEnd: Date, totalDays: number) {
   return months
 }
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function TripTimeline({ trips, today }: Props) {
   const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; trip: TripSlice | null }>({
     visible: false, x: 0, y: 0, trip: null,
   })
+  const [sheet, setSheet] = useState<TripSlice | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const todayDate = new Date(today)
   const windowStart = new Date(todayDate)
@@ -59,6 +64,12 @@ export default function TripTimeline({ trips, today }: Props) {
 
   const countries = new Set(trips.map(t => getAirportInfo(t.destination_airport).country))
   const totalDaysAbroad = trips.reduce((acc, t) => acc + t.days_outside_uk, 0)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollLeft = el.scrollWidth / 2 - el.clientWidth / 2
+  }, [])
 
   if (trips.length === 0) {
     return (
@@ -86,7 +97,7 @@ export default function TripTimeline({ trips, today }: Props) {
       </div>
 
       {/* Chart */}
-      <div className="bg-[#1e2130] border border-[#2d3348] rounded-2xl p-6 overflow-x-auto">
+      <div ref={scrollRef} className="bg-[#1e2130] border border-[#2d3348] rounded-2xl p-6 overflow-x-auto">
         <div style={{ minWidth: 720 }}>
 
           {/* Month header */}
@@ -113,7 +124,7 @@ export default function TripTimeline({ trips, today }: Props) {
                   style={{ left: `${m.leftPct}%` }}
                 />
               ))}
-              {/* Today line — lives inside the bar area so left% is correct */}
+              {/* Today line */}
               <div
                 className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-10"
                 style={{ left: `${todayPct}%` }}
@@ -124,8 +135,8 @@ export default function TripTimeline({ trips, today }: Props) {
               </div>
             </div>
 
-            {/* Trip rows */}
-            {trips.map((trip, i) => {
+            {/* Trip rows — full row is the tap target */}
+            {trips.map((trip) => {
               const isPast = new Date(trip.return_departure_at).getTime() < todayMs
               const leftPct  = pctOf(trip.outbound_departure_at, windowStart, totalDays)
               const rightPct = pctOf(trip.return_departure_at,   windowStart, totalDays)
@@ -133,7 +144,11 @@ export default function TripTimeline({ trips, today }: Props) {
               const { flag } = getAirportInfo(trip.destination_airport)
 
               return (
-                <div key={trip.id} className="flex items-center h-11 mb-2">
+                <div
+                  key={trip.id}
+                  className="flex items-center h-11 mb-2 cursor-pointer"
+                  onClick={() => setSheet(trip)}
+                >
                   {/* Row label */}
                   <div
                     className="shrink-0 text-right pr-4 text-xs font-semibold text-slate-500 tracking-wide"
@@ -145,7 +160,7 @@ export default function TripTimeline({ trips, today }: Props) {
                   {/* Bar container */}
                   <div className="relative flex-1 h-11">
                     <div
-                      className="absolute top-[6px] h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all hover:scale-y-105"
+                      className="absolute top-[6px] h-8 rounded-lg flex items-center justify-center transition-all hover:scale-y-105"
                       style={{
                         left: `${leftPct}%`,
                         width: `${widthPct}%`,
@@ -184,7 +199,49 @@ export default function TripTimeline({ trips, today }: Props) {
         </div>
       </div>
 
+      {/* Desktop hover tooltip */}
       <Tooltip {...tooltip} />
+
+      {/* Mobile bottom sheet */}
+      {sheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          onClick={() => setSheet(null)}
+        >
+          <div
+            className="w-full bg-[#1e2130] border-t border-[#2d3348] rounded-t-2xl p-6 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-3xl mb-1">{getAirportInfo(sheet.destination_airport).flag}</div>
+                <div className="text-lg font-semibold text-slate-100">
+                  {getAirportInfo(sheet.destination_airport).country}
+                </div>
+              </div>
+              <button
+                onClick={() => setSheet(null)}
+                className="text-slate-400 hover:text-slate-200 p-2 -m-2 text-xl"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-sm text-slate-500">
+              Route: <span className="text-slate-300">{sheet.departure_airport} → {sheet.destination_airport}</span>
+            </div>
+            <div className="text-sm text-slate-500">
+              Depart: <span className="text-slate-300">{fmtDate(sheet.outbound_departure_at)}</span>
+            </div>
+            <div className="text-sm text-slate-500">
+              Return: <span className="text-slate-300">{fmtDate(sheet.return_departure_at)}</span>
+            </div>
+            <div className="text-sm text-slate-500">
+              Duration: <span className="text-slate-300">{sheet.days_outside_uk} day{sheet.days_outside_uk !== 1 ? 's' : ''} outside UK</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
