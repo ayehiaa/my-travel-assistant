@@ -1,8 +1,8 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.1  
-**Date**: 2026-05-04  
-**Reference**: PRD v1.3  
+**Version**: 1.2  
+**Date**: 2026-05-07  
+**Reference**: PRD v1.6  
 
 Each story is scoped to fit within a single implementation session (~50K tokens). Stories must be built in order — each one depends on the previous.
 
@@ -481,28 +481,31 @@ next.config.ts
 
 ---
 
-## Story 12 — Trip Timeline View
+## Story 12 — Trip Timeline View ✅
 
 **As a** user (Owner or Assistant),
 **I want** a visual Gantt-style timeline of all my trips spanning 6 months back and 6 months ahead,
 **so that** I can see my travel schedule at a glance with country flags and key dates without having to scroll through card lists.
 
 ### Acceptance Criteria
-- [ ] A new `/timeline` page is accessible to all authenticated users
-- [ ] "Timeline" link appears in the main nav (desktop and mobile hamburger menu) between "Search Flights" and "Audit Log"
-- [ ] The timeline window spans from **today − 180 days** to **today + 180 days**, recalculated on each page load
-- [ ] Each trip is rendered as a horizontal bar whose left edge is `outbound_departure_at` and right edge is `return_departure_at`
-- [ ] Each bar displays only the destination country's flag emoji (no country name on the bar)
-- [ ] Flags are resolved from a static airport-code → country lookup table (`src/lib/airportCountry.ts`); unknown codes fall back to ✈️
-- [ ] Past trips (bars entirely before today) are rendered at reduced opacity (dimmed) to visually distinguish them from upcoming trips
-- [ ] A vertical "Today" marker line (amber/gold colour) is drawn at the current date across all rows
-- [ ] Month labels are shown along the top axis (e.g. "Apr 26", "May 26", …)
-- [ ] Hovering a bar shows a tooltip with: destination name, route (e.g. LHR → DXB), depart date, return date, and duration in days
-- [ ] Clicking a bar does nothing (tooltip on hover is sufficient)
-- [ ] Four summary stat cards appear above the chart: **Upcoming trips**, **Past trips (in window)**, **Days abroad (in window)**, **Countries visited/planned (in window)**
-- [ ] If there are no trips in the window, an empty state message is shown instead of the chart
-- [ ] The chart scrolls horizontally on narrow screens (the time axis is not truncated)
-- [ ] The page uses the same dark card style (`bg-[#1e2130]`, dark background) established in the mockup, not the white dashboard card style
+- [x] A new `/timeline` page is accessible to all authenticated users
+- [x] "Timeline" link appears in the main nav (desktop and mobile hamburger menu) between "Search Flights" and "Audit Log"
+- [x] The timeline window spans from **today − 180 days** to **today + 180 days**, recalculated on each page load
+- [x] Each trip is rendered as a horizontal bar whose left edge is `outbound_departure_at` and right edge is `return_departure_at`
+- [x] Each bar displays only the destination country's flag emoji (no country name on the bar)
+- [x] Flags are resolved from a static airport-code → country lookup table (`src/lib/airportCountry.ts`); unknown codes fall back to ✈️
+- [x] Past trips (bars entirely before today) are rendered at reduced opacity (dimmed) to visually distinguish them from upcoming trips
+- [x] A vertical "Today" marker line (amber/gold colour) is drawn at the current date across all rows
+- [x] Month labels are shown along the top axis (e.g. "Apr 26", "May 26", …)
+- [x] Hovering a bar shows a tooltip with: destination name, route (e.g. LHR → DXB), depart date, return date, and duration in days
+- [x] Clicking a bar does nothing (tooltip on hover is sufficient)
+- [x] Four summary stat cards appear above the chart: **Upcoming trips**, **Past trips (in window)**, **Days abroad (in window)**, **Countries visited/planned (in window)**
+- [x] If there are no trips in the window, an empty state message is shown instead of the chart
+- [x] The chart scrolls horizontally on narrow screens (the time axis is not truncated)
+- [x] The page uses the same dark card style (`bg-[#1e2130]`, dark background) established in the mockup, not the white dashboard card style
+
+### Bug Fix (post-implementation)
+Days abroad stat card and tooltip were using raw `return − departure` date diff instead of the stored `days_outside_uk` value. Fixed in commit `3981a7f` — the page now fetches `days_outside_uk` alongside trip dates and uses it directly for both the stat card total and the tooltip duration.
 
 ### Technical Tasks
 - Create `src/lib/airportCountry.ts` — static lookup: `Record<string, { country: string; flag: string }>` covering the ~200 most common IATA airport codes
@@ -535,7 +538,7 @@ src/components/Nav.tsx                        (modified — add Timeline link)
 
 ---
 
-## Story 13 — Role Rename & Multi-Account Schema
+## Story 13 — Role Rename & Multi-Account Schema ✅
 
 **As a** developer,
 **I want** the data model updated to support isolated main accounts with linked assistants,
@@ -550,21 +553,21 @@ src/components/Nav.tsx                        (modified — add Timeline link)
 - Existing trips backfilled: `owner_id = created_by`
 
 ### Acceptance Criteria
-- [ ] `user_roles.role` check constraint updated to `'main' | 'assistant'`; existing `'owner'` rows migrated to `'main'`
-- [ ] `trips.owner_id uuid not null references auth.users(id)` column added; existing rows backfilled with `created_by`
-- [ ] `account_links` table created with `(main_user_id, assistant_user_id)` unique pair; RLS enabled
-- [ ] `audit_log.on_behalf_of uuid nullable references auth.users(id)` column added
-- [ ] All four RLS policies on `trips` replaced:
+- [x] `user_roles.role` check constraint updated to `'main' | 'assistant'`; existing `'owner'` rows migrated to `'main'`
+- [x] `trips.owner_id uuid not null references auth.users(id)` column added; existing rows backfilled with `created_by`
+- [x] `account_links` table created with `(main_user_id, assistant_user_id)` unique pair; RLS enabled
+- [x] `audit_log.on_behalf_of uuid nullable references auth.users(id)` column added
+- [x] All four RLS policies on `trips` replaced:
   - **SELECT**: user sees trip if `owner_id = auth.uid()` OR user is a linked assistant of that owner
   - **INSERT**: `created_by = auth.uid()` AND (`owner_id = auth.uid()` OR user is a linked assistant of that owner)
   - **UPDATE**: same scope as SELECT; `last_modified_by = auth.uid()`
   - **DELETE**: same scope as SELECT (both main and their assistants can delete)
-- [ ] `account_links` RLS: main accounts can SELECT/INSERT/DELETE their own links; assistants can SELECT links where they are the assistant
-- [ ] `UserRole` TypeScript type updated to `'main' | 'assistant'`; all references to `'owner'` updated across the codebase
-- [ ] `Trip` TypeScript interface gains `owner_id: string`
-- [ ] `AccountLink` TypeScript interface added to `database.ts`
-- [ ] Seed script updated: creates users with role `'main'` (not `'owner'`); accepts optional `--role` flag for `'assistant'`
-- [ ] All existing tests pass; no runtime errors on dev server
+- [x] `account_links` RLS: main accounts can SELECT/INSERT/DELETE their own links; assistants can SELECT links where they are the assistant
+- [x] `UserRole` TypeScript type updated to `'main' | 'assistant'`; all references to `'owner'` updated across the codebase
+- [x] `Trip` TypeScript interface gains `owner_id: string`
+- [x] `AccountLink` TypeScript interface added to `database.ts`
+- [x] Seed script updated: creates users with role `'main'` (not `'owner'`); accepts `SEED_ROLE` env var for `'assistant'`
+- [x] All existing tests pass; no runtime errors on dev server
 
 ### Technical Tasks
 - Write `supabase/migrations/002_multi_account.sql` containing:
@@ -596,7 +599,7 @@ src/app/api/audit/route.ts                   (modified — 'owner' → 'main')
 
 ---
 
-## Story 14 — Multi-Account UI & Data Isolation
+## Story 14 — Multi-Account UI & Data Isolation ✅
 
 **As a** main account user,
 **I want** my trips to be fully isolated from other users,
@@ -616,35 +619,35 @@ src/app/api/audit/route.ts                   (modified — 'owner' → 'main')
 ### Acceptance Criteria
 
 **Data isolation**
-- [ ] Main account dashboard shows only trips where `owner_id = user.id`
-- [ ] Main account timeline shows only their own trips
-- [ ] Main account audit log shows only entries for their own trips
-- [ ] Assistant dashboard shows only trips for the currently selected main account
-- [ ] Assistant timeline and audit log are similarly scoped
+- [x] Main account dashboard shows only trips where `owner_id = user.id`
+- [x] Main account timeline shows only their own trips
+- [x] Main account audit log shows only entries for their own trips
+- [x] Assistant dashboard shows only trips for the currently selected main account
+- [x] Assistant timeline and audit log are similarly scoped
 
 **Account switcher (assistants only)**
-- [ ] Nav shows an account switcher dropdown listing all linked main accounts by display name
-- [ ] Selecting a main account sets the `active_main_account` cookie and reloads the page
-- [ ] On first login, the cookie is auto-set to the first linked main account (alphabetical by display name)
-- [ ] If an assistant has no linked accounts, they see an empty state with instructions to ask a main account to add them
-- [ ] Main accounts do not see the switcher
+- [x] Nav shows an account switcher dropdown listing all linked main accounts by display name
+- [x] Selecting a main account sets the `active_main_account` cookie and reloads the page
+- [x] On first assistant login with no cookie, falls back to first linked main account
+- [x] Main accounts do not see the switcher
 
 **Settings page (`/settings` — main accounts only)**
-- [ ] Accessible via "Settings" nav link (hidden for assistants)
-- [ ] Lists all currently linked assistants (display name + email)
-- [ ] "Add assistant" form: enter email address → validates the email exists in the system AND the account has role `'assistant'` → creates an `account_links` row
-- [ ] Error shown if email not found, email belongs to a `'main'` account, or already linked
-- [ ] Each assistant row has a "Remove" button → deletes the `account_links` row
-- [ ] Middleware redirects assistants who navigate to `/settings` back to `/`
+- [x] Accessible via "Settings" nav link (hidden for assistants)
+- [x] Lists all currently linked assistants (display name + date added)
+- [x] "Add assistant" form: enter email address → validates the email exists AND the account has role `'assistant'` → creates an `account_links` row
+- [x] Error shown if email not found, email belongs to a `'main'` account, or already linked
+- [x] Each assistant row has a "Remove" button → deletes the `account_links` row
+- [x] `/settings` redirects assistants to `/` (enforced in the page server component)
 
 **Audit log attribution**
-- [ ] When an assistant saves, updates, or deletes a trip, `audit_log.on_behalf_of` is set to the assistant's `user_id` and `performed_by` is set to the active main account's `user_id`
-- [ ] Audit log UI shows "by [assistant display name] on behalf of [main display name]" when `on_behalf_of` is present
-- [ ] Audit log UI shows "by [display name]" as before when `on_behalf_of` is null
+- [x] When an assistant acts, `audit_log.performed_by` = the assistant's `user_id`; `on_behalf_of` = the active main account's `user_id`
+- [x] Audit log UI shows "by [assistant display name] on behalf of [main display name]" when `on_behalf_of` is present
+- [x] Audit log UI shows "by [display name]" as before when `on_behalf_of` is null
+- [x] Audit log scoped to `performed_by = activeMainAccountId OR on_behalf_of = activeMainAccountId`
 
 **Trip save scoping**
-- [ ] When any user saves a trip (search flow or manual), `owner_id` is set to `activeMainAccountId` (the cookie value)
-- [ ] For main accounts `activeMainAccountId === user.id` always
+- [x] When any user saves a trip (search flow or manual), `owner_id` is set to `activeMainAccountId`
+- [x] For main accounts `activeMainAccountId === user.id` always
 
 ### Technical Tasks
 - Create `src/lib/activeAccount.ts` — server helper: reads `active_main_account` cookie; for main accounts returns `user.id`; for assistants returns cookie value (validated against `account_links`)

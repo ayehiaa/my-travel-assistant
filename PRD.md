@@ -271,8 +271,8 @@ The audit log is append-only. No entries can be deleted.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | Primary key |
-| performed_by | uuid | Foreign key → auth.users — the main account context |
-| on_behalf_of | uuid | Foreign key → auth.users — the assistant who acted (nullable) |
+| performed_by | uuid | Foreign key → auth.users — the user who performed the action (main or assistant) |
+| on_behalf_of | uuid | Foreign key → auth.users — the main account being acted upon; null when a main account acts directly (nullable) |
 | action | varchar | `created`, `updated`, `deleted` |
 | trip_id | uuid | Foreign key → trips (nullable if deleted) |
 | trip_snapshot | jsonb | Full trip state at time of action |
@@ -294,7 +294,7 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 | `/api/audit` | GET | Fetch audit log entries scoped to active main account's trips |
 | `/api/account-links` | GET | List assistants linked to the current main account |
 | `/api/account-links` | POST | Link an assistant by email to the current main account |
-| `/api/account-links/[id]` | DELETE | Remove an assistant link |
+| `/api/account-links?id=<id>` | DELETE | Remove an assistant link |
 
 All write operations trigger an audit log entry server-side using the Supabase service role key.
 
