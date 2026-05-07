@@ -54,6 +54,7 @@ export interface AuditLogEntry {
 // Joined type used in the audit log UI — includes resolved user info
 export interface AuditLogEntryWithUser extends AuditLogEntry {
   performer: Pick<UserRoleRecord, 'display_name' | 'role'>
+  on_behalf_of_user?: Pick<UserRoleRecord, 'display_name'>
 }
 
 // Joined type used in the dashboard — includes resolved creator/modifier names

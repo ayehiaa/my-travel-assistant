@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import UpcomingTrips from '@/components/dashboard/UpcomingTrips'
 import PastTrips from '@/components/dashboard/PastTrips'
@@ -14,16 +15,17 @@ export default async function DashboardPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
+  const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
   const { data: rawTrips } = await supabase
     .from('trips')
     .select('*')
+    .eq('owner_id', activeMainAccountId)
     .order('outbound_departure_at', { ascending: true })
 
   const trips = rawTrips ?? []
 
-  // Resolve creator / modifier display names
   const userIds = [...new Set([
     ...trips.map(t => t.created_by),
     ...trips.map(t => t.last_modified_by),

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import TripTimeline from '@/components/timeline/TripTimeline'
 
@@ -11,6 +12,7 @@ export default async function TimelinePage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
+  const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
   const windowStart = new Date()
@@ -22,6 +24,7 @@ export default async function TimelinePage() {
   const { data: rawTrips } = await supabase
     .from('trips')
     .select('id, departure_airport, destination_airport, outbound_departure_at, return_departure_at')
+    .eq('owner_id', activeMainAccountId)
     .gte('outbound_departure_at', windowStart.toISOString())
     .lte('outbound_departure_at', windowEnd.toISOString())
     .order('outbound_departure_at', { ascending: true })

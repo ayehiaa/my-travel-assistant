@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 import { Trip } from '@/types/database'
@@ -7,10 +9,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const activeMainAccountId = await getActiveMainAccountId(user)
+  const supabase = await createClient()
   const { id } = await params
 
   const { data: trip, error: fetchError } = await supabase
@@ -37,6 +40,7 @@ export async function DELETE(
     action: 'deleted',
     tripId: null,
     tripSnapshot: trip as Trip,
+    onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
   })
 
   return new NextResponse(null, { status: 204 })

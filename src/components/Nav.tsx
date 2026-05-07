@@ -11,6 +11,7 @@ export default function Nav() {
   const pathname = usePathname()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [switching, setSwitching] = useState(false)
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -18,12 +19,29 @@ export default function Nav() {
     router.push('/login')
   }
 
+  async function handleAccountSwitch(mainAccountId: string) {
+    if (mainAccountId === user.activeMainAccountId) return
+    setSwitching(true)
+    await fetch('/api/active-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mainAccountId }),
+    })
+    router.refresh()
+    setSwitching(false)
+  }
+
   const links = [
     { href: '/', label: 'Dashboard' },
     { href: '/search', label: 'Search Flights' },
     { href: '/timeline', label: 'Timeline' },
     { href: '/audit', label: 'Audit Log' },
+    ...(user.role === 'main' ? [{ href: '/settings', label: 'Settings' }] : []),
   ]
+
+  const activeAccountName = user.role === 'assistant'
+    ? (user.linkedMainAccounts.find(a => a.id === user.activeMainAccountId)?.displayName ?? 'Select account')
+    : user.displayName
 
   return (
     <nav className="bg-white border-b border-gray-200">
@@ -51,9 +69,25 @@ export default function Nav() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="hidden md:block text-sm text-gray-500">
-              {user.displayName}
-            </span>
+            {user.role === 'assistant' && user.linkedMainAccounts.length > 0 ? (
+              <div className="hidden md:flex items-center gap-2">
+                <span className="text-xs text-gray-400">Viewing:</span>
+                <select
+                  value={user.activeMainAccountId}
+                  onChange={e => handleAccountSwitch(e.target.value)}
+                  disabled={switching}
+                  className="text-sm text-gray-700 border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  {user.linkedMainAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.displayName}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <span className="hidden md:block text-sm text-gray-500">
+                {user.displayName}
+              </span>
+            )}
             <button
               onClick={handleSignOut}
               className="hidden md:block text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded border border-gray-200 hover:border-gray-300 transition-colors"
@@ -96,8 +130,28 @@ export default function Nav() {
               {label}
             </Link>
           ))}
+          {user.role === 'assistant' && user.linkedMainAccounts.length > 0 && (
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-xs text-gray-400 px-3 mb-1">Viewing account:</p>
+              {user.linkedMainAccounts.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => { handleAccountSwitch(a.id); setMenuOpen(false) }}
+                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                    a.id === user.activeMainAccountId
+                      ? 'bg-gray-100 text-gray-900 font-medium'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  {a.displayName}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="pt-2 border-t border-gray-100">
-            <p className="text-xs text-gray-400 px-3 mb-1">{user.displayName}</p>
+            <p className="text-xs text-gray-400 px-3 mb-1">
+              {user.role === 'assistant' ? `${user.displayName} (assistant)` : activeAccountName}
+            </p>
             <button
               onClick={handleSignOut}
               className="w-full text-left px-3 py-2 rounded text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50"

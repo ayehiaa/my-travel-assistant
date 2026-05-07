@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 import { daysOutsideUK } from '@/lib/daysCalculator'
@@ -33,9 +35,11 @@ const ManualTripSchema = z.object({
 const TripInsertSchema = z.discriminatedUnion('source', [SearchTripSchema, ManualTripSchema])
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const activeMainAccountId = await getActiveMainAccountId(user)
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('trips')
@@ -44,6 +48,7 @@ export async function GET() {
       creator:user_roles!trips_created_by_fkey(display_name),
       modifier:user_roles!trips_last_modified_by_fkey(display_name)
     `)
+    .eq('owner_id', activeMainAccountId)
     .order('outbound_departure_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -52,9 +57,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const activeMainAccountId = await getActiveMainAccountId(user)
+  const supabase = await createClient()
 
   let raw: unknown
   try {
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
     const outboundAt = `${body.outbound_departure_at}T00:00:00.000Z`
     const returnAt = `${body.return_departure_at}T00:00:00.000Z`
     insertPayload = {
-      owner_id: user.id,
+      owner_id: activeMainAccountId,
       source: 'manual',
       departure_airport: body.departure_airport,
       destination_airport: body.destination_airport,
@@ -96,7 +103,7 @@ export async function POST(request: NextRequest) {
     const outboundMs = new Date(body.outbound_departure_at).getTime()
     const returnMs = new Date(body.return_departure_at).getTime()
     insertPayload = {
-      owner_id: user.id,
+      owner_id: activeMainAccountId,
       ...body,
       days_outside_uk: Math.max(0, Math.round((returnMs - outboundMs) / 86_400_000)),
       created_by: user.id,
@@ -117,6 +124,7 @@ export async function POST(request: NextRequest) {
     action: 'created',
     tripId: trip.id,
     tripSnapshot: trip as Trip,
+    onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json(trip, { status: 201 })

@@ -3,11 +3,18 @@
 import { createContext, useContext, ReactNode } from 'react'
 import { UserRole } from '@/types/database'
 
+export interface LinkedAccount {
+  id: string
+  displayName: string
+}
+
 export interface UserContextValue {
   id: string
   email: string
   role: UserRole
   displayName: string
+  activeMainAccountId: string
+  linkedMainAccounts: LinkedAccount[]
 }
 
 const UserContext = createContext<UserContextValue | null>(null)

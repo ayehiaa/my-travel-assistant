@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import AuditEntry from '@/components/audit/AuditEntry'
 import { AuditLogEntryWithUser, UserRoleRecord } from '@/types/database'
@@ -19,6 +20,8 @@ export default async function AuditPage({
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
+  const activeMainAccountId = await getActiveMainAccountId(user)
+
   const params = await searchParams
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const from = (page - 1) * PAGE_SIZE
@@ -29,22 +32,32 @@ export default async function AuditPage({
   const { data: entries, count } = await supabase
     .from('audit_log')
     .select('*', { count: 'exact' })
+    .or(`performed_by.eq.${activeMainAccountId},on_behalf_of.eq.${activeMainAccountId}`)
     .order('created_at', { ascending: false })
     .range(from, to)
 
+  // Collect all user IDs to resolve display names
   const performerIds = [...new Set((entries ?? []).map(e => e.performed_by))]
+  const onBehalfOfIds = [...new Set(
+    (entries ?? []).map(e => e.on_behalf_of).filter(Boolean) as string[]
+  )]
+  const allUserIds = [...new Set([...performerIds, ...onBehalfOfIds])]
+
   let roleMap = new Map<string, Pick<UserRoleRecord, 'display_name' | 'role'>>()
-  if (performerIds.length > 0) {
+  if (allUserIds.length > 0) {
     const { data: roles } = await supabase
       .from('user_roles')
       .select('user_id, display_name, role')
-      .in('user_id', performerIds)
+      .in('user_id', allUserIds)
     roleMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name, role: r.role }]))
   }
 
   const enriched: AuditLogEntryWithUser[] = (entries ?? []).map(e => ({
     ...e,
     performer: roleMap.get(e.performed_by) ?? { display_name: 'Unknown', role: 'assistant' as const },
+    on_behalf_of_user: e.on_behalf_of
+      ? (roleMap.get(e.on_behalf_of) ? { display_name: roleMap.get(e.on_behalf_of)!.display_name } : { display_name: 'Unknown' })
+      : undefined,
   }))
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)

@@ -32,6 +32,11 @@ export default function AuditEntry({ entry }: { entry: AuditLogEntryWithUser }) 
               {entry.action}
             </span>
             <span className="text-sm font-medium text-gray-900">{entry.performer.display_name}</span>
+            {entry.on_behalf_of_user && (
+              <span className="text-sm text-gray-400">
+                on behalf of <span className="text-gray-600">{entry.on_behalf_of_user.display_name}</span>
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-600">
             Trip to <span className="font-medium">{dest}</span> departing {depDate}
