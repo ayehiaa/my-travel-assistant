@@ -58,10 +58,7 @@ export default function TripTimeline({ trips, today }: Props) {
   const past     = trips.filter(t => new Date(t.return_departure_at).getTime() < todayMs)
 
   const countries = new Set(trips.map(t => getAirportInfo(t.destination_airport).country))
-  const totalDaysAbroad = trips.reduce((acc, t) => {
-    const d = Math.round((new Date(t.return_departure_at).getTime() - new Date(t.outbound_departure_at).getTime()) / 86400000)
-    return acc + Math.max(0, d)
-  }, 0)
+  const totalDaysAbroad = trips.reduce((acc, t) => acc + t.days_outside_uk, 0)
 
   if (trips.length === 0) {
     return (

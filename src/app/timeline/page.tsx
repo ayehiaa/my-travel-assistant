@@ -23,7 +23,7 @@ export default async function TimelinePage() {
 
   const { data: rawTrips } = await supabase
     .from('trips')
-    .select('id, departure_airport, destination_airport, outbound_departure_at, return_departure_at')
+    .select('id, departure_airport, destination_airport, outbound_departure_at, return_departure_at, days_outside_uk')
     .eq('owner_id', activeMainAccountId)
     .gte('outbound_departure_at', windowStart.toISOString())
     .lte('outbound_departure_at', windowEnd.toISOString())

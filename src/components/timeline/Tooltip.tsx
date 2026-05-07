@@ -8,6 +8,7 @@ export interface TripSlice {
   destination_airport: string
   outbound_departure_at: string
   return_departure_at: string
+  days_outside_uk: number
 }
 
 interface TooltipProps {
@@ -21,8 +22,7 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function duration(start: string, end: string) {
-  const days = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)
+function duration(days: number) {
   return `${days} day${days !== 1 ? 's' : ''}`
 }
 
@@ -56,7 +56,7 @@ export default function Tooltip({ visible, x, y, trip }: TooltipProps) {
         Return: <span className="text-slate-300">{fmtDate(trip.return_departure_at)}</span>
       </div>
       <div className="text-slate-500">
-        Duration: <span className="text-slate-300">{duration(trip.outbound_departure_at, trip.return_departure_at)}</span>
+        Duration: <span className="text-slate-300">{duration(trip.days_outside_uk)}</span>
       </div>
     </div>
   )
