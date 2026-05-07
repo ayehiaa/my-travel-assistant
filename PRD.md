@@ -1,7 +1,7 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.4  
-**Date**: 2026-05-04  
+**Version**: 1.5  
+**Date**: 2026-05-07  
 **Owner**: Ziad Elsayed  
 
 ---
@@ -294,6 +294,7 @@ SERPAPI_KEY=
 |---|---|
 | `/` | Dashboard — upcoming & past trips |
 | `/search` | Flight search form + results |
+| `/timeline` | Gantt-style trip timeline — 6 months back to 6 months ahead |
 | `/audit` | Audit log — all user actions |
 | `/login` | Email/password login (+ Google OAuth for owner) |
 | `/forgot-password` | Request a password reset email (public) |
@@ -327,6 +328,8 @@ SERPAPI_KEY=
 8. **Audit log** — server-side logging on all write operations, `/audit` page
 9. **Polish** — loading states, error handling, responsive layout
 10. **Deployment** — Vercel + environment variables
+11. **Password reset** — forgot-password + reset-password pages via Supabase email link
+12. **Trip timeline** — `/timeline` Gantt view, 6 months back to 6 months ahead, flag emoji, today marker
 
 ---
 

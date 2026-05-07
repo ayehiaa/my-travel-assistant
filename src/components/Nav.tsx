@@ -21,6 +21,7 @@ export default function Nav() {
   const links = [
     { href: '/', label: 'Dashboard' },
     { href: '/search', label: 'Search Flights' },
+    { href: '/timeline', label: 'Timeline' },
     { href: '/audit', label: 'Audit Log' },
   ]
 

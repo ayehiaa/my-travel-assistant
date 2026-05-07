@@ -481,6 +481,60 @@ next.config.ts
 
 ---
 
+## Story 12 — Trip Timeline View
+
+**As a** user (Owner or Assistant),
+**I want** a visual Gantt-style timeline of all my trips spanning 6 months back and 6 months ahead,
+**so that** I can see my travel schedule at a glance with country flags and key dates without having to scroll through card lists.
+
+### Acceptance Criteria
+- [ ] A new `/timeline` page is accessible to all authenticated users
+- [ ] "Timeline" link appears in the main nav (desktop and mobile hamburger menu) between "Search Flights" and "Audit Log"
+- [ ] The timeline window spans from **today − 180 days** to **today + 180 days**, recalculated on each page load
+- [ ] Each trip is rendered as a horizontal bar whose left edge is `outbound_departure_at` and right edge is `return_departure_at`
+- [ ] Each bar displays only the destination country's flag emoji (no country name on the bar)
+- [ ] Flags are resolved from a static airport-code → country lookup table (`src/lib/airportCountry.ts`); unknown codes fall back to ✈️
+- [ ] Past trips (bars entirely before today) are rendered at reduced opacity (dimmed) to visually distinguish them from upcoming trips
+- [ ] A vertical "Today" marker line (amber/gold colour) is drawn at the current date across all rows
+- [ ] Month labels are shown along the top axis (e.g. "Apr 26", "May 26", …)
+- [ ] Hovering a bar shows a tooltip with: destination name, route (e.g. LHR → DXB), depart date, return date, and duration in days
+- [ ] Clicking a bar does nothing (tooltip on hover is sufficient)
+- [ ] Four summary stat cards appear above the chart: **Upcoming trips**, **Past trips (in window)**, **Days abroad (in window)**, **Countries visited/planned (in window)**
+- [ ] If there are no trips in the window, an empty state message is shown instead of the chart
+- [ ] The chart scrolls horizontally on narrow screens (the time axis is not truncated)
+- [ ] The page uses the same dark card style (`bg-[#1e2130]`, dark background) established in the mockup, not the white dashboard card style
+
+### Technical Tasks
+- Create `src/lib/airportCountry.ts` — static lookup: `Record<string, { country: string; flag: string }>` covering the ~200 most common IATA airport codes
+- Create `src/app/timeline/page.tsx` — server component; fetches all trips for the current user via Supabase, computes the window (today − 180 days → today + 180 days), passes data as props to the chart component
+- Create `src/components/timeline/TripTimeline.tsx` — client component; renders the full Gantt chart (month header, grid lines, trip rows, today line, stat cards) using pure CSS/inline styles (no charting library)
+- Create `src/components/timeline/Tooltip.tsx` — hover tooltip component (fixed-position, pointer-events: none)
+- Update `src/components/Nav.tsx` — add `{ href: '/timeline', label: 'Timeline' }` to the `links` array
+
+### Files Created / Modified
+```
+src/lib/airportCountry.ts                     (new)
+src/app/timeline/page.tsx                     (new)
+src/components/timeline/TripTimeline.tsx      (new)
+src/components/timeline/Tooltip.tsx           (new)
+src/components/Nav.tsx                        (modified — add Timeline link)
+```
+
+### Design Reference
+`public/timeline-mockup.html` — agreed visual reference. Key design decisions locked in:
+- Dark background (`#0f1117` body, `#1e2130` card)
+- Flag emoji only on bar (no country name text)
+- Amber today line (`#f59e0b`)
+- Past trips dimmed with reduced opacity and faded gradient
+- Hover tooltip for all trip detail
+- No click action on bars
+
+### Dependencies
+- Story 7 (Dashboard) — trips must already be saved to Supabase
+- Story 2 (Auth) — page is protected by existing middleware; no additional auth work needed
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -491,7 +545,8 @@ Story 1 (Foundation)
             │       │       └── Story 5 (Results UI)
             │       │               └── Story 6 (Trip Summary + Save)
             │       │                       ├── Story 7 (Dashboard)
-            │       │                       │       └── Story 7.5 (Manual Past Trip Entry)
+            │       │                       │       ├── Story 7.5 (Manual Past Trip Entry)
+            │       │                       │       └── Story 12 (Timeline View)
             │       │                       └── Story 8 (Audit Log)
             │       │                               └── Story 9 (Polish)
             │       │                                       └── Story 10 (Deploy)
@@ -500,4 +555,4 @@ Story 1 (Foundation)
 
 ---
 
-## Total Estimated Stories: 12
+## Total Estimated Stories: 13
