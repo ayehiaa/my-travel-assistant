@@ -1,6 +1,6 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.5  
+**Version**: 1.6  
 **Date**: 2026-05-07  
 **Owner**: Ziad Elsayed  
 
@@ -8,16 +8,17 @@
 
 ## 1. Overview
 
-My Travel Assistant is a personal web application that allows authorised users to search for flights, select outbound and return flights for a round trip, and maintain a persistent log of upcoming and past trips. British Airways is the preferred airline and always shown first in results, but all airlines are searchable. A key feature is the automatic calculation of days spent outside the UK per trip, excluding both the departure and return days. All actions are attributed to the user who performed them for full auditability.
+My Travel Assistant is a multi-account web application that allows authorised users to search for flights, select outbound and return flights for a round trip, and maintain a persistent log of upcoming and past trips. Each **main account** has a fully isolated trip history — they see only their own trips. **Assistant accounts** can be linked to one or more main accounts and manage trips on their behalf. British Airways is the preferred airline and always shown first in results, but all airlines are searchable. A key feature is the automatic calculation of days spent outside the UK per trip, excluding both the departure and return days. All actions are attributed to the user who performed them for full auditability.
 
 ---
 
 ## 2. Goals
 
 - Quickly find the best flights for a given round trip, with British Airways prioritised
-- Maintain a shared trip history accessible from any device by authorised users
+- Maintain a fully isolated trip history per main account, accessible from any device
+- Allow assistant accounts to manage trips on behalf of one or more main accounts
 - Track days spent outside the UK per trip (for personal residency/tax awareness)
-- Know who created or modified any trip at any point in time
+- Know who created or modified any trip at any point in time, including assistant attribution
 
 ---
 
@@ -33,14 +34,20 @@ My Travel Assistant is a personal web application that allows authorised users t
 
 ## 4. Users & Roles
 
-The app supports a small, closed set of named users. There is no public registration — accounts are created manually by the owner via Supabase Auth dashboard or a seeding script.
+The app supports a small, closed set of named users. There is no public registration — accounts are created manually via Supabase Auth dashboard or a seeding script.
 
 | Role | Description |
 |---|---|
-| **Owner** | Full access. Can search, save, edit, and delete any trip. Can view the full audit log. |
-| **Assistant** | Can search flights, save new trips, and view all trips. Cannot delete trips. Can view the audit log. |
+| **Main** | Sees only their own trips. Full CRUD on their own trips. Can manage which assistant accounts are linked to them via the `/settings` page. |
+| **Assistant** | Linked to one or more main accounts. Can search, save, edit, and delete trips on behalf of any linked main account. Uses an account switcher in the nav to choose which main account's context they're operating in. |
 
-Each user has their own **email + password** credentials managed via Supabase Auth. The owner additionally has Google OAuth as a login option.
+**Linking rules:**
+- A main account can have multiple linked assistants
+- An assistant can be linked to multiple main accounts
+- Main accounts add assistants by entering an existing assistant's email on the `/settings` page
+- Assistant accounts must already exist in the system before they can be linked
+
+Each user has their own **email + password** credentials managed via Supabase Auth.
 
 ---
 
@@ -61,12 +68,12 @@ Each user has their own **email + password** credentials managed via Supabase Au
 
 - All pages are protected — unauthenticated users are redirected to `/login`
 - Login page supports **email + password** for all users
-- Owner can also log in via **Google OAuth**
 - Sessions managed via Supabase Auth helpers for Next.js
 - User roles stored in a `user_roles` table in Supabase, keyed by `user_id`
-- Row-level security (RLS) policies enforce role permissions at the database level
-- Middleware checks role on every protected route and blocks unauthorised actions
-- Both Owner and Assistant can reset their password via a secure email link
+- Row-level security (RLS) policies enforce data isolation at the database level — main accounts can only access their own trips; assistants can only access trips belonging to their linked main accounts
+- The active main account context for assistants is stored in an `active_main_account` cookie, set on first login and updated via the account switcher
+- Middleware guards `/settings` — assistants are redirected to `/` if they attempt to access it
+- Both Main and Assistant accounts can reset their password via a secure email link
   - `/forgot-password` — user enters their email; Supabase sends a time-limited reset link
   - `/reset-password` — user sets a new password after clicking the link; minimum 8 characters
   - Both routes are public (no session required)
@@ -132,7 +139,7 @@ After selecting both flights, a trip summary panel is shown:
 - Departure city → Destination city
 - **Days outside UK** (see calculation below)
 
-A "Save Trip" button persists the trip to Supabase. The `created_by` field is automatically set to the currently authenticated user.
+A "Save Trip" button persists the trip to Supabase. The `created_by` field is set to the authenticated user; `owner_id` is set to the active main account (for assistants, this is the currently selected main account from the switcher).
 
 ---
 
@@ -172,7 +179,7 @@ Each trip card in the dashboard shows:
 - Created by (name of the user who saved the trip)
 - Last modified by (name of the user who last edited the trip, if different)
 
-Trips can be deleted from the dashboard by the **Owner only**.
+Trips can be deleted from the dashboard by the **main account** and any of their **linked assistants**.
 
 ---
 
@@ -201,11 +208,11 @@ A **"+ Add past trip"** button in the Past Trips section opens a modal with the 
 
 Every create, update, and delete action on a trip is recorded in an `audit_log` table.
 
-The audit log is viewable by both Owner and Assistant via a dedicated `/audit` page.
+The audit log is viewable by both Main and Assistant accounts via a dedicated `/audit` page, scoped to the active main account's trips only.
 
 **Each audit log entry shows:**
 - Timestamp
-- User who performed the action (name + email)
+- User who performed the action — displayed as "by [name]" or "by [assistant] on behalf of [main]" when an assistant acted
 - Action type (created / updated / deleted)
 - Trip affected (destination, departure date)
 - Fields changed (for updates — before and after values)
@@ -221,15 +228,27 @@ The audit log is append-only. No entries can be deleted.
 | Column | Type | Notes |
 |---|---|---|
 | user_id | uuid | Foreign key → auth.users, primary key |
-| role | varchar | `owner` or `assistant` |
+| role | varchar | `main` or `assistant` |
 | display_name | varchar | Human-readable name shown in UI and audit log |
 | created_at | timestamptz | Auto |
+
+### `account_links` table
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | Primary key |
+| main_user_id | uuid | Foreign key → auth.users — the main account |
+| assistant_user_id | uuid | Foreign key → auth.users — the linked assistant |
+| created_by | uuid | Foreign key → auth.users — who created the link |
+| created_at | timestamptz | Auto |
+| — | unique | `(main_user_id, assistant_user_id)` pair must be unique |
 
 ### `trips` table
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | Primary key |
+| owner_id | uuid | Foreign key → auth.users — the main account this trip belongs to |
 | departure_airport | varchar(3) | IATA code |
 | destination_airport | varchar(3) | IATA code |
 | source | varchar(10) | `search` or `manual`, default `search` |
@@ -242,7 +261,7 @@ The audit log is append-only. No entries can be deleted.
 | return_departure_at | timestamptz | Full datetime |
 | return_arrival_at | timestamptz | Nullable — null for manual trips |
 | days_outside_uk | integer | Pre-calculated |
-| created_by | uuid | Foreign key → auth.users |
+| created_by | uuid | Foreign key → auth.users — who saved the trip |
 | last_modified_by | uuid | Foreign key → auth.users |
 | created_at | timestamptz | Auto |
 | updated_at | timestamptz | Auto-updated on change |
@@ -252,14 +271,15 @@ The audit log is append-only. No entries can be deleted.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | Primary key |
-| performed_by | uuid | Foreign key → auth.users |
+| performed_by | uuid | Foreign key → auth.users — the main account context |
+| on_behalf_of | uuid | Foreign key → auth.users — the assistant who acted (nullable) |
 | action | varchar | `created`, `updated`, `deleted` |
 | trip_id | uuid | Foreign key → trips (nullable if deleted) |
 | trip_snapshot | jsonb | Full trip state at time of action |
 | changed_fields | jsonb | `{ field: { before, after } }` for updates |
 | created_at | timestamptz | Auto |
 
-Row-level security (RLS) is enabled on all tables. The `audit_log` is readable by all authenticated users but writable only by the service role (server-side only).
+Row-level security (RLS) is enabled on all tables. The `audit_log` is readable by authenticated users (scoped to the active main account's trips) but writable only by the service role (server-side only).
 
 ---
 
@@ -268,10 +288,13 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 | Route | Method | Description |
 |---|---|---|
 | `/api/flights/search` | POST | Calls SerpAPI, returns top 3 outbound + top 3 return flights (BA prioritised) |
-| `/api/trips` | GET | Fetch all trips |
-| `/api/trips` | POST | Save a new trip (`source: search` or `source: manual`); sets `created_by` from session |
-| `/api/trips/[id]` | DELETE | Delete a trip — Owner only |
-| `/api/audit` | GET | Fetch audit log entries |
+| `/api/trips` | GET | Fetch trips scoped to active main account |
+| `/api/trips` | POST | Save a new trip; sets `owner_id` to active main account, `created_by` to current user |
+| `/api/trips/[id]` | DELETE | Delete a trip — main account or linked assistant |
+| `/api/audit` | GET | Fetch audit log entries scoped to active main account's trips |
+| `/api/account-links` | GET | List assistants linked to the current main account |
+| `/api/account-links` | POST | Link an assistant by email to the current main account |
+| `/api/account-links/[id]` | DELETE | Remove an assistant link |
 
 All write operations trigger an audit log entry server-side using the Supabase service role key.
 
@@ -290,15 +313,16 @@ SERPAPI_KEY=
 
 ## 11. Pages & Routing
 
-| Route | Description |
-|---|---|
-| `/` | Dashboard — upcoming & past trips |
-| `/search` | Flight search form + results |
-| `/timeline` | Gantt-style trip timeline — 6 months back to 6 months ahead |
-| `/audit` | Audit log — all user actions |
-| `/login` | Email/password login (+ Google OAuth for owner) |
-| `/forgot-password` | Request a password reset email (public) |
-| `/reset-password` | Set a new password after clicking the reset link (public) |
+| Route | Access | Description |
+|---|---|---|
+| `/` | Both | Dashboard — upcoming & past trips (scoped to active main account) |
+| `/search` | Both | Flight search form + results |
+| `/timeline` | Both | Gantt-style trip timeline — 6 months back to 6 months ahead |
+| `/audit` | Both | Audit log — scoped to active main account's trips |
+| `/settings` | Main only | Manage linked assistant accounts |
+| `/login` | Public | Email/password login |
+| `/forgot-password` | Public | Request a password reset email |
+| `/reset-password` | Public | Set a new password after clicking the reset link |
 
 ---
 
@@ -310,8 +334,9 @@ SERPAPI_KEY=
 - British Airways flights display a prominent **BA badge** and always appear first in the list
 - The days outside UK count is visually prominent in the trip summary and dashboard cards
 - Trip cards show "Added by [name]" and "Last edited by [name]" attribution
-- The delete button is hidden for users with the Assistant role
-- Loading states shown during Amadeus API calls (skeleton or spinner)
+- Assistant accounts see an account switcher dropdown in the nav to switch between linked main accounts
+- The Settings nav link is visible to main accounts only
+- Loading states shown during API calls (skeleton or spinner)
 - Error states shown if no flights are found for the selected criteria
 
 ---
@@ -330,6 +355,8 @@ SERPAPI_KEY=
 10. **Deployment** — Vercel + environment variables
 11. **Password reset** — forgot-password + reset-password pages via Supabase email link
 12. **Trip timeline** — `/timeline` Gantt view, 6 months back to 6 months ahead, flag emoji, today marker
+13. **Role rename & schema** — rename `owner` → `main`, add `owner_id` to trips, `account_links` table, `on_behalf_of` to audit log, rewrite RLS
+14. **Multi-account UI** — account switcher, `/settings` page, scoped queries, assistant attribution in audit log
 
 ---
 
@@ -341,5 +368,5 @@ SERPAPI_KEY=
 - Open-jaw or multi-city itineraries
 - Fare class / cabin selection
 - Export to CSV/PDF
-- Additional user roles beyond Owner and Assistant
+- Additional user roles beyond Main and Assistant
 - Airline preference filtering (beyond BA priority)

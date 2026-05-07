@@ -535,6 +535,153 @@ src/components/Nav.tsx                        (modified — add Timeline link)
 
 ---
 
+## Story 13 — Role Rename & Multi-Account Schema
+
+**As a** developer,
+**I want** the data model updated to support isolated main accounts with linked assistants,
+**so that** Stories 14 and all future features have a stable, correctly scoped foundation.
+
+### Context & Decisions
+- `'owner'` role renamed to `'main'` throughout (DB + code)
+- Trips gain an `owner_id` column (which main account the trip belongs to)
+- New `account_links` join table (many-to-many: main ↔ assistant)
+- `audit_log` gains `on_behalf_of` for assistant attribution
+- RLS policies fully rewritten to enforce per-main-account isolation
+- Existing trips backfilled: `owner_id = created_by`
+
+### Acceptance Criteria
+- [ ] `user_roles.role` check constraint updated to `'main' | 'assistant'`; existing `'owner'` rows migrated to `'main'`
+- [ ] `trips.owner_id uuid not null references auth.users(id)` column added; existing rows backfilled with `created_by`
+- [ ] `account_links` table created with `(main_user_id, assistant_user_id)` unique pair; RLS enabled
+- [ ] `audit_log.on_behalf_of uuid nullable references auth.users(id)` column added
+- [ ] All four RLS policies on `trips` replaced:
+  - **SELECT**: user sees trip if `owner_id = auth.uid()` OR user is a linked assistant of that owner
+  - **INSERT**: `created_by = auth.uid()` AND (`owner_id = auth.uid()` OR user is a linked assistant of that owner)
+  - **UPDATE**: same scope as SELECT; `last_modified_by = auth.uid()`
+  - **DELETE**: same scope as SELECT (both main and their assistants can delete)
+- [ ] `account_links` RLS: main accounts can SELECT/INSERT/DELETE their own links; assistants can SELECT links where they are the assistant
+- [ ] `UserRole` TypeScript type updated to `'main' | 'assistant'`; all references to `'owner'` updated across the codebase
+- [ ] `Trip` TypeScript interface gains `owner_id: string`
+- [ ] `AccountLink` TypeScript interface added to `database.ts`
+- [ ] Seed script updated: creates users with role `'main'` (not `'owner'`); accepts optional `--role` flag for `'assistant'`
+- [ ] All existing tests pass; no runtime errors on dev server
+
+### Technical Tasks
+- Write `supabase/migrations/002_multi_account.sql` containing:
+  - `ALTER TABLE user_roles` — drop old check, add new check, `UPDATE` existing rows
+  - `ALTER TABLE trips ADD COLUMN owner_id` + backfill + not-null constraint
+  - `CREATE TABLE account_links`
+  - `ALTER TABLE audit_log ADD COLUMN on_behalf_of`
+  - `DROP POLICY` (all 4 trip policies) + `CREATE POLICY` (new 4)
+  - New RLS policies for `account_links`
+- Update `src/types/database.ts` — `UserRole`, `Trip`, add `AccountLink`
+- Global find-and-replace `'owner'` → `'main'` in all `.ts`/`.tsx` files (role string literals only)
+- Update `scripts/seed-user.mjs` — default role `'main'`, optional `SEED_ROLE` env var
+
+### Files Created / Modified
+```
+supabase/migrations/002_multi_account.sql    (new)
+src/types/database.ts                        (modified)
+scripts/seed-user.mjs                        (modified)
+src/lib/auth.ts                              (modified — 'owner' → 'main')
+src/app/page.tsx                             (modified — 'owner' → 'main')
+src/app/api/trips/route.ts                   (modified — owner_id in insert)
+src/app/api/trips/[id]/route.ts              (modified — 'owner' → 'main')
+src/app/api/audit/route.ts                   (modified — 'owner' → 'main')
+```
+
+### Dependencies
+- Story 1 (Foundation) — schema must exist
+- Must be completed before Story 14
+
+---
+
+## Story 14 — Multi-Account UI & Data Isolation
+
+**As a** main account user,
+**I want** my trips to be fully isolated from other users,
+**and as an** assistant,
+**I want** to switch between the main accounts I'm linked to and manage their trips on their behalf,
+**so that** each user sees only what they're authorised to see.
+
+### Context & Decisions
+- Main accounts always operate in their own context — no switcher needed
+- Assistants get an account switcher dropdown in the nav; selection stored in `active_main_account` cookie
+- All server-side data fetches (dashboard, timeline, audit log, search save) are scoped to `activeMainAccountId`
+- New `/settings` page (main accounts only): list linked assistants, add by email, remove
+- Nav: Settings link visible to main accounts only
+- `audit_log.on_behalf_of` populated when an assistant performs a write (value = assistant's `user_id`; `performed_by` = main account's `user_id`)
+- Audit log UI updated to show "by [assistant] on behalf of [main]" when `on_behalf_of` is set
+
+### Acceptance Criteria
+
+**Data isolation**
+- [ ] Main account dashboard shows only trips where `owner_id = user.id`
+- [ ] Main account timeline shows only their own trips
+- [ ] Main account audit log shows only entries for their own trips
+- [ ] Assistant dashboard shows only trips for the currently selected main account
+- [ ] Assistant timeline and audit log are similarly scoped
+
+**Account switcher (assistants only)**
+- [ ] Nav shows an account switcher dropdown listing all linked main accounts by display name
+- [ ] Selecting a main account sets the `active_main_account` cookie and reloads the page
+- [ ] On first login, the cookie is auto-set to the first linked main account (alphabetical by display name)
+- [ ] If an assistant has no linked accounts, they see an empty state with instructions to ask a main account to add them
+- [ ] Main accounts do not see the switcher
+
+**Settings page (`/settings` — main accounts only)**
+- [ ] Accessible via "Settings" nav link (hidden for assistants)
+- [ ] Lists all currently linked assistants (display name + email)
+- [ ] "Add assistant" form: enter email address → validates the email exists in the system AND the account has role `'assistant'` → creates an `account_links` row
+- [ ] Error shown if email not found, email belongs to a `'main'` account, or already linked
+- [ ] Each assistant row has a "Remove" button → deletes the `account_links` row
+- [ ] Middleware redirects assistants who navigate to `/settings` back to `/`
+
+**Audit log attribution**
+- [ ] When an assistant saves, updates, or deletes a trip, `audit_log.on_behalf_of` is set to the assistant's `user_id` and `performed_by` is set to the active main account's `user_id`
+- [ ] Audit log UI shows "by [assistant display name] on behalf of [main display name]" when `on_behalf_of` is present
+- [ ] Audit log UI shows "by [display name]" as before when `on_behalf_of` is null
+
+**Trip save scoping**
+- [ ] When any user saves a trip (search flow or manual), `owner_id` is set to `activeMainAccountId` (the cookie value)
+- [ ] For main accounts `activeMainAccountId === user.id` always
+
+### Technical Tasks
+- Create `src/lib/activeAccount.ts` — server helper: reads `active_main_account` cookie; for main accounts returns `user.id`; for assistants returns cookie value (validated against `account_links`)
+- Update `src/app/page.tsx` — scope trips query with `.eq('owner_id', activeMainAccountId)`
+- Update `src/app/timeline/page.tsx` — same scope
+- Update `src/app/audit/page.tsx` + `src/app/api/audit/route.ts` — scope to trips owned by `activeMainAccountId`
+- Update `src/app/api/trips/route.ts` — set `owner_id = activeMainAccountId` on insert
+- Update `src/app/api/trips/[id]/route.ts` — set `on_behalf_of` in audit log when `user.role === 'assistant'`
+- Update `src/lib/auditLogger.ts` — accept optional `onBehalfOf` param; write to `audit_log.on_behalf_of`
+- Update `src/components/Nav.tsx` — account switcher for assistants; Settings link for main accounts
+- Create `src/app/settings/page.tsx` — manage linked assistants
+- Create `src/app/api/account-links/route.ts` — GET (list assistants), POST (add by email), DELETE (remove)
+- Update `src/proxy.ts` — block `/settings` for assistants; set `active_main_account` cookie on first assistant login
+- Update `src/components/audit/AuditTable.tsx` — render `on_behalf_of` attribution
+
+### Files Created / Modified
+```
+src/lib/activeAccount.ts                        (new)
+src/app/settings/page.tsx                       (new)
+src/app/api/account-links/route.ts              (new)
+src/app/page.tsx                                (modified — scoped query)
+src/app/timeline/page.tsx                       (modified — scoped query)
+src/app/audit/page.tsx                          (modified — scoped query)
+src/app/api/audit/route.ts                      (modified — scoped query)
+src/app/api/trips/route.ts                      (modified — owner_id on insert)
+src/app/api/trips/[id]/route.ts                 (modified — on_behalf_of in audit)
+src/lib/auditLogger.ts                          (modified — on_behalf_of param)
+src/components/Nav.tsx                          (modified — switcher + settings link)
+src/components/audit/AuditTable.tsx             (modified — attribution display)
+src/proxy.ts                                    (modified — settings guard + cookie init)
+```
+
+### Dependencies
+- Story 13 — schema and role rename must be complete first
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -551,8 +698,11 @@ Story 1 (Foundation)
             │       │                               └── Story 9 (Polish)
             │       │                                       └── Story 10 (Deploy)
             └── Story 11 (Password Reset) ← depends on Story 2 only
+
+Story 13 (Role Rename & Schema) ← depends on Story 1
+    └── Story 14 (Multi-Account UI) ← depends on Story 13
 ```
 
 ---
 
-## Total Estimated Stories: 13
+## Total Estimated Stories: 15
