@@ -1,4 +1,4 @@
-export type UserRole = 'owner' | 'assistant'
+export type UserRole = 'main' | 'assistant'
 
 export type AuditAction = 'created' | 'updated' | 'deleted'
 
@@ -9,8 +9,17 @@ export interface UserRoleRecord {
   created_at: string
 }
 
+export interface AccountLink {
+  id: string
+  main_user_id: string
+  assistant_user_id: string
+  created_by: string
+  created_at: string
+}
+
 export interface Trip {
   id: string
+  owner_id: string
   source: 'search' | 'manual'
   departure_airport: string
   destination_airport: string
@@ -34,6 +43,7 @@ export type TripInsert = Omit<Trip, 'id' | 'created_at' | 'updated_at'>
 export interface AuditLogEntry {
   id: string
   performed_by: string
+  on_behalf_of: string | null
   action: AuditAction
   trip_id: string | null
   trip_snapshot: Trip

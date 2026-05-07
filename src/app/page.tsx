@@ -52,7 +52,7 @@ export default async function DashboardPage() {
     .filter(t => new Date(t.outbound_departure_at) < todayStart)
     .reverse()
 
-  const canDelete = user.role === 'owner'
+  const canDelete = user.role === 'main'
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

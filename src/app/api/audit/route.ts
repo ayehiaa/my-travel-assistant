@@ -8,15 +8,6 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: roleRecord } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single()
-  if (!roleRecord || roleRecord.role !== 'owner') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
   const page = Math.max(1, parseInt(request.nextUrl.searchParams.get('page') ?? '1', 10))
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1

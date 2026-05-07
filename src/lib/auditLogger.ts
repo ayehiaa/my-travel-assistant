@@ -7,13 +7,15 @@ export async function logAudit(params: {
   tripId: string | null
   tripSnapshot: Trip
   changedFields?: Record<string, { before: unknown; after: unknown }>
+  onBehalfOf?: string
 }) {
   const admin = createAdminClient()
   await admin.from('audit_log').insert({
-    performed_by: params.performedBy,
-    action: params.action,
-    trip_id: params.tripId,
-    trip_snapshot: params.tripSnapshot,
+    performed_by:   params.performedBy,
+    action:         params.action,
+    trip_id:        params.tripId,
+    trip_snapshot:  params.tripSnapshot,
     changed_fields: params.changedFields ?? null,
+    on_behalf_of:   params.onBehalfOf ?? null,
   })
 }

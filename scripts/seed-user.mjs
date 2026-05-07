@@ -12,9 +12,15 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-const EMAIL = process.env.SEED_EMAIL
-const PASSWORD = process.env.SEED_PASSWORD
-const DISPLAY_NAME = process.env.SEED_DISPLAY_NAME ?? 'Owner'
+const EMAIL        = process.env.SEED_EMAIL
+const PASSWORD     = process.env.SEED_PASSWORD
+const DISPLAY_NAME = process.env.SEED_DISPLAY_NAME ?? 'User'
+const ROLE         = process.env.SEED_ROLE ?? 'main'
+
+if (!['main', 'assistant'].includes(ROLE)) {
+  console.error('SEED_ROLE must be "main" or "assistant"')
+  process.exit(1)
+}
 
 if (!EMAIL || !PASSWORD) {
   console.error('Missing required env vars: SEED_EMAIL and SEED_PASSWORD must be set')
@@ -45,10 +51,10 @@ if (!userId) {
 
   const { error: roleError } = await admin
     .from('user_roles')
-    .upsert({ user_id: existing.id, role: 'owner', display_name: DISPLAY_NAME })
+    .upsert({ user_id: existing.id, role: ROLE, display_name: DISPLAY_NAME })
 
   if (roleError) { console.error('Role error:', roleError.message); process.exit(1) }
-  console.log('✓ Role set for existing user')
+  console.log(`✓ Role set: ${ROLE}`)
   process.exit(0)
 }
 
@@ -56,9 +62,9 @@ console.log('✓ Created user:', userId)
 
 const { error: roleError } = await admin
   .from('user_roles')
-  .upsert({ user_id: userId, role: 'owner', display_name: DISPLAY_NAME })
+  .upsert({ user_id: userId, role: ROLE, display_name: DISPLAY_NAME })
 
 if (roleError) { console.error('Role error:', roleError.message); process.exit(1) }
 
-console.log('✓ Role set: owner')
+console.log(`✓ Role set: ${ROLE}`)
 console.log(`\nLogin: ${EMAIL}`)

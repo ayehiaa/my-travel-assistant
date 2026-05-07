@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
     const outboundAt = `${body.outbound_departure_at}T00:00:00.000Z`
     const returnAt = `${body.return_departure_at}T00:00:00.000Z`
     insertPayload = {
+      owner_id: user.id,
       source: 'manual',
       departure_airport: body.departure_airport,
       destination_airport: body.destination_airport,
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
     const outboundMs = new Date(body.outbound_departure_at).getTime()
     const returnMs = new Date(body.return_departure_at).getTime()
     insertPayload = {
+      owner_id: user.id,
       ...body,
       days_outside_uk: Math.max(0, Math.round((returnMs - outboundMs) / 86_400_000)),
       created_by: user.id,
