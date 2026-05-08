@@ -211,7 +211,7 @@ Main accounts can set a **reference date** in Settings. The app then counts all 
 
 **Reference window**: `[referenceDate − 1 year, referenceDate]` (inclusive).
 
-**Boundary trip handling**: Trips that partially overlap the window are clipped to the window boundaries, then the standard per-trip rule applies to the clipped segment (exclude first and last day). Example: trip 10 Jul → 20 Jul with window starting 15 Jul → clipped to 15 Jul → 20 Jul → 4 days counted (16, 17, 18, 19).
+**Boundary trip handling**: The actual days-abroad range is computed first (`departure + 1` → `return − 1`), then intersected with the window. Window boundary dates are plain calendar dates — if the user was already abroad on `windowStart`, that day is counted. Example: trip 8 Jul → 17 Jul with window starting 12 Jul → days abroad = 9–16 Jul, intersect with window = 12–16 Jul → **5 days**.
 
 **Settings page**: A "90-day calculation" card below the Linked Assistants card shows a date input and Save button. Main accounts only. Stored as `reference_date date` (nullable) on `user_roles`.
 

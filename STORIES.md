@@ -702,9 +702,12 @@ src/proxy.ts                                    (modified — settings guard + c
 - [x] Assistants see the stat card read-only when viewing a main account's timeline (Settings page remains main-only)
 - [x] The Timeline chart window (±6 months from today) is unchanged
 
-### Boundary rule (agreed)
-Trip clipped to window, then exclude first and last day of the clipped segment.
-Example: trip 10 Jul → 20 Jul, window starts 15 Jul → clipped 15 Jul → 20 Jul → counts 16, 17, 18, 19 = **4 days**.
+### Boundary rule (corrected)
+Compute the actual days-abroad range first (`departure + 1 day` → `return − 1 day`), then intersect with the window. Window boundaries are plain calendar dates and are counted if the user was already abroad.
+Example: trip 8 Jul → 17 Jul, window starts 12 Jul → days abroad = 9–16 Jul, intersect = 12–16 Jul = **5 days**.
+
+### Bug fix (post-implementation)
+`daysOutsideUKInWindow` was clipping the trip to the window boundary first then applying the -1 rule, incorrectly treating the window start/end as if they were departure/return days. Fixed by computing the days-abroad range before intersecting. Also patched a stored `days_outside_uk = 7` (should be 6) on the LHR→BUD trip caused by an off-by-one at save time.
 
 ### Technical Tasks
 - Add `reference_date date` nullable column to `user_roles` via migration `004_reference_date.sql`
