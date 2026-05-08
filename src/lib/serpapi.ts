@@ -96,6 +96,7 @@ export async function searchAirports(
   url.searchParams.set('term', keyword)
   url.searchParams.set('locale', 'en')
   url.searchParams.append('types[]', 'airport')
+  url.searchParams.append('types[]', 'city')
 
   const res = await fetch(url.toString(), { next: { revalidate: 3600 } })
   if (!res.ok) return []
@@ -104,7 +105,7 @@ export async function searchAirports(
 
   const data = (await res.json()) as TpAirport[]
   return data
-    .filter(a => a.type === 'airport' && a.code)
+    .filter(a => (a.type === 'airport' || a.type === 'city') && a.code)
     .slice(0, 8)
     .map(a => ({ iataCode: a.code, name: a.name, cityName: a.city_name ?? a.name }))
 }
