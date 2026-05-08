@@ -21,16 +21,7 @@ export interface Trip {
   id: string
   owner_id: string
   source: 'search' | 'manual'
-  departure_airport: string
-  destination_airport: string
-  outbound_airline: string | null
-  outbound_flight_number: string | null
-  outbound_departure_at: string
-  outbound_arrival_at: string | null
-  return_airline: string | null
-  return_flight_number: string | null
-  return_departure_at: string
-  return_arrival_at: string | null
+  trip_type: 'round_trip' | 'multi_city'
   days_outside_uk: number
   created_by: string
   last_modified_by: string
@@ -38,7 +29,21 @@ export interface Trip {
   updated_at: string
 }
 
+export interface TripLeg {
+  id: string
+  trip_id: string
+  leg_order: number
+  from_airport: string
+  to_airport: string
+  airline: string | null
+  flight_number: string | null
+  departure_at: string
+  arrival_at: string | null
+  created_at: string
+}
+
 export type TripInsert = Omit<Trip, 'id' | 'created_at' | 'updated_at'>
+export type TripLegInsert = Omit<TripLeg, 'id' | 'created_at'>
 
 export interface AuditLogEntry {
   id: string
@@ -46,7 +51,7 @@ export interface AuditLogEntry {
   on_behalf_of: string | null
   action: AuditAction
   trip_id: string | null
-  trip_snapshot: Trip
+  trip_snapshot: Trip & { legs: TripLeg[] }
   changed_fields: Record<string, { before: unknown; after: unknown }> | null
   created_at: string
 }
@@ -61,4 +66,5 @@ export interface AuditLogEntryWithUser extends AuditLogEntry {
 export interface TripWithUsers extends Trip {
   creator: Pick<UserRoleRecord, 'display_name'>
   modifier: Pick<UserRoleRecord, 'display_name'>
+  legs: TripLeg[]
 }

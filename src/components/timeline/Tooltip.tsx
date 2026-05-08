@@ -4,11 +4,13 @@ import { getAirportInfo } from '@/lib/airportCountry'
 
 export interface TripSlice {
   id: string
-  departure_airport: string
-  destination_airport: string
-  outbound_departure_at: string
-  return_departure_at: string
   days_outside_uk: number
+  legs: {
+    from_airport: string
+    to_airport: string
+    departure_at: string
+    leg_order: number
+  }[]
 }
 
 interface TooltipProps {
@@ -26,10 +28,18 @@ function duration(days: number) {
   return `${days} day${days !== 1 ? 's' : ''}`
 }
 
+function routeLabel(legs: TripSlice['legs']) {
+  if (!legs.length) return '?'
+  return [...legs.map(l => l.from_airport), legs[legs.length - 1].to_airport].join(' → ')
+}
+
 export default function Tooltip({ visible, x, y, trip }: TooltipProps) {
   if (!trip) return null
 
-  const dest = getAirportInfo(trip.destination_airport)
+  const legs = trip.legs
+  const firstLeg = legs[0]
+  const lastLeg = legs[legs.length - 1]
+  const primaryDest = getAirportInfo(firstLeg?.to_airport ?? '')
 
   return (
     <div
@@ -44,16 +54,13 @@ export default function Tooltip({ visible, x, y, trip }: TooltipProps) {
       }}
       className="bg-[#0f1117] border border-[#3d4460] rounded-xl px-4 py-3 min-w-[190px] shadow-2xl text-sm"
     >
-      <div className="text-2xl mb-1">{dest.flag}</div>
-      <div className="font-semibold text-slate-100 mb-2">{dest.country}</div>
+      <div className="text-2xl mb-1">{primaryDest.flag}</div>
+      <div className="font-semibold text-slate-100 mb-2">{routeLabel(legs)}</div>
       <div className="text-slate-500 mb-0.5">
-        Route: <span className="text-slate-300">{trip.departure_airport} → {trip.destination_airport}</span>
+        Depart: <span className="text-slate-300">{firstLeg ? fmtDate(firstLeg.departure_at) : '?'}</span>
       </div>
       <div className="text-slate-500 mb-0.5">
-        Depart: <span className="text-slate-300">{fmtDate(trip.outbound_departure_at)}</span>
-      </div>
-      <div className="text-slate-500 mb-0.5">
-        Return: <span className="text-slate-300">{fmtDate(trip.return_departure_at)}</span>
+        Return: <span className="text-slate-300">{lastLeg ? fmtDate(lastLeg.departure_at) : '?'}</span>
       </div>
       <div className="text-slate-500">
         Duration: <span className="text-slate-300">{duration(trip.days_outside_uk)}</span>

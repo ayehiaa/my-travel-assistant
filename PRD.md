@@ -1,6 +1,6 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.7  
+**Version**: 1.9  
 **Date**: 2026-05-08  
 **Owner**: Ziad Elsayed  
 
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-My Travel Assistant is a multi-account web application that allows authorised users to search for flights, select outbound and return flights for a round trip, and maintain a persistent log of upcoming and past trips. Each **main account** has a fully isolated trip history — they see only their own trips. **Assistant accounts** can be linked to one or more main accounts and manage trips on their behalf. British Airways is the preferred airline and always shown first in results, but all airlines are searchable. A key feature is the automatic calculation of days spent outside the UK per trip, excluding both the departure and return days. All actions are attributed to the user who performed them for full auditability.
+**Sojourn** is a multi-account web application that allows authorised users to search for flights, build round-trip or multi-city itineraries, and maintain a persistent log of upcoming and past trips. Each **main account** has a fully isolated trip history — they see only their own trips. **Assistant accounts** can be linked to one or more main accounts and manage trips on their behalf. British Airways is the preferred airline and always shown first in results, but all airlines are searchable. A key feature is the automatic calculation of days spent outside the UK per trip, excluding both the departure and return days. All actions are attributed to the user who performed them for full auditability. Unauthenticated visitors see a public marketing landing page at `/` before signing in.
 
 ---
 
@@ -27,7 +27,6 @@ My Travel Assistant is a multi-account web application that allows authorised us
 
 - Booking or payment processing
 - Group/multi-passenger trips
-- Open-jaw or multi-city itineraries
 - Mobile app (web only)
 - Self-service user registration (accounts are created by the owner only)
 
@@ -86,7 +85,11 @@ Each user has their own **email + password** credentials managed via Supabase Au
 
 ### 7.1 Flight Search Form
 
-The search form collects the following inputs:
+A **trip-type tab switcher** at the top of the form selects between:
+- **Round trip** — single outbound and return leg (existing behaviour)
+- **Multi-city** — 1 to 3 legs, each with independent origin, destination, date, and time slot
+
+**Round-trip fields (per leg):**
 
 | Field | Type | Notes |
 |---|---|---|
@@ -97,13 +100,13 @@ The search form collects the following inputs:
 | Outbound time preference | Toggle | Morning or Evening |
 | Return time preference | Toggle | Morning or Evening |
 
+**Multi-city:** A vertical stack of leg rows. Each leg has: origin autocomplete, destination autocomplete, date picker, time slot toggle, and (from leg 2 onward) an × removal button. An "Add leg" button appears when fewer than 3 legs exist. Leg N's origin auto-fills from leg N−1's destination; the 3rd leg's destination auto-fills from leg 0's origin.
+
 **Time slot definitions:**
 - Morning: 06:00 – 13:00 (local departure time)
 - Evening: 13:00 – 23:59 (local departure time)
 
-**Trip type**: Round trip only. Departure airport = return airport (same UK airport both ways).
-
-On submit, the form triggers two parallel Amadeus flight offer searches: one for the outbound leg and one for the return leg.
+On submit, the form fires one SerpAPI search per leg in parallel.
 
 ---
 
@@ -221,6 +224,20 @@ Main accounts can set a **reference date** in Settings. The app then counts all 
 
 ---
 
+### 7.9 Multi-city Trips
+
+Users can search for itineraries with up to **3 legs** using the multi-city trip type. Each leg is an independent one-way flight search. The results panel shows a vertical stack of per-leg flight columns; the user selects one flight per leg before proceeding to the trip summary.
+
+The trip summary displays the full city chain (e.g. `London → Düsseldorf → Paris → London`) and one flight card per leg. Days outside UK is calculated from the first leg's departure to the last leg's departure.
+
+**Database:** Each leg is stored as a row in the `trip_legs` table (see §8). The `trips.trip_type` column distinguishes `round_trip` from `multi_city`. All existing round trips were backfilled into `trip_legs` as part of migration `005_multi_city.sql`, and the flat departure/return columns were dropped from `trips`.
+
+**Dashboard:** Trip cards show the full route chain derived from all legs. Outbound / Return labels are used for round trips; Leg 1 / Leg 2 / Leg 3 for multi-city.
+
+**Timeline:** The bar's left edge is the first leg's departure; the right edge is the last leg's departure. The tooltip shows the full route chain.
+
+---
+
 ### 7.7 Audit Log
 
 Every create, update, and delete action on a trip is recorded in an `audit_log` table.
@@ -267,22 +284,32 @@ The audit log is append-only. No entries can be deleted.
 |---|---|---|
 | id | uuid | Primary key |
 | owner_id | uuid | Foreign key → auth.users — the main account this trip belongs to |
-| departure_airport | varchar(3) | IATA code |
-| destination_airport | varchar(3) | IATA code |
+| trip_type | varchar(20) | `round_trip` or `multi_city` |
 | source | varchar(10) | `search` or `manual`, default `search` |
-| outbound_airline | varchar(100) | Nullable — null for manual trips |
-| outbound_flight_number | varchar(10) | Nullable — null for manual trips |
-| outbound_departure_at | timestamptz | Full datetime |
-| outbound_arrival_at | timestamptz | Nullable — null for manual trips |
-| return_airline | varchar(100) | Nullable — null for manual trips |
-| return_flight_number | varchar(10) | Nullable — null for manual trips |
-| return_departure_at | timestamptz | Full datetime |
-| return_arrival_at | timestamptz | Nullable — null for manual trips |
 | days_outside_uk | integer | Pre-calculated |
 | created_by | uuid | Foreign key → auth.users — who saved the trip |
 | last_modified_by | uuid | Foreign key → auth.users |
 | created_at | timestamptz | Auto |
 | updated_at | timestamptz | Auto-updated on change |
+
+Flat departure/return columns were removed in migration `005_multi_city.sql`. All flight leg data is stored in `trip_legs`.
+
+### `trip_legs` table
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | Primary key |
+| trip_id | uuid | Foreign key → trips |
+| leg_order | integer | 0-based position within the trip |
+| from_airport | varchar(3) | IATA code |
+| to_airport | varchar(3) | IATA code |
+| departure_at | timestamptz | Departure datetime |
+| arrival_at | timestamptz | Nullable — null for manual trips |
+| airline | varchar(100) | Nullable — null for manual trips |
+| flight_number | varchar(10) | Nullable — null for manual trips |
+| created_at | timestamptz | Auto |
+
+Legs are ordered by `leg_order`. Round trips have 2 legs (outbound + return); multi-city trips have 2–3 legs.
 
 ### `audit_log` table
 
@@ -305,9 +332,9 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 
 | Route | Method | Description |
 |---|---|---|
-| `/api/flights/search` | POST | Calls SerpAPI, returns top 3 outbound + top 3 return flights (BA prioritised) |
-| `/api/trips` | GET | Fetch trips scoped to active main account |
-| `/api/trips` | POST | Save a new trip; sets `owner_id` to active main account, `created_by` to current user |
+| `/api/flights/search` | POST | Calls SerpAPI; for round trips returns `{ tripType, outbound, return }`; for multi-city fires parallel calls per leg and returns `{ tripType, legs: FlightOffer[][] }` |
+| `/api/trips` | GET | Fetch trips with `trip_legs(*)` joined, scoped to active main account |
+| `/api/trips` | POST | Save a new trip; body includes `{ trip_type, legs: [...] }`; inserts trip row then `trip_legs` rows; rolls back if leg insert fails |
 | `/api/trips/[id]` | DELETE | Delete a trip — main account or linked assistant |
 | `/api/audit` | GET | Fetch audit log entries scoped to active main account's trips |
 | `/api/account-links` | GET | List assistants linked to the current main account |
@@ -334,8 +361,8 @@ SERPAPI_KEY=
 
 | Route | Access | Description |
 |---|---|---|
-| `/` | Both | Dashboard — upcoming & past trips (scoped to active main account) |
-| `/search` | Both | Flight search form + results |
+| `/` | Public (unauthenticated) / Both (authenticated) | Landing page (Sojourn marketing page) for unauthenticated visitors; Dashboard for authenticated users |
+| `/search` | Both | Flight search form + results (round trip or multi-city) |
 | `/timeline` | Both | Gantt-style trip timeline — 6 months back to 6 months ahead |
 | `/audit` | Both | Audit log — scoped to active main account's trips |
 | `/settings` | Main only | Manage linked assistant accounts |
@@ -377,6 +404,8 @@ SERPAPI_KEY=
 13. **Role rename & schema** — rename `owner` → `main`, add `owner_id` to trips, `account_links` table, `on_behalf_of` to audit log, rewrite RLS
 14. **Multi-account UI** — account switcher, `/settings` page, scoped queries, assistant attribution in audit log
 15. **Annual days abroad counter** — reference date setting, windowed calculation with boundary clipping, timeline stat card
+16. **Multi-city flight search** — trip-type tab switcher, per-leg search, `trip_legs` schema, unified dashboard/timeline display
+17. **Sojourn landing page** — public marketing page at `/` for unauthenticated visitors; app rebranded as Sojourn
 
 ---
 
@@ -384,8 +413,8 @@ SERPAPI_KEY=
 
 - Email/calendar reminders for upcoming trips
 - ~~Cumulative days outside UK across all trips (yearly total)~~ — implemented in Story 15
+- ~~Open-jaw or multi-city itineraries~~ — implemented in Story 16
 - Group/multi-passenger trips
-- Open-jaw or multi-city itineraries
 - Fare class / cabin selection
 - Export to CSV/PDF
 - Additional user roles beyond Main and Assistant

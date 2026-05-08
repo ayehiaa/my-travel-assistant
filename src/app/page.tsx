@@ -1,30 +1,35 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import UpcomingTrips from '@/components/dashboard/UpcomingTrips'
 import PastTrips from '@/components/dashboard/PastTrips'
 import { TripWithUsers, UserRoleRecord } from '@/types/database'
+import LandingPage from '@/components/landing/LandingPage'
 
 export const metadata = {
-  title: 'Dashboard — Travel Assistant',
+  title: 'Sojourn — Your trusted travel tracker',
+  description: 'Track every day outside the UK. Stay on the right side of the Statutory Residence Test.',
 }
 
 export default async function DashboardPage() {
   const user = await getAuthUser()
-  if (!user) redirect('/login')
+  if (!user) return <LandingPage />
 
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
   const { data: rawTrips } = await supabase
     .from('trips')
-    .select('*')
+    .select('*, legs:trip_legs(*)')
     .eq('owner_id', activeMainAccountId)
-    .order('outbound_departure_at', { ascending: true })
+    .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
 
-  const trips = rawTrips ?? []
+  const trips = (rawTrips ?? []).sort((a, b) => {
+    const aDate = a.legs?.[0]?.departure_at ?? a.created_at
+    const bDate = b.legs?.[0]?.departure_at ?? b.created_at
+    return new Date(aDate).getTime() - new Date(bDate).getTime()
+  })
 
   const userIds = [...new Set([
     ...trips.map(t => t.created_by),
@@ -42,6 +47,7 @@ export default async function DashboardPage() {
 
   const enriched: TripWithUsers[] = trips.map(t => ({
     ...t,
+    legs: t.legs ?? [],
     creator: roleMap.get(t.created_by) ?? { display_name: 'Unknown' },
     modifier: roleMap.get(t.last_modified_by) ?? { display_name: 'Unknown' },
   }))
@@ -49,9 +55,15 @@ export default async function DashboardPage() {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
-  const upcoming = enriched.filter(t => new Date(t.outbound_departure_at) >= todayStart)
+  const upcoming = enriched.filter(t => {
+    const dep = t.legs[0]?.departure_at ?? t.created_at
+    return new Date(dep) >= todayStart
+  })
   const past = enriched
-    .filter(t => new Date(t.outbound_departure_at) < todayStart)
+    .filter(t => {
+      const dep = t.legs[0]?.departure_at ?? t.created_at
+      return new Date(dep) < todayStart
+    })
     .reverse()
 
   const canDelete = user.role === 'main'

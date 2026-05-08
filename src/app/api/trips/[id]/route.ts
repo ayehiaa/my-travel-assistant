@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
-import { Trip } from '@/types/database'
+import { Trip, TripLeg } from '@/types/database'
 
 export async function DELETE(
   _request: NextRequest,
@@ -18,8 +18,9 @@ export async function DELETE(
 
   const { data: trip, error: fetchError } = await supabase
     .from('trips')
-    .select('*')
+    .select('*, legs:trip_legs(*)')
     .eq('id', id)
+    .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
     .single()
 
   if (fetchError || !trip) {
@@ -39,7 +40,7 @@ export async function DELETE(
     performedBy: user.id,
     action: 'deleted',
     tripId: null,
-    tripSnapshot: trip as Trip,
+    tripSnapshot: { ...(trip as Trip), legs: (trip.legs ?? []) as TripLeg[] },
     onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
   })
 

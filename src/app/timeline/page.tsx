@@ -22,13 +22,26 @@ export default async function TimelinePage() {
   const chartWindowEnd = new Date()
   chartWindowEnd.setDate(chartWindowEnd.getDate() + 180)
 
+  // Fetch all trips with legs; filter by first leg departure in code
   const { data: rawTrips } = await supabase
     .from('trips')
-    .select('id, departure_airport, destination_airport, outbound_departure_at, return_departure_at, days_outside_uk')
+    .select('id, days_outside_uk, legs:trip_legs(from_airport, to_airport, departure_at, leg_order)')
     .eq('owner_id', activeMainAccountId)
-    .gte('outbound_departure_at', chartWindowStart.toISOString())
-    .lte('outbound_departure_at', chartWindowEnd.toISOString())
-    .order('outbound_departure_at', { ascending: true })
+    .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
+
+  const windowStartIso = chartWindowStart.toISOString()
+  const windowEndIso   = chartWindowEnd.toISOString()
+
+  const filteredTrips = (rawTrips ?? [])
+    .filter(t => {
+      const firstDep = t.legs?.[0]?.departure_at
+      return firstDep && firstDep >= windowStartIso && firstDep <= windowEndIso
+    })
+    .sort((a, b) => {
+      const aDate = a.legs?.[0]?.departure_at ?? ''
+      const bDate = b.legs?.[0]?.departure_at ?? ''
+      return aDate.localeCompare(bDate)
+    })
 
   // Fetch reference date for the active main account
   const { data: roleRow } = await supabase
@@ -46,16 +59,32 @@ export default async function TimelinePage() {
     const refStart = new Date(referenceDate)
     refStart.setFullYear(refStart.getFullYear() - 1)
 
-    const { data: annualTrips } = await supabase
+    const { data: allTrips } = await supabase
       .from('trips')
-      .select('outbound_departure_at, return_departure_at')
+      .select('legs:trip_legs(departure_at, leg_order)')
       .eq('owner_id', activeMainAccountId)
-      .lte('outbound_departure_at', refEnd.toISOString())
-      .gte('return_departure_at', refStart.toISOString())
+      .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
 
-    annualDaysAbroad = (annualTrips ?? []).reduce((acc, t) => {
-      return acc + daysOutsideUKInWindow(t.outbound_departure_at, t.return_departure_at, refStart, refEnd)
-    }, 0)
+    const refStartIso = refStart.toISOString()
+    const refEndIso   = refEnd.toISOString()
+
+    annualDaysAbroad = (allTrips ?? [])
+      .filter(t => {
+        const legs = t.legs ?? []
+        if (!legs.length) return false
+        const firstDep = legs[0].departure_at
+        const lastDep  = legs[legs.length - 1].departure_at
+        return firstDep <= refEndIso && lastDep >= refStartIso
+      })
+      .reduce((acc, t) => {
+        const legs = t.legs!
+        return acc + daysOutsideUKInWindow(
+          legs[0].departure_at,
+          legs[legs.length - 1].departure_at,
+          refStart,
+          refEnd,
+        )
+      }, 0)
   }
 
   return (
@@ -65,7 +94,7 @@ export default async function TimelinePage() {
         <p className="text-sm text-slate-500 mt-1">6 months back · Today · 6 months ahead</p>
       </div>
       <TripTimeline
-        trips={rawTrips ?? []}
+        trips={filteredTrips}
         today={new Date().toISOString()}
         referenceDate={referenceDate}
         annualDaysAbroad={annualDaysAbroad}

@@ -39,10 +39,11 @@ export default function AddPastTripModal({ onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source: 'manual',
-          departure_airport: origin.iataCode,
-          destination_airport: destination.iataCode,
-          outbound_departure_at: departureDate,
-          return_departure_at: returnDate,
+          trip_type: 'round_trip',
+          legs: [
+            { from_airport: origin.iataCode, to_airport: destination.iataCode, departure_at: departureDate },
+            { from_airport: destination.iataCode, to_airport: origin.iataCode, departure_at: returnDate },
+          ],
         }),
       })
       if (!res.ok) {

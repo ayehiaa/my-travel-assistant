@@ -1,11 +1,11 @@
 import { createAdminClient } from './supabase/admin'
-import { AuditAction, Trip } from '@/types/database'
+import { AuditAction, Trip, TripLeg } from '@/types/database'
 
 export async function logAudit(params: {
   performedBy: string
   action: AuditAction
   tripId: string | null
-  tripSnapshot: Trip
+  tripSnapshot: Trip & { legs: TripLeg[] }
   changedFields?: Record<string, { before: unknown; after: unknown }>
   onBehalfOf?: string
 }) {

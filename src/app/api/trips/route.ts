@@ -5,34 +5,45 @@ import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 import { daysOutsideUK } from '@/lib/daysCalculator'
-import { Trip } from '@/types/database'
+import { Trip, TripLeg } from '@/types/database'
 
 const isoDatetime = z.string().datetime({ local: true })
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD')
 
+// ── Search trip schemas ───────────────────────────────────────────────────────
+
+const SearchLegSchema = z.object({
+  from_airport:  z.string().length(3),
+  to_airport:    z.string().length(3),
+  airline:       z.string().min(1).max(100),
+  flight_number: z.string().min(1).max(20),
+  departure_at:  isoDatetime,
+  arrival_at:    isoDatetime,
+})
+
 const SearchTripSchema = z.object({
-  source: z.literal('search'),
-  departure_airport: z.string().min(1).max(10),
-  destination_airport: z.string().min(1).max(10),
-  outbound_airline: z.string().min(1).max(100),
-  outbound_flight_number: z.string().min(1).max(20),
-  outbound_departure_at: isoDatetime,
-  outbound_arrival_at: isoDatetime,
-  return_airline: z.string().min(1).max(100),
-  return_flight_number: z.string().min(1).max(20),
-  return_departure_at: isoDatetime,
-  return_arrival_at: isoDatetime,
+  source:    z.literal('search'),
+  trip_type: z.enum(['round_trip', 'multi_city']),
+  legs:      z.array(SearchLegSchema).min(2).max(3),
+})
+
+// ── Manual trip schemas ───────────────────────────────────────────────────────
+
+const ManualLegSchema = z.object({
+  from_airport: z.string().length(3),
+  to_airport:   z.string().length(3),
+  departure_at: isoDate,
 })
 
 const ManualTripSchema = z.object({
-  source: z.literal('manual'),
-  departure_airport: z.string().length(3),
-  destination_airport: z.string().length(3),
-  outbound_departure_at: isoDate,
-  return_departure_at: isoDate,
+  source:    z.literal('manual'),
+  trip_type: z.literal('round_trip'),
+  legs:      z.array(ManualLegSchema).length(2),
 })
 
 const TripInsertSchema = z.discriminatedUnion('source', [SearchTripSchema, ManualTripSchema])
+
+// ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET() {
   const user = await getAuthUser()
@@ -46,15 +57,25 @@ export async function GET() {
     .select(`
       *,
       creator:user_roles!trips_created_by_fkey(display_name),
-      modifier:user_roles!trips_last_modified_by_fkey(display_name)
+      modifier:user_roles!trips_last_modified_by_fkey(display_name),
+      legs:trip_legs(*)
     `)
     .eq('owner_id', activeMainAccountId)
-    .order('outbound_departure_at', { ascending: true })
+    .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
 
   if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
 
-  return NextResponse.json(data)
+  // Sort trips by first leg departure_at (legs are already ordered by leg_order)
+  const sorted = (data ?? []).sort((a, b) => {
+    const aDate = a.legs?.[0]?.departure_at ?? a.created_at
+    const bDate = b.legs?.[0]?.departure_at ?? b.created_at
+    return new Date(aDate).getTime() - new Date(bDate).getTime()
+  })
+
+  return NextResponse.json(sorted)
 }
+
+// ── POST ──────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
@@ -77,55 +98,67 @@ export async function POST(request: NextRequest) {
 
   const body = parsed.data
 
-  let insertPayload: Record<string, unknown>
+  // ── Normalise leg datetimes ───────────────────────────────────────────────
 
-  if (body.source === 'manual') {
-    const outboundAt = `${body.outbound_departure_at}T00:00:00.000Z`
-    const returnAt = `${body.return_departure_at}T00:00:00.000Z`
-    insertPayload = {
-      owner_id: activeMainAccountId,
-      source: 'manual',
-      departure_airport: body.departure_airport,
-      destination_airport: body.destination_airport,
-      outbound_departure_at: outboundAt,
-      return_departure_at: returnAt,
-      outbound_airline: null,
-      outbound_flight_number: null,
-      outbound_arrival_at: null,
-      return_airline: null,
-      return_flight_number: null,
-      return_arrival_at: null,
-      days_outside_uk: daysOutsideUK(outboundAt, returnAt),
-      created_by: user.id,
-      last_modified_by: user.id,
-    }
-  } else {
-    const outboundMs = new Date(body.outbound_departure_at).getTime()
-    const returnMs = new Date(body.return_departure_at).getTime()
-    insertPayload = {
-      owner_id: activeMainAccountId,
-      ...body,
-      days_outside_uk: Math.max(0, Math.round((returnMs - outboundMs) / 86_400_000)),
-      created_by: user.id,
-      last_modified_by: user.id,
-    }
-  }
+  const normalisedLegs = body.legs.map(leg => ({
+    from_airport:  leg.from_airport,
+    to_airport:    leg.to_airport,
+    airline:       'airline' in leg ? leg.airline : null,
+    flight_number: 'flight_number' in leg ? leg.flight_number : null,
+    departure_at:  body.source === 'manual'
+      ? `${leg.departure_at}T00:00:00.000Z`
+      : (leg as { departure_at: string }).departure_at,
+    arrival_at:    'arrival_at' in leg
+      ? (leg as { arrival_at: string }).arrival_at
+      : null,
+  }))
 
-  const { data: trip, error } = await supabase
+  // ── days_outside_uk: first leg departure → last leg departure ─────────────
+
+  const firstDeparture = normalisedLegs[0].departure_at
+  const lastDeparture  = normalisedLegs[normalisedLegs.length - 1].departure_at
+
+  // ── Insert trip ───────────────────────────────────────────────────────────
+
+  const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .insert(insertPayload)
+    .insert({
+      owner_id:        activeMainAccountId,
+      source:          body.source,
+      trip_type:       body.trip_type,
+      days_outside_uk: daysOutsideUK(firstDeparture, lastDeparture),
+      created_by:      user.id,
+      last_modified_by: user.id,
+    })
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (tripError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+
+  // ── Insert legs ───────────────────────────────────────────────────────────
+
+  const { data: insertedLegs, error: legsError } = await supabase
+    .from('trip_legs')
+    .insert(
+      normalisedLegs.map((leg, i) => ({ ...leg, trip_id: trip.id, leg_order: i + 1 }))
+    )
+    .select()
+
+  if (legsError) {
+    // Roll back the trip row to avoid orphaned records
+    await supabase.from('trips').delete().eq('id', trip.id)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+
+  // ── Audit log ─────────────────────────────────────────────────────────────
 
   await logAudit({
-    performedBy: user.id,
-    action: 'created',
-    tripId: trip.id,
-    tripSnapshot: trip as Trip,
-    onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
+    performedBy:  user.id,
+    action:       'created',
+    tripId:       trip.id,
+    tripSnapshot: { ...(trip as Trip), legs: insertedLegs as TripLeg[] },
+    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
   })
 
-  return NextResponse.json(trip, { status: 201 })
+  return NextResponse.json({ ...trip, legs: insertedLegs }, { status: 201 })
 }

@@ -42,6 +42,13 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function tripFirstDep(t: TripSlice) { return t.legs[0]?.departure_at ?? '' }
+function tripLastDep(t: TripSlice)  { return t.legs[t.legs.length - 1]?.departure_at ?? '' }
+function tripRoute(t: TripSlice) {
+  if (!t.legs.length) return '?'
+  return [...t.legs.map(l => l.from_airport), t.legs[t.legs.length - 1].to_airport].join(' → ')
+}
+
 export default function TripTimeline({ trips, today, referenceDate, annualDaysAbroad }: Props) {
   const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; trip: TripSlice | null }>({
     visible: false, x: 0, y: 0, trip: null,
@@ -61,10 +68,13 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
   const months = buildMonths(windowStart, windowEnd, totalDays)
 
   const todayMs = todayDate.getTime()
-  const upcoming = trips.filter(t => new Date(t.return_departure_at).getTime() >= todayMs)
-  const past     = trips.filter(t => new Date(t.return_departure_at).getTime() < todayMs)
+  const upcoming = trips.filter(t => new Date(tripLastDep(t)).getTime() >= todayMs)
+  const past     = trips.filter(t => new Date(tripLastDep(t)).getTime() < todayMs)
 
-  const countries = new Set(trips.map(t => getAirportInfo(t.destination_airport).country))
+  // Count unique countries from all non-final legs (final leg goes home)
+  const countries = new Set(
+    trips.flatMap(t => t.legs.slice(0, -1).map(l => getAirportInfo(l.to_airport).country))
+  )
 
   const annualLabel = referenceDate
     ? `Annual days abroad till ${new Date(referenceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
@@ -155,13 +165,15 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
               </div>
             </div>
 
-            {/* Trip rows — full row is the tap target */}
+            {/* Trip rows */}
             {trips.map((trip) => {
-              const isPast = new Date(trip.return_departure_at).getTime() < todayMs
-              const leftPct  = pctOf(trip.outbound_departure_at, windowStart, totalDays)
-              const rightPct = pctOf(trip.return_departure_at,   windowStart, totalDays)
+              const firstDep = tripFirstDep(trip)
+              const lastDep  = tripLastDep(trip)
+              const isPast   = new Date(lastDep).getTime() < todayMs
+              const leftPct  = pctOf(firstDep, windowStart, totalDays)
+              const rightPct = pctOf(lastDep,  windowStart, totalDays)
               const widthPct = Math.max(0.3, rightPct - leftPct)
-              const { flag } = getAirportInfo(trip.destination_airport)
+              const { flag } = getAirportInfo(trip.legs[0]?.to_airport ?? '')
 
               return (
                 <div
@@ -169,12 +181,12 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
                   className="flex items-center h-11 mb-2 cursor-pointer"
                   onClick={() => setSheet(trip)}
                 >
-                  {/* Row label */}
+                  {/* Row label: compact origin → first destination */}
                   <div
                     className="shrink-0 text-right pr-4 text-xs font-semibold text-slate-500 tracking-wide"
                     style={{ width: 136 }}
                   >
-                    {trip.departure_airport} → {trip.destination_airport}
+                    {trip.legs[0]?.from_airport ?? '?'} → {trip.legs[0]?.to_airport ?? '?'}
                   </div>
 
                   {/* Bar container */}
@@ -234,9 +246,9 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
           >
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-3xl mb-1">{getAirportInfo(sheet.destination_airport).flag}</div>
+                <div className="text-3xl mb-1">{getAirportInfo(sheet.legs[0]?.to_airport ?? '').flag}</div>
                 <div className="text-lg font-semibold text-slate-100">
-                  {getAirportInfo(sheet.destination_airport).country}
+                  {tripRoute(sheet)}
                 </div>
               </div>
               <button
@@ -248,13 +260,10 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
               </button>
             </div>
             <div className="text-sm text-slate-500">
-              Route: <span className="text-slate-300">{sheet.departure_airport} → {sheet.destination_airport}</span>
+              Depart: <span className="text-slate-300">{fmtDate(tripFirstDep(sheet))}</span>
             </div>
             <div className="text-sm text-slate-500">
-              Depart: <span className="text-slate-300">{fmtDate(sheet.outbound_departure_at)}</span>
-            </div>
-            <div className="text-sm text-slate-500">
-              Return: <span className="text-slate-300">{fmtDate(sheet.return_departure_at)}</span>
+              Return: <span className="text-slate-300">{fmtDate(tripLastDep(sheet))}</span>
             </div>
             <div className="text-sm text-slate-500">
               Duration: <span className="text-slate-300">{sheet.days_outside_uk} day{sheet.days_outside_uk !== 1 ? 's' : ''} outside UK</span>

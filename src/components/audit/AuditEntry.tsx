@@ -16,11 +16,11 @@ function formatTimestamp(iso: string) {
 
 export default function AuditEntry({ entry }: { entry: AuditLogEntryWithUser }) {
   const snapshot = entry.trip_snapshot
-  const dest = snapshot?.destination_airport ?? '?'
-  const depDate = snapshot?.outbound_departure_at
-    ? new Date(snapshot.outbound_departure_at).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'short', year: 'numeric',
-      })
+  const legs = snapshot?.legs ?? []
+  const dest = legs[0]?.to_airport ?? '?'
+  const firstDep = legs[0]?.departure_at
+  const depDate = firstDep
+    ? new Date(firstDep).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '?'
 
   return (

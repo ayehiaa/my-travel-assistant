@@ -17,6 +17,11 @@ function formatTime(iso: string) {
   })
 }
 
+function legLabel(index: number, total: number, tripType: string) {
+  if (tripType === 'round_trip') return index === 0 ? 'Out' : 'Return'
+  return `Leg ${index + 1}`
+}
+
 type Props = {
   trip: TripWithUsers
   canDelete: boolean
@@ -27,8 +32,15 @@ export default function TripCard({ trip, canDelete }: Props) {
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
 
+  const legs = trip.legs ?? []
+  const firstLeg = legs[0]
+  const lastLeg = legs[legs.length - 1]
+  const routeStr = legs.length
+    ? [...legs.map(l => l.from_airport), lastLeg.to_airport].join(' → ')
+    : '?'
+
   async function handleDelete() {
-    if (!confirm(`Delete trip to ${trip.destination_airport}? This cannot be undone.`)) return
+    if (!confirm(`Delete trip ${routeStr}? This cannot be undone.`)) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/trips/${trip.id}`, { method: 'DELETE' })
@@ -51,13 +63,13 @@ export default function TripCard({ trip, canDelete }: Props) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-gray-900">
-              {trip.departure_airport} → {trip.destination_airport}
-            </span>
+            <span className="text-lg font-semibold text-gray-900">{routeStr}</span>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {formatDate(trip.outbound_departure_at)} → {formatDate(trip.return_departure_at)}
-          </p>
+          {firstLeg && lastLeg && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {formatDate(firstLeg.departure_at)} → {formatDate(lastLeg.departure_at)}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className="inline-flex items-center justify-center bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg px-3 py-1 min-w-[4rem] text-center">
@@ -72,22 +84,18 @@ export default function TripCard({ trip, canDelete }: Props) {
         <p className="text-xs text-gray-400 italic">Manually added</p>
       ) : (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-xs font-medium text-gray-400 uppercase">Out</span>
-              <span className="font-medium text-gray-900">{trip.outbound_airline}</span>
-              <span className="text-gray-400">{trip.outbound_flight_number}</span>
+          {legs.map((leg, i) => (
+            <div key={leg.id} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className="w-16 text-xs font-medium text-gray-400 uppercase">
+                  {legLabel(i, legs.length, trip.trip_type)}
+                </span>
+                <span className="font-medium text-gray-900">{leg.airline}</span>
+                <span className="text-gray-400">{leg.flight_number}</span>
+              </div>
+              <span className="text-gray-600 tabular-nums">{formatTime(leg.departure_at)}</span>
             </div>
-            <span className="text-gray-600 tabular-nums">{formatTime(trip.outbound_departure_at)}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-16 text-xs font-medium text-gray-400 uppercase">Return</span>
-              <span className="font-medium text-gray-900">{trip.return_airline}</span>
-              <span className="text-gray-400">{trip.return_flight_number}</span>
-            </div>
-            <span className="text-gray-600 tabular-nums">{formatTime(trip.return_departure_at)}</span>
-          </div>
+          ))}
         </div>
       )}
 

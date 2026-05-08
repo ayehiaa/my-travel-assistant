@@ -1,11 +1,10 @@
-import { FlightOffer, Airport } from '@/types/flights'
+import { FlightOffer, LegFormState } from '@/types/flights'
 import { daysOutsideUK } from '@/lib/daysCalculator'
 
 type Props = {
-  outbound: FlightOffer
-  returnFlight: FlightOffer
-  origin: Airport
-  destination: Airport
+  tripType: 'round_trip' | 'multi_city'
+  legs: LegFormState[]
+  selectedFlights: FlightOffer[]
   onSave: () => void
   onBack: () => void
   saving: boolean
@@ -13,14 +12,9 @@ type Props = {
 }
 
 function formatDateTime(iso: string) {
-  const date = new Date(iso)
-  return date.toLocaleString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+  return new Date(iso).toLocaleString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   })
 }
 
@@ -40,17 +34,25 @@ function FlightRow({ label, offer }: { label: string; offer: FlightOffer }) {
   )
 }
 
+function flightLabel(index: number, total: number, tripType: 'round_trip' | 'multi_city') {
+  if (tripType === 'round_trip') return index === 0 ? 'Outbound' : 'Return'
+  return `Leg ${index + 1}`
+}
+
 export default function TripSummary({
-  outbound,
-  returnFlight,
-  origin,
-  destination,
-  onSave,
-  onBack,
-  saving,
-  saveError,
+  tripType, legs, selectedFlights, onSave, onBack, saving, saveError,
 }: Props) {
-  const days = daysOutsideUK(outbound.departureAt, returnFlight.departureAt)
+  const firstFlight = selectedFlights[0]
+  const lastFlight  = selectedFlights[selectedFlights.length - 1]
+  const days = firstFlight && lastFlight
+    ? daysOutsideUK(firstFlight.departureAt, lastFlight.departureAt)
+    : 0
+
+  // Full route label from city names
+  const cities = legs.map(l => l.origin?.cityName ?? l.origin?.iataCode ?? '?')
+  const finalDest = legs[legs.length - 1]?.destination
+  if (finalDest) cities.push(finalDest.cityName ?? finalDest.iataCode ?? '?')
+  const routeLabel = cities.join(' → ')
 
   return (
     <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-5">
@@ -66,9 +68,7 @@ export default function TripSummary({
 
       {/* Route */}
       <div className="text-center py-2">
-        <p className="text-2xl font-semibold text-gray-900">
-          {origin.cityName} → {destination.cityName}
-        </p>
+        <p className="text-2xl font-semibold text-gray-900">{routeLabel}</p>
       </div>
 
       {/* Days outside UK */}
@@ -79,12 +79,16 @@ export default function TripSummary({
         </p>
       </div>
 
-      {/* Flights */}
+      {/* Flights — one row per leg */}
       <div className="space-y-4 divide-y divide-gray-100">
-        <FlightRow label="Outbound" offer={outbound} />
-        <div className="pt-4">
-          <FlightRow label="Return" offer={returnFlight} />
-        </div>
+        {selectedFlights.map((flight, i) => (
+          <div key={i} className={i > 0 ? 'pt-4' : ''}>
+            <FlightRow
+              label={flightLabel(i, selectedFlights.length, tripType)}
+              offer={flight}
+            />
+          </div>
+        ))}
       </div>
 
       {saveError && (

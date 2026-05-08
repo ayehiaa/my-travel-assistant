@@ -1,8 +1,8 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.3  
+**Version**: 1.5  
 **Date**: 2026-05-08  
-**Reference**: PRD v1.7  
+**Reference**: PRD v1.9  
 
 Each story is scoped to fit within a single implementation session (~50K tokens). Stories must be built in order — each one depends on the previous.
 
@@ -735,6 +735,118 @@ src/components/timeline/TripTimeline.tsx                (modified)
 
 ---
 
+## Story 16 — Multi-city Flight Search ✅
+
+**As a** user,
+**I want** to search for multi-city trips with up to 3 legs,
+**so that** I can record and plan trips that visit multiple destinations (e.g. LHR → DUS → CDG → LHR) as a single trip.
+
+### Acceptance Criteria
+- [x] A trip-type tab switcher ("Round trip" | "Multi-city") appears at the top of the search form
+- [x] Switching trip type resets legs, results, and selection state
+- [x] Round-trip mode retains the existing 2-column layout using legs[0] (outbound) and legs[1] (return)
+- [x] Multi-city mode renders a vertical stack of leg rows, each with: origin, destination, departure date, time slot toggle
+- [x] Each leg row (from leg 2 onward) has an × button to remove it (removing leg 2 collapses legs 2 and 3)
+- [x] "Add leg" button adds another leg (max 3); next leg's origin auto-fills from previous leg's destination
+- [x] 3rd leg's destination auto-fills from leg 0's origin (fly home)
+- [x] Multi-city search fires parallel SerpAPI calls per leg and returns `{ tripType: 'multi_city', legs: FlightOffer[][] }`
+- [x] Results panel shows a vertical stack of per-leg flight columns (one FlightColumn per leg)
+- [x] "Review Trip" enabled when all legs have a selected flight
+- [x] Trip summary shows full city chain route and one FlightRow per selected leg
+- [x] `days_outside_uk` = first leg departure → last leg departure (same `daysOutsideUK` helper)
+- [x] Saved trip writes one `trip_legs` row per leg; `trip_type` column on `trips` is `multi_city`
+- [x] Dashboard route display shows full chain: `LHR → DUS → CDG → LHR`
+- [x] Timeline bar: left edge = first leg departure, right edge = last leg departure; tooltip shows full route chain
+
+### Technical Tasks
+- Write `supabase/migrations/005_multi_city.sql` — create `trip_legs` table, backfill existing round trips, drop flat columns from `trips`, add RLS
+- Update `src/types/database.ts` — `Trip` gains `trip_type`; new `TripLeg` + `TripLegInsert` types; `TripWithUsers` gains `legs: TripLeg[]`
+- Update `src/types/flights.ts` — add `LegFormState`, `LegSearchRequest`; discriminated union `FlightSearchRequest = RoundTripSearchRequest | MultiCitySearchRequest`
+- Rewrite `src/hooks/useFlightSearch.ts` — legs-based state, `tripType`, `updateLeg`, `addLeg`, `removeLeg`, `selectedFlights[]`
+- Update `src/app/api/flights/search/route.ts` — branch on `tripType`; multi-city fires parallel SerpAPI calls per leg
+- Update `src/app/api/trips/route.ts` — accept `legs` array; insert trip then `trip_legs`; GET joins `trip_legs(*)`
+- Update `src/app/api/trips/[id]/route.ts` — DELETE fetches `trip_legs(*)` before cascade-delete for audit snapshot
+- Update `src/app/page.tsx` — join `trip_legs(*)`, sort/filter by `legs[0].departure_at`
+- Update `src/app/timeline/page.tsx` — fetch `trip_legs`, filter in code, annual calc uses first/last leg departure
+- Update `src/components/dashboard/TripCard.tsx` — route string from legs array, dynamic Out/Return/Leg N labels
+- Update `src/components/dashboard/AddPastTripModal.tsx` — send `{ trip_type: 'round_trip', legs: [...] }` payload
+- Rewrite `src/components/search/SearchForm.tsx` — tab switcher, `RoundTripForm`/`MultiCityForm` with `LegRow`
+- Rewrite `src/components/search/FlightResultsPanel.tsx` — discriminate on `results.tripType`; multi_city stack
+- Rewrite `src/components/search/TripSummary.tsx` — full route chain, stacked FlightRow per leg
+- Rewrite `src/app/search/page.tsx` — wire new hook API; adaptive skeleton
+- Update `src/components/audit/AuditEntry.tsx` — derive destination/date from `snapshot.legs[0]`
+- Update `src/components/timeline/TripTimeline.tsx` — helpers using legs; bar uses first/last dep
+- Update `src/components/timeline/Tooltip.tsx` — `TripSlice` redefined with `legs` array
+- Update `src/lib/auditLogger.ts` — `tripSnapshot` type updated to `Trip & { legs: TripLeg[] }`
+
+### Files Created / Modified
+```
+supabase/migrations/005_multi_city.sql                 (new)
+src/types/database.ts                                  (modified)
+src/types/flights.ts                                   (modified)
+src/hooks/useFlightSearch.ts                           (rewritten)
+src/app/api/flights/search/route.ts                    (modified)
+src/app/api/trips/route.ts                             (modified)
+src/app/api/trips/[id]/route.ts                        (modified)
+src/app/page.tsx                                       (modified)
+src/app/timeline/page.tsx                              (modified)
+src/components/dashboard/TripCard.tsx                  (modified)
+src/components/dashboard/AddPastTripModal.tsx          (modified)
+src/components/search/SearchForm.tsx                   (rewritten)
+src/components/search/FlightResultsPanel.tsx           (rewritten)
+src/components/search/TripSummary.tsx                  (rewritten)
+src/app/search/page.tsx                                (rewritten)
+src/components/audit/AuditEntry.tsx                    (modified)
+src/components/timeline/TripTimeline.tsx               (modified)
+src/components/timeline/Tooltip.tsx                    (modified)
+src/lib/auditLogger.ts                                 (modified)
+```
+
+### Dependencies
+- Story 15 (Annual Days Abroad) — all prior schema and UI must exist
+- Migration `005_multi_city.sql` must be applied via `supabase db push` before the app works end-to-end
+
+---
+
+## Story 17 — Sojourn Landing Page ✅
+
+**As a** visitor who is not yet logged in,
+**I want** to see a marketing landing page at `/` explaining what the app does,
+**so that** I can understand the product before signing in.
+
+### Acceptance Criteria
+- [x] Unauthenticated visitors who navigate to `/` see a landing page instead of being redirected to `/login`
+- [x] The app is branded as **Sojourn** throughout — page title, nav, and all copy
+- [x] A sticky top nav shows the Sojourn logo/name on the left and a "Sign in →" button on the right
+- [x] A dark hero section contains a full-width plane-takeoff photo, the headline "Your trusted travel tracker", a subtitle, a primary CTA button ("Sign in to Sojourn"), and a 3-stat strip (183 days abroad / 5 countries visited / 3 legs per trip)
+- [x] Four alternating light/dark feature sections (each with a mockup + copy):
+  1. Days counter — progress bar mockup showing days abroad
+  2. Flight search — search form + results mockup
+  3. Timeline — Gantt bar chart mockup with flag emoji and today marker
+  4. Multi-city trips — 3-leg stacked card mockup
+- [x] A dark CTA section at the bottom: headline + "Sign in" button
+- [x] A minimal footer
+- [x] Authenticated users visiting `/` continue to see the dashboard (unchanged behaviour)
+- [x] `/` is added to the public route allowlist in `src/proxy.ts` so middleware does not redirect unauthenticated visitors
+
+### Technical Tasks
+- Add `pathname === '/'` to `isPublicRoute` in `src/proxy.ts`
+- Create `src/components/landing/LandingPage.tsx` — full landing page component (dark hero, 4 feature sections, CTA, footer)
+- Update `src/app/page.tsx` — add `if (!user) return <LandingPage />`; update metadata `title` to `'Sojourn — Your trusted travel tracker'`
+
+### Files Created / Modified
+```
+src/proxy.ts                               (modified — public route allowlist)
+src/components/landing/LandingPage.tsx     (new)
+src/app/page.tsx                           (modified — landing branch + metadata)
+```
+
+### Dependencies
+- Story 2 (Auth) — `getAuthUser()` must exist to branch on authentication state
+- Story 16 (Multi-city) — landing page references multi-city as a feature
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -755,8 +867,10 @@ Story 1 (Foundation)
 Story 13 (Role Rename & Schema) ← depends on Story 1
     └── Story 14 (Multi-Account UI) ← depends on Story 13
             └── Story 15 (Annual Days Abroad Counter) ← depends on Story 14
+                    └── Story 16 (Multi-city Flight Search) ← depends on Story 15
+                            └── Story 17 (Sojourn Landing Page) ← depends on Story 16
 ```
 
 ---
 
-## Total Estimated Stories: 16
+## Total Estimated Stories: 18
