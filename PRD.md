@@ -1,7 +1,7 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.6  
-**Date**: 2026-05-07  
+**Version**: 1.7  
+**Date**: 2026-05-08  
 **Owner**: Ziad Elsayed  
 
 ---
@@ -18,6 +18,7 @@ My Travel Assistant is a multi-account web application that allows authorised us
 - Maintain a fully isolated trip history per main account, accessible from any device
 - Allow assistant accounts to manage trips on behalf of one or more main accounts
 - Track days spent outside the UK per trip (for personal residency/tax awareness)
+- Track total days outside the UK within a user-defined annual window for 90-day rule compliance
 - Know who created or modified any trip at any point in time, including assistant attribution
 
 ---
@@ -204,6 +205,22 @@ A **"+ Add past trip"** button in the Past Trips section opens a modal with the 
 
 ---
 
+### 7.8 Annual Days Abroad Counter
+
+Main accounts can set a **reference date** in Settings. The app then counts all days spent outside the UK in the 12-month window ending on that date and displays the total on the Timeline page.
+
+**Reference window**: `[referenceDate − 1 year, referenceDate]` (inclusive).
+
+**Boundary trip handling**: Trips that partially overlap the window are clipped to the window boundaries, then the standard per-trip rule applies to the clipped segment (exclude first and last day). Example: trip 10 Jul → 20 Jul with window starting 15 Jul → clipped to 15 Jul → 20 Jul → 4 days counted (16, 17, 18, 19).
+
+**Settings page**: A "90-day calculation" card below the Linked Assistants card shows a date input and Save button. Main accounts only. Stored as `reference_date date` (nullable) on `user_roles`.
+
+**Timeline stat card**: Replaces the raw "Days abroad" card with "Annual days abroad till [date]". If no reference date is set, shows a prompt linking to Settings. Assistants see this card read-only when viewing a main account's timeline.
+
+**Query scope**: All trips overlapping the reference window are fetched for the count — this is independent of the ±6-month chart window.
+
+---
+
 ### 7.7 Audit Log
 
 Every create, update, and delete action on a trip is recorded in an `audit_log` table.
@@ -230,6 +247,7 @@ The audit log is append-only. No entries can be deleted.
 | user_id | uuid | Foreign key → auth.users, primary key |
 | role | varchar | `main` or `assistant` |
 | display_name | varchar | Human-readable name shown in UI and audit log |
+| reference_date | date | Nullable — end date of the annual 90-day calculation window (main accounts only) |
 | created_at | timestamptz | Auto |
 
 ### `account_links` table
@@ -295,6 +313,7 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 | `/api/account-links` | GET | List assistants linked to the current main account |
 | `/api/account-links` | POST | Link an assistant by email to the current main account |
 | `/api/account-links?id=<id>` | DELETE | Remove an assistant link |
+| `/api/settings/reference-date` | PATCH | Update reference date for the current main account |
 
 All write operations trigger an audit log entry server-side using the Supabase service role key.
 
@@ -357,13 +376,14 @@ SERPAPI_KEY=
 12. **Trip timeline** — `/timeline` Gantt view, 6 months back to 6 months ahead, flag emoji, today marker
 13. **Role rename & schema** — rename `owner` → `main`, add `owner_id` to trips, `account_links` table, `on_behalf_of` to audit log, rewrite RLS
 14. **Multi-account UI** — account switcher, `/settings` page, scoped queries, assistant attribution in audit log
+15. **Annual days abroad counter** — reference date setting, windowed calculation with boundary clipping, timeline stat card
 
 ---
 
 ## 14. Out of Scope (Future Considerations)
 
 - Email/calendar reminders for upcoming trips
-- Cumulative days outside UK across all trips (yearly total)
+- ~~Cumulative days outside UK across all trips (yearly total)~~ — implemented in Story 15
 - Group/multi-passenger trips
 - Open-jaw or multi-city itineraries
 - Fare class / cabin selection

@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { UserRoleRecord } from '@/types/database'
 import AssistantsManager from '@/components/settings/AssistantsManager'
+import ReferenceDateSettings from '@/components/settings/ReferenceDateSettings'
 
 export const metadata = {
   title: 'Settings — Travel Assistant',
@@ -38,6 +39,12 @@ export default async function SettingsPage() {
     createdAt: l.created_at,
   }))
 
+  const { data: roleRow } = await supabase
+    .from('user_roles')
+    .select('reference_date')
+    .eq('user_id', user.id)
+    .single()
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="mb-8">
@@ -52,6 +59,15 @@ export default async function SettingsPage() {
           an assistant account to link it.
         </p>
         <AssistantsManager initial={initial} />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">90-day calculation</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          Set the end date of your annual window. The app will count days spent outside
+          the UK in the 12 months leading up to this date.
+        </p>
+        <ReferenceDateSettings initialDate={roleRow?.reference_date ?? null} />
       </div>
     </div>
   )

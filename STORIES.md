@@ -1,8 +1,8 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.2  
-**Date**: 2026-05-07  
-**Reference**: PRD v1.6  
+**Version**: 1.3  
+**Date**: 2026-05-08  
+**Reference**: PRD v1.7  
 
 Each story is scoped to fit within a single implementation session (~50K tokens). Stories must be built in order — each one depends on the previous.
 
@@ -685,6 +685,53 @@ src/proxy.ts                                    (modified — settings guard + c
 
 ---
 
+## Story 15 — Annual Days Abroad Counter ✅
+
+**As a** main account user,
+**I want** to set a reference date and see the total days I've spent outside the UK in the 12 months leading up to that date,
+**so that** I can monitor my compliance with the 90-day rule at a glance.
+
+### Acceptance Criteria
+- [x] A "90-day calculation" card appears on `/settings` below the "Linked assistants" card (main accounts only)
+- [x] The card shows a date input pre-filled with the current reference date (if set) and a Save button
+- [x] Save is disabled until the date changes; on success a toast confirms; on failure a toast errors
+- [x] Any date is accepted — no past/future restriction
+- [x] The Timeline page stat card previously labelled "Days abroad" is replaced with "Annual days abroad till [date]"
+- [x] The count reflects all days outside the UK in the 12-month window ending on the reference date, with trips clipped to the window boundaries (first and last day of clipped segment excluded)
+- [x] If no reference date is set, the stat card shows `—` and a prompt: "Set a reference date in Settings" (linked)
+- [x] Assistants see the stat card read-only when viewing a main account's timeline (Settings page remains main-only)
+- [x] The Timeline chart window (±6 months from today) is unchanged
+
+### Boundary rule (agreed)
+Trip clipped to window, then exclude first and last day of the clipped segment.
+Example: trip 10 Jul → 20 Jul, window starts 15 Jul → clipped 15 Jul → 20 Jul → counts 16, 17, 18, 19 = **4 days**.
+
+### Technical Tasks
+- Add `reference_date date` nullable column to `user_roles` via migration `004_reference_date.sql`
+- Add `daysOutsideUKInWindow(outbound, return, windowStart, windowEnd)` to `src/lib/daysCalculator.ts` with unit tests
+- Create `src/app/api/settings/reference-date/route.ts` — PATCH, main role only
+- Create `src/components/settings/ReferenceDateSettings.tsx` — date input + save button client component
+- Update `src/app/settings/page.tsx` — fetch `reference_date`, render new card
+- Update `src/app/timeline/page.tsx` — fetch `reference_date` for active main account; query trips overlapping reference window; compute windowed sum; pass props to `TripTimeline`
+- Update `src/components/timeline/TripTimeline.tsx` — accept `referenceDate` + `annualDaysAbroad` props; replace stat card
+
+### Files Created / Modified
+```
+supabase/migrations/004_reference_date.sql              (new)
+src/lib/daysCalculator.ts                               (modified — new export)
+src/lib/daysCalculator.test.ts                          (modified — new tests)
+src/app/api/settings/reference-date/route.ts            (new)
+src/components/settings/ReferenceDateSettings.tsx       (new)
+src/app/settings/page.tsx                               (modified)
+src/app/timeline/page.tsx                               (modified)
+src/components/timeline/TripTimeline.tsx                (modified)
+```
+
+### Dependencies
+- Story 14 (Multi-Account UI) — `user_roles` and the settings page pattern must exist
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -704,8 +751,9 @@ Story 1 (Foundation)
 
 Story 13 (Role Rename & Schema) ← depends on Story 1
     └── Story 14 (Multi-Account UI) ← depends on Story 13
+            └── Story 15 (Annual Days Abroad Counter) ← depends on Story 14
 ```
 
 ---
 
-## Total Estimated Stories: 15
+## Total Estimated Stories: 16

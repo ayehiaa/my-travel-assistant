@@ -7,6 +7,8 @@ import Tooltip, { TripSlice } from './Tooltip'
 interface Props {
   trips: TripSlice[]
   today: string
+  referenceDate: string | null
+  annualDaysAbroad: number | null
 }
 
 function pctOf(date: string, windowStart: Date, totalDays: number) {
@@ -40,7 +42,7 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function TripTimeline({ trips, today }: Props) {
+export default function TripTimeline({ trips, today, referenceDate, annualDaysAbroad }: Props) {
   const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; trip: TripSlice | null }>({
     visible: false, x: 0, y: 0, trip: null,
   })
@@ -63,7 +65,10 @@ export default function TripTimeline({ trips, today }: Props) {
   const past     = trips.filter(t => new Date(t.return_departure_at).getTime() < todayMs)
 
   const countries = new Set(trips.map(t => getAirportInfo(t.destination_airport).country))
-  const totalDaysAbroad = trips.reduce((acc, t) => acc + t.days_outside_uk, 0)
+
+  const annualLabel = referenceDate
+    ? `Annual days abroad till ${new Date(referenceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : 'Annual days abroad'
 
   useEffect(() => {
     const el = scrollRef.current
@@ -84,16 +89,31 @@ export default function TripTimeline({ trips, today }: Props) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { value: upcoming.length, label: 'Upcoming trips' },
-          { value: past.length,     label: 'Past (this window)' },
-          { value: totalDaysAbroad, label: 'Days abroad' },
-          { value: countries.size,  label: 'Countries' },
+          { value: String(upcoming.length), label: 'Upcoming trips' },
+          { value: String(past.length),     label: 'Past (this window)' },
+          { value: countries.size,          label: 'Countries' },
         ].map(s => (
           <div key={s.label} className="bg-[#1e2130] border border-[#2d3348] rounded-xl px-5 py-4">
             <div className="text-2xl font-bold text-slate-100">{s.value}</div>
             <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
           </div>
         ))}
+        <div className="bg-[#1e2130] border border-[#2d3348] rounded-xl px-5 py-4">
+          {annualDaysAbroad !== null ? (
+            <>
+              <div className="text-2xl font-bold text-slate-100">{annualDaysAbroad}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{annualLabel}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-slate-500">—</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Set a reference date in{' '}
+                <a href="/settings" className="text-blue-400 hover:underline">Settings</a>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Chart */}
