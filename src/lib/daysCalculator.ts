@@ -8,9 +8,9 @@ export function daysOutsideUK(outboundDepartureAt: string, returnDepartureAt: st
   return Math.max(0, diffDays - 1)
 }
 
-// Same rule applied to a trip clipped to [windowStart, windowEnd].
-// If the trip crosses a boundary, only the days inside the window count,
-// still excluding the first and last day of the clipped segment.
+// Count days abroad that fall within [windowStart, windowEnd].
+// Only the trip's own departure and return days are excluded — window
+// boundaries are plain calendar dates and are counted if the user was abroad.
 export function daysOutsideUKInWindow(
   outboundDepartureAt: string,
   returnDepartureAt: string,
@@ -20,11 +20,17 @@ export function daysOutsideUKInWindow(
   const tripStart = new Date(outboundDepartureAt.split('T')[0])
   const tripEnd   = new Date(returnDepartureAt.split('T')[0])
 
-  const clippedStart = tripStart < windowStart ? windowStart : tripStart
-  const clippedEnd   = tripEnd   > windowEnd   ? windowEnd   : tripEnd
+  // Actual days-abroad range: exclude departure and return days
+  const firstDay = new Date(tripStart); firstDay.setDate(firstDay.getDate() + 1)
+  const lastDay  = new Date(tripEnd);   lastDay.setDate(lastDay.getDate()   - 1)
 
-  if (clippedStart >= clippedEnd) return 0
+  if (firstDay > lastDay) return 0
 
-  const diffDays = Math.round((clippedEnd.getTime() - clippedStart.getTime()) / (1000 * 60 * 60 * 24))
-  return Math.max(0, diffDays - 1)
+  // Intersect with window — inclusive on both ends
+  const start = firstDay < windowStart ? windowStart : firstDay
+  const end   = lastDay  > windowEnd   ? windowEnd   : lastDay
+
+  if (start > end) return 0
+
+  return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
