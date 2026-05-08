@@ -104,8 +104,15 @@ export async function searchAirports(
   type TpAirport = { code: string; name: string; city_name: string; type: string }
 
   const data = (await res.json()) as TpAirport[]
-  return data
-    .filter(a => (a.type === 'airport' || a.type === 'city') && a.code)
+  const all = data.filter(a => (a.type === 'airport' || a.type === 'city') && a.code)
+
+  // Prefer airport results — they carry specific IATA codes SerpAPI can use.
+  // Fall back to city results only when no airports matched (e.g. "Lis" → Lisbon LIS).
+  // This avoids multi-airport city codes like LON/PAR/NYC that SerpAPI rejects.
+  const airports = all.filter(a => a.type === 'airport')
+  const results  = airports.length > 0 ? airports : all.filter(a => a.type === 'city')
+
+  return results
     .slice(0, 8)
     .map(a => ({ iataCode: a.code, name: a.name, cityName: a.city_name ?? a.name }))
 }
