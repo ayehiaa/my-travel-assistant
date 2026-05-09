@@ -37,7 +37,7 @@ export default function SearchPage() {
         background: 'linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 100%)',
         position: 'relative',
         overflow: 'hidden',
-        padding: '48px 32px 36px',
+        padding: '48px clamp(16px, 4vw, 32px) 36px',
       }}>
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -69,7 +69,7 @@ export default function SearchPage() {
       </section>
 
       {/* Results area */}
-      <div style={{ maxWidth: 896, margin: '0 auto', padding: '0 32px' }}>
+      <div style={{ maxWidth: 896, margin: '0 auto', padding: '0 clamp(16px, 4vw, 32px)' }}>
         {searchStatus === 'loading' && (
           <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round_trip' ? '1fr 1fr' : '1fr', gap: 24, marginTop: 32 }}>
             {skeletonTitles.map(title => (

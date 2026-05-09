@@ -88,7 +88,7 @@ export default async function SettingsPage() {
   const userInitials = initials(user.displayName)
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: '40px 32px' }}>
+    <div style={{ maxWidth: 960, margin: '0 auto', padding: '40px clamp(16px, 4vw, 32px)' }}>
       {/* Page head */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 4 }}>

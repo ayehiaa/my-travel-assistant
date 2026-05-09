@@ -79,6 +79,7 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
 
   return (
     <div
+      className="sj-past-row"
       style={{
         display: 'grid',
         gridTemplateColumns: '56px 1.2fr 1fr 1fr 0.7fr 0.6fr',
@@ -93,12 +94,12 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
       onMouseLeave={e => { e.currentTarget.style.background = ''; setHovered(false) }}
     >
       {/* Gradient swatch */}
-      <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
+      <div className="sj-pr-swatch" style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
         <span style={{ position: 'absolute', bottom: 4, left: 4, fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'white', textShadow: '0 1px 2px rgba(0,0,0,.3)' }}>{flag}</span>
       </div>
 
       {/* Route + tags */}
-      <div>
+      <div className="sj-pr-route">
         <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0 }}>
           {routeParts.map((code, i) => (
             <span key={i}>
@@ -115,7 +116,7 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
       </div>
 
       {/* Dates */}
-      <div style={{ fontSize: 13 }}>
+      <div className="sj-pr-dates" style={{ fontSize: 13 }}>
         {firstLeg && lastLeg && (
           <>
             <strong>{fmtDate(firstLeg.departure_at)}</strong>
@@ -125,19 +126,19 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
       </div>
 
       {/* Flight numbers */}
-      <div style={{ fontSize: 13 }}>
+      <div className="sj-pr-flights" style={{ fontSize: 13 }}>
         <small style={{ display: 'block', color: 'var(--ink-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Flights</small>
         {isManual ? <span style={{ color: 'var(--ink-4)', fontStyle: 'italic' }}>—</span> : flightNums}
       </div>
 
       {/* Days count */}
-      <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+      <div className="sj-pr-days" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
         <span style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22 }}>{trip.days_outside_uk}</span>
         <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>days</span>
       </div>
 
       {/* Chevron / delete */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+      <div className="sj-pr-action" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
         {canDelete && hovered ? (
           <button
             onClick={e => { e.stopPropagation(); handleDelete() }}

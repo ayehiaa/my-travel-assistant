@@ -62,7 +62,7 @@ export default async function AuditPage({
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
   return (
-    <div style={{ maxWidth: 896, margin: '0 auto', padding: '40px 32px' }}>
+    <div style={{ maxWidth: 896, margin: '0 auto', padding: '40px clamp(16px, 4vw, 32px)' }}>
       {/* Page head */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>

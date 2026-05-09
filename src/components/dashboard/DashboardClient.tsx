@@ -23,7 +23,7 @@ export default function DashboardClient({
   const [showModal, setShowModal] = useState(false)
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 28px 80px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px clamp(16px, 4vw, 28px) 80px' }}>
 
       <DashboardHero
         firstName={firstName}

@@ -127,9 +127,10 @@ textarea:focus-visible,
     grid-template-columns: 1fr 1fr !important;
   }
 
-  /* Dashboard hero → single column */
+  /* Dashboard hero → single column, tighter padding */
   .sj-hero-grid {
     grid-template-columns: 1fr !important;
+    padding: 28px 24px !important;
   }
   .sj-hero-glass {
     display: none !important;
@@ -193,6 +194,22 @@ textarea:focus-visible,
     grid-template-columns: 1fr !important;
   }
   .sj-leg-arrow { display: none !important; }
+}
+
+/* ── Mobile-only overrides (max 640px) ────────────────────────── */
+@media (max-width: 640px) {
+  /* Past-trips dense rows → 2-col: route | dates */
+  .sj-past-row {
+    grid-template-columns: 1fr auto !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+  }
+  .sj-pr-swatch,
+  .sj-pr-flights,
+  .sj-pr-days,
+  .sj-pr-action {
+    display: none !important;
+  }
 }
 
 /* Skeleton shimmer */
