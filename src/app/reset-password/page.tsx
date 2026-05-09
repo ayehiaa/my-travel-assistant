@@ -18,7 +18,6 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     if (checked.current) return
     checked.current = true
-
     async function checkSession() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -28,14 +27,8 @@ export default function ResetPasswordPage() {
   }, [])
 
   function validate(): boolean {
-    if (password.length < 8) {
-      setValidationError('Password must be at least 8 characters.')
-      return false
-    }
-    if (password !== confirm) {
-      setValidationError('Passwords do not match.')
-      return false
-    }
+    if (password.length < 8) { setValidationError('Password must be at least 8 characters.'); return false }
+    if (password !== confirm) { setValidationError('Passwords do not match.'); return false }
     setValidationError('')
     return true
   }
@@ -43,44 +36,47 @@ export default function ResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
-
     setServerError('')
     setLoading(true)
-
     const supabase = createClient()
     const { error } = await supabase.auth.updateUser({ password })
-
-    if (error) {
-      setServerError(error.message)
-      setLoading(false)
-      return
-    }
-
+    if (error) { setServerError(error.message); setLoading(false); return }
     await supabase.auth.signOut()
     window.location.href = '/login?message=password_updated'
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">Travel Assistant</h1>
-          <p className="mt-1 text-sm text-gray-500">Choose a new password</p>
-        </div>
+  const inputStyle = {
+    border: '1.5px solid var(--rule)', borderRadius: 10, padding: '12px 14px',
+    fontSize: 15, background: 'white', outline: 'none', fontFamily: 'var(--sans)',
+    width: '100%', boxSizing: 'border-box' as const, transition: 'border-color .15s, box-shadow .15s',
+  }
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
+
+        {/* Brand */}
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 20, color: 'var(--ink)', textDecoration: 'none', marginBottom: 28 }}>
+          <div style={{ width: 32, height: 32, background: 'var(--blue-700)', color: 'white', borderRadius: 9, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 17 }}>S</div>
+          Sojourn
+        </Link>
+
+        <div style={{ background: 'var(--paper)', borderRadius: 20, border: '1px solid var(--rule)', boxShadow: 'var(--shadow)', padding: '28px 32px' }}>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', margin: '0 0 6px' }}>Choose a new password</h2>
+          <p style={{ color: 'var(--ink-3)', margin: '0 0 24px', fontSize: 14 }}>Pick something you haven&apos;t used before.</p>
+
           {stage === 'verifying' && (
-            <p className="text-sm text-gray-500 text-center py-4">Verifying your reset link…</p>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', textAlign: 'center', padding: '16px 0' }}>Verifying your reset link…</p>
           )}
 
           {stage === 'invalid' && (
-            <div className="space-y-4">
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#b8493d' }}>
                 This reset link is invalid or has expired. Reset links are valid for 1 hour.
               </div>
               <Link
                 href="/forgot-password"
-                className="block w-full text-center py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                style={{ display: 'block', textAlign: 'center', background: 'var(--blue-700)', color: 'white', borderRadius: 10, padding: '13px 18px', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}
               >
                 Request a new link
               </Link>
@@ -88,56 +84,40 @@ export default function ResetPasswordPage() {
           )}
 
           {stage === 'ready' && (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  New password
-                </label>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label htmlFor="password" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>New password</label>
                 <input
-                  id="password"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  autoFocus
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setValidationError('') }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Min. 8 characters"
+                  id="password" type="password" required autoComplete="new-password" autoFocus
+                  value={password} onChange={e => { setPassword(e.target.value); setValidationError('') }}
+                  placeholder="Min. 8 characters" style={inputStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue-700)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--blue-100)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
                 />
               </div>
 
-              <div>
-                <label htmlFor="confirm" className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm new password
-                </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label htmlFor="confirm" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>Confirm new password</label>
                 <input
-                  id="confirm"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={confirm}
-                  onChange={e => { setConfirm(e.target.value); setValidationError('') }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Repeat your new password"
+                  id="confirm" type="password" required autoComplete="new-password"
+                  value={confirm} onChange={e => { setConfirm(e.target.value); setValidationError('') }}
+                  placeholder="Repeat your new password" style={inputStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue-700)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--blue-100)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
                 />
               </div>
 
-              {validationError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {validationError}
-                </p>
-              )}
-
-              {serverError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {serverError}
-                </p>
+              {(validationError || serverError) && (
+                <div style={{ background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#b8493d' }}>
+                  {validationError || serverError}
+                </div>
               )}
 
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                type="submit" disabled={loading}
+                style={{ background: 'var(--blue-700)', color: 'white', border: 'none', borderRadius: 10, padding: '13px 18px', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'var(--sans)', transition: 'background .15s' }}
+                onMouseOver={e => { if (!loading) e.currentTarget.style.background = 'var(--blue-900)' }}
+                onMouseOut={e => { e.currentTarget.style.background = 'var(--blue-700)' }}
               >
                 {loading ? 'Updating…' : 'Update password'}
               </button>
@@ -146,10 +126,8 @@ export default function ResetPasswordPage() {
         </div>
 
         {stage !== 'invalid' && (
-          <p className="text-center text-sm text-gray-500 mt-4">
-            <Link href="/login" className="text-blue-600 hover:underline">
-              Back to sign in
-            </Link>
+          <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--ink-3)' }}>
+            <Link href="/login" style={{ color: 'var(--blue-700)', fontWeight: 600 }}>← Back to sign in</Link>
           </p>
         )}
       </div>

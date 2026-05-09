@@ -14,81 +14,62 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     const supabase = createClient()
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     })
-
     setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
+    if (error) { setError(error.message); return }
     setSubmitted(true)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">Travel Assistant</h1>
-          <p className="mt-1 text-sm text-gray-500">Reset your password</p>
-        </div>
+    <div style={{ minHeight: '100vh', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+        {/* Brand */}
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 20, color: 'var(--ink)', textDecoration: 'none', marginBottom: 28 }}>
+          <div style={{ width: 32, height: 32, background: 'var(--blue-700)', color: 'white', borderRadius: 9, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 17 }}>S</div>
+          Sojourn
+        </Link>
+
+        <div style={{ background: 'var(--paper)', borderRadius: 20, border: '1px solid var(--rule)', boxShadow: 'var(--shadow)', padding: '28px 32px' }}>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', margin: '0 0 6px' }}>Reset password</h2>
+          <p style={{ color: 'var(--ink-3)', margin: '0 0 24px', fontSize: 14 }}>We&apos;ll send a reset link to your inbox.</p>
+
           {submitted ? (
-            <div className="space-y-4">
-              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-3">
-                If an account exists for <span className="font-medium">{email}</span>, you&apos;ll
-                receive a reset link shortly. Check your inbox.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--mint)', borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#1a6b4a' }}>
+                If an account exists for <strong>{email}</strong>, you&apos;ll receive a reset link shortly. Check your inbox.
               </div>
-              <p className="text-xs text-gray-500 text-center">
-                Didn&apos;t get it? Check your spam folder or{' '}
-                <button
-                  onClick={() => { setSubmitted(false); setEmail('') }}
-                  className="text-blue-600 hover:underline"
-                >
-                  try again
-                </button>
-                .
+              <p style={{ fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>
+                Didn&apos;t get it? Check spam or{' '}
+                <button onClick={() => { setSubmitted(false); setEmail('') }} style={{ color: 'var(--blue-700)', fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none', fontSize: 13, fontFamily: 'var(--sans)' }}>try again</button>.
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Enter your email address and we&apos;ll send you a link to reset your password.
-              </p>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label htmlFor="email" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>Email</label>
                 <input
-                  id="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  autoFocus
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  id="email" type="email" required autoComplete="email" autoFocus
+                  value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  style={{ border: '1.5px solid var(--rule)', borderRadius: 10, padding: '12px 14px', fontSize: 15, background: 'white', outline: 'none', fontFamily: 'var(--sans)', transition: 'border-color .15s, box-shadow .15s' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue-700)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--blue-100)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {error}
-                </p>
+                <div style={{ background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#b8493d' }}>{error}</div>
               )}
 
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                type="submit" disabled={loading}
+                style={{ background: 'var(--blue-700)', color: 'white', border: 'none', borderRadius: 10, padding: '13px 18px', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'var(--sans)', transition: 'background .15s' }}
+                onMouseOver={e => { if (!loading) e.currentTarget.style.background = 'var(--blue-900)' }}
+                onMouseOut={e => { e.currentTarget.style.background = 'var(--blue-700)' }}
               >
                 {loading ? 'Sending…' : 'Send reset link'}
               </button>
@@ -96,10 +77,8 @@ export default function ForgotPasswordPage() {
           )}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
-          <Link href="/login" className="text-blue-600 hover:underline">
-            Back to sign in
-          </Link>
+        <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--ink-3)' }}>
+          <Link href="/login" style={{ color: 'var(--blue-700)', fontWeight: 600 }}>← Back to sign in</Link>
         </p>
       </div>
     </div>
