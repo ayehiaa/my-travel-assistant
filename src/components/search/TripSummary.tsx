@@ -11,32 +11,17 @@ type Props = {
   saveError: string
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString('en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  })
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
-function FlightRow({ label, offer }: { label: string; offer: FlightOffer }) {
-  return (
-    <div className="grid grid-cols-[80px_1fr] gap-3 text-sm">
-      <span className="text-gray-500 font-medium pt-0.5">{label}</span>
-      <div>
-        <p className="font-semibold text-gray-900">
-          {offer.flightNumber} · {offer.airline}
-        </p>
-        <p className="text-gray-600">
-          {formatDateTime(offer.departureAt)} → {formatDateTime(offer.arrivalAt)}
-        </p>
-      </div>
-    </div>
-  )
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function flightLabel(index: number, total: number, tripType: 'round_trip' | 'multi_city') {
-  if (tripType === 'round_trip') return index === 0 ? 'Outbound' : 'Return'
-  return `Leg ${index + 1}`
+function legLabel(i: number, tripType: 'round_trip' | 'multi_city') {
+  if (tripType === 'round_trip') return i === 0 ? 'Outbound' : 'Return'
+  return `Leg ${i + 1}`
 }
 
 export default function TripSummary({
@@ -48,62 +33,146 @@ export default function TripSummary({
     ? daysOutsideUK(firstFlight.departureAt, lastFlight.departureAt)
     : 0
 
-  // Full route label from city names
-  const cities = legs.map(l => l.origin?.cityName ?? l.origin?.iataCode ?? '?')
-  const finalDest = legs[legs.length - 1]?.destination
-  if (finalDest) cities.push(finalDest.cityName ?? finalDest.iataCode ?? '?')
-  const routeLabel = cities.join(' → ')
+  const iataRoute = (() => {
+    const codes: string[] = legs.map(l => l.origin?.iataCode ?? '?')
+    const final = legs[legs.length - 1]?.destination?.iataCode
+    if (final) codes.push(final)
+    return codes
+  })()
+
+  const cityRoute = (() => {
+    const cities: string[] = legs.map(l => l.origin?.cityName ?? l.origin?.iataCode ?? '?')
+    const finalCity = legs[legs.length - 1]?.destination?.cityName ?? legs[legs.length - 1]?.destination?.iataCode
+    if (finalCity) cities.push(finalCity)
+    return cities
+  })()
+
+  const totalPrice = selectedFlights.reduce((s, f) => s + f.price, 0)
 
   return (
-    <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Trip summary</h2>
-        <button
-          onClick={onBack}
-          className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
-        >
-          Back to results
-        </button>
+    <div style={{ marginTop: 32, borderRadius: 'var(--r-xl)', overflow: 'hidden', border: '1px solid var(--rule)', boxShadow: 'var(--shadow-lg)' }}>
+      {/* Navy gradient header */}
+      <div style={{
+        background: 'linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 100%)',
+        padding: '32px 32px 28px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'radial-gradient(ellipse 60% 80% at 90% 20%, rgba(26,115,214,.4) 0%, transparent 70%)',
+        }} />
+
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            {/* Route chain in display font */}
+            <div style={{
+              fontFamily: 'var(--display)', fontWeight: 700,
+              fontSize: 'clamp(32px,4vw,52px)', letterSpacing: '-0.025em',
+              color: 'white', lineHeight: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 4px',
+            }}>
+              {iataRoute.map((code, i) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0 4px' }}>
+                  <span>{code}</span>
+                  {i < iataRoute.length - 1 && (
+                    <span style={{ color: 'var(--yellow)', margin: '0 6px' }}>→</span>
+                  )}
+                </span>
+              ))}
+            </div>
+
+            {/* City subline */}
+            <div style={{ color: 'rgba(255,255,255,.7)', fontSize: 14, marginTop: 8, fontWeight: 500 }}>
+              {cityRoute.join(' → ')} · {tripType === 'round_trip' ? 'round trip' : `${legs.length}-city itinerary`}
+            </div>
+          </div>
+
+          {/* Days pill */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)', marginBottom: 4 }}>
+              Days outside UK
+            </div>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'var(--yellow)', color: 'var(--blue-900)',
+              borderRadius: 999, padding: '8px 16px',
+            }}>
+              <span style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', lineHeight: 1 }}>{days}</span>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>days</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Route */}
-      <div className="text-center py-2">
-        <p className="text-2xl font-semibold text-gray-900">{routeLabel}</p>
-      </div>
-
-      {/* Days outside UK */}
-      <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-center">
-        <p className="text-3xl font-bold text-blue-700">{days}</p>
-        <p className="text-sm text-blue-600 mt-0.5">
-          {days === 1 ? 'day' : 'days'} outside UK
-        </p>
-      </div>
-
-      {/* Flights — one row per leg */}
-      <div className="space-y-4 divide-y divide-gray-100">
+      {/* Per-leg columns */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${selectedFlights.length}, 1fr)`,
+        background: 'var(--paper)',
+      }}>
         {selectedFlights.map((flight, i) => (
-          <div key={i} className={i > 0 ? 'pt-4' : ''}>
-            <FlightRow
-              label={flightLabel(i, selectedFlights.length, tripType)}
-              offer={flight}
-            />
+          <div key={i} style={{
+            padding: '20px 24px',
+            borderRight: i < selectedFlights.length - 1 ? '1px solid var(--rule)' : 'none',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 10 }}>
+              {legLabel(i, tripType)} · {fmtDate(flight.departureAt)}
+            </div>
+            <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22, letterSpacing: '-0.01em', marginBottom: 4 }}>
+              {fmtTime(flight.departureAt)} → {fmtTime(flight.arrivalAt)}
+            </div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>
+              {flight.flightNumber}
+              <small style={{ color: 'var(--ink-3)', fontWeight: 500, marginLeft: 6 }}>{flight.airline}</small>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>
+              {legs[i]?.origin?.iataCode ?? ''} → {legs[i]?.destination?.iataCode ?? ''}
+            </div>
           </div>
         ))}
       </div>
 
-      {saveError && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {saveError}
-        </p>
-      )}
+      {/* Footer */}
+      <div style={{
+        background: 'var(--paper-2)', borderTop: '1px solid var(--rule)',
+        padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            onClick={onBack}
+            style={{ fontSize: 13, color: 'var(--ink-3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', textDecoration: 'underline' }}
+          >
+            Back to results
+          </button>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+            Total · <strong style={{ fontFamily: 'var(--display)', fontSize: 18, color: 'var(--ink)' }}>£{totalPrice.toFixed(0)}</strong>
+          </div>
+        </div>
 
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-      >
-        {saving ? 'Saving…' : 'Save trip'}
-      </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {saveError && (
+            <p style={{ fontSize: 13, color: 'var(--coral)', background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 8, padding: '6px 12px', margin: 0 }}>
+              {saveError}
+            </p>
+          )}
+          <button
+            onClick={onSave}
+            disabled={saving}
+            style={{
+              background: 'var(--yellow)', color: 'var(--blue-900)',
+              border: 'none', borderRadius: 999, padding: '12px 28px',
+              fontWeight: 700, fontSize: 15, cursor: 'pointer',
+              fontFamily: 'var(--sans)', opacity: saving ? 0.5 : 1,
+              transition: 'opacity .15s, transform .12s',
+            }}
+            onMouseOver={e => { if (!saving) e.currentTarget.style.transform = 'translateY(-1px)' }}
+            onMouseOut={e => { e.currentTarget.style.transform = '' }}
+          >
+            {saving ? 'Saving…' : 'Save to my trips ✓'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

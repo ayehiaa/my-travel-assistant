@@ -24,7 +24,6 @@ export default function SearchPage() {
     setTimeout(() => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
-  const skeletonCount = tripType === 'round_trip' ? 2 : legs.length
   const skeletonTitles = tripType === 'round_trip'
     ? ['Outbound flights', 'Return flights']
     : legs.map((_, i) => `Leg ${i + 1} flights`)
@@ -32,59 +31,88 @@ export default function SearchPage() {
   const allFlightsSelected = selectedFlights.length > 0 && selectedFlights.every(f => f !== null)
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Search flights</h1>
+    <div>
+      {/* Navy hero — contains the search form */}
+      <section style={{
+        background: 'linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        padding: '48px 32px 36px',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'radial-gradient(ellipse 70% 60% at 80% 40%, rgba(26,115,214,.35) 0%, transparent 70%)',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 896, margin: '0 auto' }}>
+          <h2 style={{
+            fontFamily: 'var(--display)', fontWeight: 700,
+            fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-0.02em',
+            color: 'white', margin: '0 0 6px',
+          }}>
+            Where are you going?
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,.75)', margin: '0 0 28px', fontSize: 15 }}>
+            Round-trip or multi-city · British Airways flights surface first.
+          </p>
 
-      <SearchForm
-        tripType={tripType}
-        legs={legs}
-        onSetTripType={setTripType}
-        onUpdateLeg={updateLeg}
-        onAddLeg={addLeg}
-        onRemoveLeg={removeLeg}
-        onSubmit={submitSearch}
-        loading={searchStatus === 'loading'}
-      />
-
-      {searchStatus === 'loading' && (
-        <div className={`mt-6 ${tripType === 'round_trip' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-6'}`}>
-          {skeletonTitles.map(title => (
-            <div key={title}>
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{title}</p>
-              <div className="space-y-3">{[1, 2, 3].map(i => <FlightCardSkeleton key={i} />)}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {searchStatus === 'error' && (
-        <p className="mt-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-          {searchError}
-        </p>
-      )}
-
-      {searchStatus === 'success' && results && !showSummary && (
-        <FlightResultsPanel
-          results={results}
-          selectedFlights={selectedFlights}
-          onSelectFlight={setSelectedFlight}
-          onReviewTrip={handleReviewTrip}
-        />
-      )}
-
-      {showSummary && allFlightsSelected && (
-        <div ref={summaryRef}>
-          <TripSummary
+          <SearchForm
             tripType={tripType}
             legs={legs}
-            selectedFlights={selectedFlights as FlightOffer[]}
-            onSave={saveTrip}
-            onBack={backToResults}
-            saving={saveStatus === 'saving'}
-            saveError={saveError}
+            onSetTripType={setTripType}
+            onUpdateLeg={updateLeg}
+            onAddLeg={addLeg}
+            onRemoveLeg={removeLeg}
+            onSubmit={submitSearch}
+            loading={searchStatus === 'loading'}
           />
         </div>
-      )}
+      </section>
+
+      {/* Results area */}
+      <div style={{ maxWidth: 896, margin: '0 auto', padding: '0 32px' }}>
+        {searchStatus === 'loading' && (
+          <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round_trip' ? '1fr 1fr' : '1fr', gap: 24, marginTop: 32 }}>
+            {skeletonTitles.map(title => (
+              <div key={title}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 12 }}>{title}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[1, 2, 3].map(i => <FlightCardSkeleton key={i} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {searchStatus === 'error' && (
+          <p style={{ marginTop: 24, fontSize: 14, color: 'var(--coral)', background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 'var(--r)', padding: '12px 16px' }}>
+            {searchError}
+          </p>
+        )}
+
+        {searchStatus === 'success' && results && !showSummary && (
+          <FlightResultsPanel
+            results={results}
+            legs={legs}
+            selectedFlights={selectedFlights}
+            onSelectFlight={setSelectedFlight}
+            onReviewTrip={handleReviewTrip}
+          />
+        )}
+
+        {showSummary && allFlightsSelected && (
+          <div ref={summaryRef}>
+            <TripSummary
+              tripType={tripType}
+              legs={legs}
+              selectedFlights={selectedFlights as FlightOffer[]}
+              onSave={saveTrip}
+              onBack={backToResults}
+              saving={saveStatus === 'saving'}
+              saveError={saveError}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
