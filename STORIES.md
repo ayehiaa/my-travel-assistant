@@ -1,6 +1,6 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.7  
+**Version**: 1.8  
 **Date**: 2026-05-09  
 **Reference**: PRD v2.1  
 
@@ -274,31 +274,35 @@ src/app/api/trips/[id]/route.ts
 
 ---
 
-## Story 7.5 — Manual Past Trip Entry
+## Story 7.5 — Manual Past Trip Entry ✅
 
 **As a** user,  
 **I want** to log a past trip directly from the dashboard without searching for flights,  
 **so that** I can record trips that were booked outside the app or taken before I started using it.
 
 ### Acceptance Criteria
-- [ ] The Past Trips section on the dashboard has a **"+ Add past trip"** button visible to all authenticated users
-- [ ] Clicking the button opens a modal with: origin airport (autocomplete), destination airport (autocomplete), departure date (date picker, max = yesterday), return date (date picker, min = departure date + 1, max = today)
-- [ ] The Save button is disabled until all fields are filled and return date > departure date
-- [ ] Clicking outside the modal or the × button closes it without saving
-- [ ] On save, the trip is posted to `POST /api/trips` with `source: "manual"`; flight detail fields are omitted
-- [ ] On success, a toast notification confirms the save and the dashboard refreshes
-- [ ] On failure, a toast error is shown and the modal stays open
-- [ ] The saved trip card displays **"Manually added"** in place of flight info
-- [ ] Days outside UK is calculated automatically from the two dates
-- [ ] The action is recorded in the audit log as `created`
-- [ ] The database allows null flight detail columns via migration `002_add_manual_trips.sql`
+- [x] The Past Trips section on the dashboard has a **"+ Add past trip"** button visible to all authenticated users
+- [x] Clicking the button opens a modal with a **Round trip / Multi-city tab switcher**
+- [x] **Round trip mode**: origin airport, destination airport, departure date (max = yesterday), return date (min = departure date, max = today)
+- [x] **Multi-city mode**: 2–3 legs; each leg has origin autocomplete, destination autocomplete, and date picker; leg N origin auto-fills from leg N-1 destination; 3rd leg destination auto-fills from leg 0 origin; remove buttons on legs 2+ when there are more than 2 legs; "+ Add leg" button when fewer than 3 legs
+- [x] First leg date capped at yesterday; subsequent legs have no upper bound (supports in-progress trips where the user is still abroad)
+- [x] The Save button is disabled until all fields are filled and dates are chronologically valid
+- [x] Clicking outside the modal or the × button closes it without saving
+- [x] On save, the trip is posted to `POST /api/trips` with `source: "manual"`; flight detail fields are omitted
+- [x] On success, a toast notification confirms the save and the dashboard refreshes
+- [x] On failure, a toast error is shown and the modal stays open
+- [x] The saved trip card displays **"Manually added"** in place of flight info
+- [x] Days outside UK is calculated from first leg departure → last leg departure (same formula as search)
+- [x] A yellow summary strip shows the full route chain and days count once all fields are complete
+- [x] The action is recorded in the audit log as `created`
+- [x] The database allows null flight detail columns via migration `002_add_manual_trips.sql`
 
 ### Technical Tasks
 - Add `source VARCHAR(10) NOT NULL DEFAULT 'search' CHECK (source IN ('search', 'manual'))` column to `trips` table
 - Make `outbound_airline`, `outbound_flight_number`, `outbound_arrival_at`, `return_airline`, `return_flight_number`, `return_arrival_at` nullable in `trips` table
 - Write `supabase/migrations/002_add_manual_trips.sql`
-- Create `src/components/dashboard/AddPastTripModal.tsx` — modal component
-- Update `src/app/api/trips/route.ts` — handle `source: "manual"` in POST handler with `ManualTripSchema` validation
+- Create `src/components/dashboard/AddPastTripModal.tsx` — modal with round trip + multi-city tab switcher
+- Update `src/app/api/trips/route.ts` — `ManualTripSchema` accepts `trip_type: round_trip | multi_city` and 2–3 legs
 - Update `src/components/dashboard/PastTrips.tsx` — add "+" button and render modal
 - Update `src/components/dashboard/TripCard.tsx` — render "Manually added" when `source === "manual"`
 - Update `src/types/database.ts` — add `source` field and make flight detail fields optional
