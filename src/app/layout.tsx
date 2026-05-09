@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Bricolage_Grotesque, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { getAuthUser } from '@/lib/auth'
-import { getActiveMainAccountId, getLinkedMainAccounts } from '@/lib/activeAccount'
+import { getActiveMainAccountId, getLinkedMainAccounts, activatePendingLinks } from '@/lib/activeAccount'
 import { UserProvider, UserContextValue } from '@/context/UserContext'
 import { ToastProvider } from '@/context/ToastContext'
 import Nav from '@/components/Nav'
@@ -45,6 +45,7 @@ export default async function RootLayout({
     const [activeMainAccountId, linkedMainAccounts] = await Promise.all([
       getActiveMainAccountId(user),
       user.role === 'assistant' ? getLinkedMainAccounts(user.id) : Promise.resolve([]),
+      user.role === 'assistant' ? activatePendingLinks(user.id) : Promise.resolve(),
     ])
     contextValue = { ...user, activeMainAccountId, linkedMainAccounts }
   }

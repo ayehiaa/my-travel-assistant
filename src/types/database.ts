@@ -9,12 +9,17 @@ export interface UserRoleRecord {
   created_at: string
 }
 
+export type InvitationStatus = 'pending' | 'active' | 'expired'
+
 export interface AccountLink {
   id: string
   main_user_id: string
   assistant_user_id: string
   created_by: string
   created_at: string
+  status: InvitationStatus
+  invited_at: string | null
+  expires_at: string | null
 }
 
 export interface Trip {

@@ -1026,6 +1026,64 @@ src/app/globals.css                      (modified)
 
 ---
 
+## Story 21 — Assistant Invitation Flow
+
+**As a** main account user,
+**I want** to invite an assistant by entering their name and email,
+**so that** they receive an invitation email, can set their password, and immediately get access to my account — without me needing to create their account manually.
+
+### Acceptance Criteria
+- [ ] The invite form in Settings collects two fields: assistant's full name and email address (both required)
+- [ ] Submitting the form calls `POST /api/invitations`
+- [ ] If the email is new: a Supabase auth account is created automatically (role: assistant), a password recovery link is generated, and a custom Resend email is sent containing the assistant's name, the main account's name, the reset link, and a "expires in 3 days" notice
+- [ ] If the email already belongs to an existing assistant: no new account is created; a notification email is sent (no reset link); the link is created as pending
+- [ ] If the email belongs to an existing main account: API returns 400 displayed in the form
+- [ ] The new link is stored in `account_links` with `status = 'pending'`, `invited_at`, and `expires_at = now() + 3 days`
+- [ ] The assistant row in Settings shows a status badge: **Pending** (amber, with expiry date), **Active** (green), or **Expired** (red)
+- [ ] Pending and expired rows show a **Resend** button; clicking it calls `POST /api/invitations/resend`, generates a fresh recovery link, resets `expires_at`, and sends a new email
+- [ ] When the assistant logs in for the first time after accepting, their pending `account_links` rows are automatically flipped to `active` (handled in root layout server component)
+- [ ] When Settings renders, any pending links past `expires_at` are marked `expired` before the page data is fetched
+- [ ] `getLinkedMainAccounts` and `getActiveMainAccountId` only return `active` links — pending/expired assistants have no active access
+- [ ] The invite button label changes to "Sending…" while in flight; the form shows inline error on failure
+
+### Technical Tasks
+- Add migration `006_invitation_flow.sql` — adds `status`, `invited_at`, `expires_at` to `account_links`
+- Add `src/lib/email.ts` — Resend client, `sendInvitationEmail`, `sendAssistantAddedEmail`
+- Add `src/app/api/invitations/route.ts` — POST invite handler (new user + existing assistant branches)
+- Add `src/app/api/invitations/resend/route.ts` — POST resend handler
+- Update `src/app/api/account-links/route.ts` — GET returns status/expiresAt + auto-expires; remove POST
+- Update `src/lib/activeAccount.ts` — filter all queries to `status = 'active'`; add `activatePendingLinks()`
+- Update `src/app/layout.tsx` — call `activatePendingLinks()` for assistant users on every page load
+- Update `src/app/settings/page.tsx` — run expiry update before render; pass status/expiresAt to manager
+- Update `src/components/settings/AssistantsManager.tsx` — name field, status badges, resend button
+- Update `src/types/database.ts` — add `InvitationStatus` type + new fields to `AccountLink`
+
+### Files Created / Modified
+```
+supabase/migrations/006_invitation_flow.sql          (new)
+src/lib/email.ts                                     (new)
+src/app/api/invitations/route.ts                     (new)
+src/app/api/invitations/resend/route.ts              (new)
+src/app/api/account-links/route.ts                   (modified — GET updated, POST removed)
+src/lib/activeAccount.ts                             (modified)
+src/app/layout.tsx                                   (modified)
+src/app/settings/page.tsx                            (modified)
+src/components/settings/AssistantsManager.tsx        (modified)
+src/types/database.ts                                (modified)
+```
+
+### Environment Variables Required
+```
+RESEND_API_KEY=              # From resend.com/api-keys
+RESEND_FROM_EMAIL=           # Verified sender (e.g. Sojourn <noreply@yourdomain.com>)
+NEXT_PUBLIC_APP_URL=         # Production URL for reset link redirect
+```
+
+### Dependencies
+- Story 14 (Multi-Account UI) — `account_links` table and Settings page must exist
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -1046,13 +1104,14 @@ Story 1 (Foundation)
 
 Story 13 (Role Rename & Schema) ← depends on Story 1
     └── Story 14 (Multi-Account UI) ← depends on Story 13
-            └── Story 15 (Annual Days Abroad Counter) ← depends on Story 14
-                    └── Story 16 (Multi-city Flight Search) ← depends on Story 15
-                            └── Story 17 (Sojourn Landing Page) ← depends on Story 16
-                                    └── Story 18 (Sojourn Visual Rebrand) ← depends on Story 17
-                                            └── Story 20 (Mobile Responsiveness Pass 2) ← depends on Story 18
+            ├── Story 15 (Annual Days Abroad Counter) ← depends on Story 14
+            │       └── Story 16 (Multi-city Flight Search) ← depends on Story 15
+            │               └── Story 17 (Sojourn Landing Page) ← depends on Story 16
+            │                       └── Story 18 (Sojourn Visual Rebrand) ← depends on Story 17
+            │                               └── Story 20 (Mobile Responsiveness Pass 2) ← depends on Story 18
+            └── Story 21 (Assistant Invitation Flow) ← depends on Story 14
 ```
 
 ---
 
-## Total Estimated Stories: 20
+## Total Estimated Stories: 21

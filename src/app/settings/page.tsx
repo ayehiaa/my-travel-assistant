@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { UserRoleRecord } from '@/types/database'
 import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 import AssistantsManager from '@/components/settings/AssistantsManager'
@@ -20,10 +21,20 @@ export default async function SettingsPage() {
   if (user.role !== 'main') redirect('/')
 
   const supabase = await createClient()
+  const admin = createAdminClient()
+
+  // Expire any pending links past their expires_at before rendering
+  const now = new Date().toISOString()
+  await admin
+    .from('account_links')
+    .update({ status: 'expired' })
+    .eq('main_user_id', user.id)
+    .eq('status', 'pending')
+    .lt('expires_at', now)
 
   const { data: links } = await supabase
     .from('account_links')
-    .select('id, assistant_user_id, created_at')
+    .select('id, assistant_user_id, created_at, status, expires_at')
     .eq('main_user_id', user.id)
     .order('created_at', { ascending: true })
 
@@ -42,6 +53,8 @@ export default async function SettingsPage() {
     assistantUserId: l.assistant_user_id,
     displayName: nameMap.get(l.assistant_user_id)?.display_name ?? 'Unknown',
     createdAt: l.created_at,
+    status: l.status as 'pending' | 'active' | 'expired',
+    expiresAt: l.expires_at,
   }))
 
   const { data: roleRow } = await supabase

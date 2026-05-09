@@ -44,8 +44,12 @@ The app supports a small, closed set of named users. There is no public registra
 **Linking rules:**
 - A main account can have multiple linked assistants
 - An assistant can be linked to multiple main accounts
-- Main accounts add assistants by entering an existing assistant's email on the `/settings` page
-- Assistant accounts must already exist in the system before they can be linked
+- Main accounts invite assistants by entering their name + email on the `/settings` page
+- If the email is new, an assistant account is created automatically and an invitation email is sent via Resend
+- If the email already belongs to an existing assistant, a notification email is sent and the link is created immediately
+- Invitations expire after 3 days; the main can resend at any time from Settings
+- A pending invitation flips to active automatically on the assistant's first authenticated page load
+- Emails that belong to an existing main account cannot be invited as an assistant
 
 Each user has their own **email + password** credentials managed via Supabase Auth.
 
@@ -60,6 +64,7 @@ Each user has their own **email + password** credentials managed via Supabase Au
 | Database | Supabase (PostgreSQL) |
 | Auth | Supabase Auth — email/password + Google OAuth (owner only) |
 | Flight Data | Amadeus for Developers REST API |
+| Email | Resend (transactional — invitation emails only) |
 | Deployment | Vercel |
 
 ---
@@ -282,6 +287,9 @@ The audit log is append-only. No entries can be deleted.
 | assistant_user_id | uuid | Foreign key → auth.users — the linked assistant |
 | created_by | uuid | Foreign key → auth.users — who created the link |
 | created_at | timestamptz | Auto |
+| status | varchar(10) | `pending`, `active`, or `expired` — default `active` for pre-invitation rows |
+| invited_at | timestamptz | Nullable — when the invitation was sent |
+| expires_at | timestamptz | Nullable — 3 days after invited_at; null for pre-invitation rows |
 | — | unique | `(main_user_id, assistant_user_id)` pair must be unique |
 
 ### `trips` table
@@ -343,9 +351,10 @@ Row-level security (RLS) is enabled on all tables. The `audit_log` is readable b
 | `/api/trips` | POST | Save a new trip; body includes `{ trip_type, legs: [...] }`; inserts trip row then `trip_legs` rows; rolls back if leg insert fails |
 | `/api/trips/[id]` | DELETE | Delete a trip — main account or linked assistant |
 | `/api/audit` | GET | Fetch audit log entries scoped to active main account's trips |
-| `/api/account-links` | GET | List assistants linked to the current main account |
-| `/api/account-links` | POST | Link an assistant by email to the current main account |
+| `/api/account-links` | GET | List assistants linked to the current main account (with status); auto-expires pending links past `expires_at` |
 | `/api/account-links?id=<id>` | DELETE | Remove an assistant link |
+| `/api/invitations` | POST | Invite an assistant by name + email — creates account if new, links if existing; sends Resend email |
+| `/api/invitations/resend` | POST | Resend an invitation; generates a fresh Supabase recovery link and resets the 3-day expiry |
 | `/api/settings/reference-date` | PATCH | Update reference date for the current main account |
 
 All write operations trigger an audit log entry server-side using the Supabase service role key.
@@ -359,6 +368,9 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SERPAPI_KEY=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=           # Must use a Resend-verified sender domain
+NEXT_PUBLIC_APP_URL=         # Used in invitation email links
 ```
 
 ---
@@ -415,6 +427,7 @@ SERPAPI_KEY=
 18. **Sojourn visual rebrand** — full Sojourn design system applied across all pages (Story 18 ✅)
 19. **Delete trip on past trips list** — hover-reveal trash icon on PastRow for main accounts, confirm dialog, DELETE API call (Story 19 ✅)
 20. **Mobile responsiveness pass 2** — landing page and search page fully responsive down to 375px (Story 20 ✅)
+21. **Assistant invitation flow** — main accounts invite assistants by name + email; account auto-created, Resend invitation email with 3-day expiry, pending/active/expired status badges in Settings, resend button (Story 21)
 
 ---
 

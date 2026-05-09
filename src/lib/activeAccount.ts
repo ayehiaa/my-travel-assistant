@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/admin'
 import { AuthUser } from './auth'
 
 export const ACTIVE_ACCOUNT_COOKIE = 'active_main_account'
@@ -17,16 +18,18 @@ export async function getActiveMainAccountId(user: AuthUser): Promise<string> {
       .select('main_user_id')
       .eq('assistant_user_id', user.id)
       .eq('main_user_id', cookieValue)
+      .eq('status', 'active')
       .maybeSingle()
 
     if (data) return cookieValue
   }
 
-  // Fallback: first linked main account
+  // Fallback: first active linked main account
   const { data: links } = await supabase
     .from('account_links')
     .select('main_user_id')
     .eq('assistant_user_id', user.id)
+    .eq('status', 'active')
     .limit(1)
 
   return links?.[0]?.main_user_id ?? user.id
@@ -41,6 +44,7 @@ export async function getLinkedMainAccounts(
     .from('account_links')
     .select('main_user_id')
     .eq('assistant_user_id', userId)
+    .eq('status', 'active')
 
   if (!links?.length) return []
 
@@ -52,4 +56,14 @@ export async function getLinkedMainAccounts(
 
   const roleMap = new Map((roles ?? []).map(r => [r.user_id, r.display_name]))
   return mainIds.map(id => ({ id, displayName: roleMap.get(id) ?? 'Unknown' }))
+}
+
+// Flips any pending links for an assistant to active on their first login.
+export async function activatePendingLinks(userId: string): Promise<void> {
+  const admin = createAdminClient()
+  await admin
+    .from('account_links')
+    .update({ status: 'active' })
+    .eq('assistant_user_id', userId)
+    .eq('status', 'pending')
 }
