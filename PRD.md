@@ -1,6 +1,6 @@
 # Product Requirements Document — Sojourn
 
-**Version**: 2.2  
+**Version**: 2.3  
 **Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
@@ -175,7 +175,10 @@ The dashboard shows a **navy hero banner** at the top — greeting, primary CTAs
 
 Each trip card shows: route chain, destination flag, departure → return dates, flight numbers, days outside UK, and creator/modifier attribution.
 
-Trips can be deleted from the dashboard by the **main account** and any of their **linked assistants**.
+**Delete behaviour:**
+- **Upcoming trips** (TripCard): main accounts see a coral "Delete" text button in the card footer; clicking shows a `confirm()` dialog before calling `DELETE /api/trips/[id]`
+- **Past trips** (dense list): main accounts see a trash icon that appears on row hover; clicking shows a `confirm()` dialog before deleting
+- Assistants see no delete controls on either section
 
 Detailed travel statistics (countries visited, journeys per year, Gantt-style timeline) live on the `/timeline` page.
 

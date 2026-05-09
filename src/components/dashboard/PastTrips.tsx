@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/context/ToastContext'
 import { TripWithUsers } from '@/types/database'
 import { getAirportInfo } from '@/lib/airportCountry'
 import EmptyState from './EmptyState'
@@ -32,7 +34,20 @@ type Props = {
   onShowModal?: (v: boolean) => void
 }
 
-function PastRow({ trip }: { trip: TripWithUsers }) {
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
+      <path d="M1 3.5h12M5.5 3.5V2h3v1.5M2.5 3.5l1 8.5h7l1-8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean }) {
+  const router = useRouter()
+  const toast = useToast()
+  const [hovered, setHovered] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const legs = trip.legs ?? []
   const firstLeg = legs[0]
   const lastLeg = legs[legs.length - 1]
@@ -48,19 +63,34 @@ function PastRow({ trip }: { trip: TripWithUsers }) {
   const isManual = trip.source === 'manual'
   const flightNums = legs.map(l => l.flight_number ?? '—').join(' · ')
 
+  async function handleDelete() {
+    if (!confirm(`Delete ${routeParts.join(' → ')}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/trips/${trip.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      toast('Trip deleted', 'success')
+      router.refresh()
+    } catch {
+      toast('Failed to delete trip', 'error')
+      setDeleting(false)
+    }
+  }
+
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '56px 1.2fr 1fr 1fr 0.7fr 0.6fr',
-      gap: 14,
-      padding: '14px 18px',
-      alignItems: 'center',
-      borderBottom: '1px solid var(--rule-soft)',
-      cursor: 'pointer',
-      transition: 'background .12s',
-    }}
-      onMouseOver={e => { e.currentTarget.style.background = 'var(--paper-2)' }}
-      onMouseOut={e => { e.currentTarget.style.background = '' }}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '56px 1.2fr 1fr 1fr 0.7fr 0.6fr',
+        gap: 14,
+        padding: '14px 18px',
+        alignItems: 'center',
+        borderBottom: '1px solid var(--rule-soft)',
+        cursor: 'pointer',
+        transition: 'background .12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--paper-2)'; setHovered(true) }}
+      onMouseLeave={e => { e.currentTarget.style.background = ''; setHovered(false) }}
     >
       {/* Gradient swatch */}
       <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
@@ -106,15 +136,33 @@ function PastRow({ trip }: { trip: TripWithUsers }) {
         <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>days</span>
       </div>
 
-      {/* Chevron */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <span style={{ color: 'var(--ink-4)', fontSize: 18 }}>›</span>
+      {/* Chevron / delete */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        {canDelete && hovered ? (
+          <button
+            onClick={e => { e.stopPropagation(); handleDelete() }}
+            disabled={deleting}
+            title="Delete trip"
+            style={{
+              background: 'none', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer',
+              color: 'var(--coral)', opacity: deleting ? 0.4 : 1,
+              padding: '6px', borderRadius: 6, display: 'grid', placeItems: 'center',
+              transition: 'background .1s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--coral-soft)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            {deleting ? '…' : <TrashIcon />}
+          </button>
+        ) : (
+          <span style={{ color: 'var(--ink-4)', fontSize: 18 }}>›</span>
+        )}
       </div>
     </div>
   )
 }
 
-export default function PastTrips({ trips, showModal: controlledShow, onShowModal }: Omit<Props, 'canDelete'> & { canDelete?: boolean }) {
+export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal }: Props) {
   const [internalShow, setInternalShow] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow
@@ -136,7 +184,7 @@ export default function PastTrips({ trips, showModal: controlledShow, onShowModa
         <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
           {trips.map((trip, i) => (
             <div key={trip.id} style={{ borderBottom: i === trips.length - 1 ? 'none' : undefined }}>
-              <PastRow trip={trip} />
+              <PastRow trip={trip} canDelete={canDelete} />
             </div>
           ))}
         </div>

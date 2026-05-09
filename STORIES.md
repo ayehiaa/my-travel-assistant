@@ -1,6 +1,6 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.8  
+**Version**: 1.9  
 **Date**: 2026-05-09  
 **Reference**: PRD v2.1  
 
@@ -237,30 +237,31 @@ src/app/api/trips/route.ts
 
 ---
 
-## Story 7 — Trip Dashboard (Upcoming & Past Trips)
+## Story 7 — Trip Dashboard (Upcoming & Past Trips) ✅
 
 **As a** user,  
 **I want** to see all my saved trips split into upcoming and past sections,  
 **so that** I have a clear view of my travel history and future plans.
 
 ### Acceptance Criteria
-- [ ] `/` (home) page shows two sections: "Upcoming Trips" and "Past Trips"
-- [ ] Upcoming: trips where departure date ≥ today, sorted by departure date ascending
-- [ ] Past: trips where departure date < today, sorted by departure date descending
-- [ ] If either section is empty, a friendly empty state message is shown
-- [ ] Each trip card shows: destination city, departure date → return date, outbound flight (airline + number + time), return flight (airline + number + time), days outside UK (prominent), "Added by [name]", "Last edited by [name]" (if different from creator)
-- [ ] A "Search flights" button/link in the header navigates to `/search`
-- [ ] Owner sees a Delete button on each trip card; Assistant does not
-- [ ] Clicking Delete (Owner only) shows a confirmation prompt, then calls `DELETE /api/trips/[id]`; on success the card is removed from the list
-- [ ] Trip data is fetched server-side (SSR) for fast initial load
+- [x] `/` (home) page shows two sections: "Upcoming Trips" and "Past Trips"
+- [x] Upcoming: trips where departure date ≥ today, sorted by departure date ascending
+- [x] Past: trips where departure date < today, sorted by departure date descending
+- [x] If either section is empty, a friendly empty state message is shown
+- [x] Each trip card shows: destination city, departure date → return date, outbound flight (airline + number + time), return flight (airline + number + time), days outside UK (prominent), "Added by [name]", "Last edited by [name]" (if different from creator)
+- [x] A "Search flights" button/link in the header navigates to `/search`
+- [x] Main account sees a Delete button on each upcoming trip card (TripCard); assistant does not
+- [x] Clicking Delete (main only) shows a `confirm()` prompt, then calls `DELETE /api/trips/[id]`; on success the card is removed from the list with a success toast
+- [x] Past trips list shows a **hover-reveal trash icon** on each row for main accounts; clicking fires a `confirm()` prompt then `DELETE /api/trips/[id]`; on success the row is removed
+- [x] Trip data is fetched server-side (SSR) for fast initial load
 
 ### Technical Tasks
 - Create `src/app/page.tsx` — dashboard page with SSR data fetching
-- Create `src/components/dashboard/TripCard.tsx` — individual trip card
+- Create `src/components/dashboard/TripCard.tsx` — individual trip card with delete
 - Create `src/components/dashboard/UpcomingTrips.tsx` — upcoming section
-- Create `src/components/dashboard/PastTrips.tsx` — past section
+- Create `src/components/dashboard/PastTrips.tsx` — past section with hover-reveal delete per row
 - Create `src/components/dashboard/EmptyState.tsx` — empty state component
-- Create `src/app/api/trips/[id]/route.ts` — DELETE handler (owner only, logs to audit)
+- Create `src/app/api/trips/[id]/route.ts` — DELETE handler (main only, logs to audit)
 
 ### Files Created
 ```
