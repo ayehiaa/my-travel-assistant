@@ -37,8 +37,8 @@ const ManualLegSchema = z.object({
 
 const ManualTripSchema = z.object({
   source:    z.literal('manual'),
-  trip_type: z.literal('round_trip'),
-  legs:      z.array(ManualLegSchema).length(2),
+  trip_type: z.enum(['round_trip', 'multi_city']),
+  legs:      z.array(ManualLegSchema).min(2).max(3),
 })
 
 const TripInsertSchema = z.discriminatedUnion('source', [SearchTripSchema, ManualTripSchema])
