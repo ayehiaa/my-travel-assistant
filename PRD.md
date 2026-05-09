@@ -1,6 +1,6 @@
-# Product Requirements Document — My Travel Assistant
+# Product Requirements Document — Sojourn
 
-**Version**: 2.0  
+**Version**: 2.1  
 **Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
@@ -163,7 +163,7 @@ days_outside_uk = return_date - departure_date - 1
 
 ### 7.5 Trip Dashboard
 
-The main dashboard is split into two sections:
+The dashboard shows a **navy hero banner** at the top — greeting, primary CTAs ("Plan a new trip" / "Log a past trip"), and a glass card displaying annual days abroad (rolling 12-month window ending at the user's reference date). Below that, the page is split into two sections:
 
 **Upcoming Trips**
 - Trips where the departure date is today or in the future
@@ -173,17 +173,11 @@ The main dashboard is split into two sections:
 - Trips where the departure date is in the past
 - Sorted by departure date descending (most recent first)
 
-Each trip card in the dashboard shows:
-- Airline name + flight number for outbound and return
-- Destination city
-- Departure date → Return date
-- Outbound flight number and time
-- Return flight number and time
-- Days outside UK
-- Created by (name of the user who saved the trip)
-- Last modified by (name of the user who last edited the trip, if different)
+Each trip card shows: route chain, destination flag, departure → return dates, flight numbers, days outside UK, and creator/modifier attribution.
 
 Trips can be deleted from the dashboard by the **main account** and any of their **linked assistants**.
+
+Detailed travel statistics (countries visited, journeys per year, Gantt-style timeline) live on the `/timeline` page.
 
 ---
 
@@ -411,7 +405,7 @@ SERPAPI_KEY=
 
 ## 13. Visual Design System (Sojourn Rebrand)
 
-The app is being visually rebranded from generic Tailwind utility classes to the **Sojourn design system**. The design prototype lives in `docs/sojourn-design/`.
+The app uses the **Sojourn design system** throughout. The design prototype lives in `docs/sojourn-design/`. Rebrand is complete as of 2026-05-09 (Story 18 ✅).
 
 **Design tokens** (all in `globals.css :root`):
 - Colour scale: `--blue-900` → `--blue-50`, `--yellow`, `--coral`, `--mint`, `--peach`, `--lavender`, `--sky`, `--rose`, ink scale, paper scale, rule scale
@@ -421,15 +415,17 @@ The app is being visually rebranded from generic Tailwind utility classes to the
 
 **Key components:**
 - **Nav**: navy `--blue-700` bar, yellow rotated brand tile, pill tab group, yellow avatar
-- **DashboardHero**: navy gradient card (60/40 grid), glass days counter, dual CTAs
-- **StatRow**: 4 tinted tiles (coral / mint / sky / lavender)
-- **YearStrip**: 12-month grid with gradient trip bars and coral TODAY line
+- **DashboardHero**: navy gradient card (60/40 grid), glass annual-days counter, dual CTAs
 - **TripCard**: 140px gradient cover (type pill + days pill + destination), display-font route chain
 - **PastTrips**: dense list with gradient swatch, route chain, days count in display font
 - **AddPastTripModal**: lavender-soft gradient header, yellow summary strip, modalIn/modalRise animations
 - **Landing**: dark navy with radial glows, 8 sections
-
-**Rebrand is tracked as Story 18 in STORIES.md.** Implementation is in progress — see plan file for remaining steps.
+- **SearchForm**: yellow-bordered round-trip bar, pill trip-type tabs, multi-city leg stack
+- **FlightCard**: selected state with overhanging "✓ Selected" pill; BA priority chip
+- **TripSummary**: navy gradient header, display-font route chain with yellow arrows
+- **TripTimeline**: gradient trip bars, coral TODAY line, 4-up stat tiles, bottom-sheet detail panel
+- **Settings**: 2×2 card grid, navy reference-date readout, coral danger zone
+- **Audit**: color-coded action pills (mint created / sky updated / coral deleted)
 
 ---
 
