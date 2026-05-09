@@ -9,18 +9,21 @@ import AddPastTripModal from './AddPastTripModal'
 type Props = {
   trips: TripWithUsers[]
   canDelete: boolean
+  showModal?: boolean
+  onShowModal?: (v: boolean) => void
 }
 
-export default function PastTrips({ trips, canDelete }: Props) {
-  const [showModal, setShowModal] = useState(false)
+export default function PastTrips({ trips, canDelete, showModal: controlledShow, onShowModal }: Props) {
+  const [internalShow, setInternalShow] = useState(false)
+  const showModal = controlledShow ?? internalShow
+  const setShowModal = onShowModal ?? setInternalShow
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-700">Past Trips</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button
           onClick={() => setShowModal(true)}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+          style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)' }}
         >
           + Add past trip
         </button>

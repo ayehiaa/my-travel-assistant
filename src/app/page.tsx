@@ -1,14 +1,13 @@
-import Link from 'next/link'
 import { getAuthUser } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
-import UpcomingTrips from '@/components/dashboard/UpcomingTrips'
-import PastTrips from '@/components/dashboard/PastTrips'
-import { TripWithUsers, UserRoleRecord } from '@/types/database'
+import DashboardClient from '@/components/dashboard/DashboardClient'
 import LandingPage from '@/components/landing/LandingPage'
+import { TripWithUsers, UserRoleRecord } from '@/types/database'
+import { getAirportInfo } from '@/lib/airportCountry'
 
 export const metadata = {
-  title: 'Sojourn — Your trusted travel tracker',
+  title: 'Sojourn — Dashboard',
   description: 'Track every day outside the UK. Stay on the right side of the Statutory Residence Test.',
 }
 
@@ -19,11 +18,18 @@ export default async function DashboardPage() {
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
-  const { data: rawTrips } = await supabase
-    .from('trips')
-    .select('*, legs:trip_legs(*)')
-    .eq('owner_id', activeMainAccountId)
-    .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
+  const [{ data: rawTrips }, { data: roleRow }] = await Promise.all([
+    supabase
+      .from('trips')
+      .select('*, legs:trip_legs(*)')
+      .eq('owner_id', activeMainAccountId)
+      .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
+    supabase
+      .from('user_roles')
+      .select('reference_date')
+      .eq('user_id', activeMainAccountId)
+      .single(),
+  ])
 
   const trips = (rawTrips ?? []).sort((a, b) => {
     const aDate = a.legs?.[0]?.departure_at ?? a.created_at
@@ -32,8 +38,8 @@ export default async function DashboardPage() {
   })
 
   const userIds = [...new Set([
-    ...trips.map(t => t.created_by),
-    ...trips.map(t => t.last_modified_by),
+    ...trips.map((t: { created_by: string }) => t.created_by),
+    ...trips.map((t: { last_modified_by: string }) => t.last_modified_by),
   ])]
 
   let roleMap = new Map<string, Pick<UserRoleRecord, 'display_name'>>()
@@ -42,10 +48,10 @@ export default async function DashboardPage() {
       .from('user_roles')
       .select('user_id, display_name')
       .in('user_id', userIds)
-    roleMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name }]))
+    roleMap = new Map((roles ?? []).map((r: Pick<UserRoleRecord, 'user_id' | 'display_name'>) => [r.user_id, { display_name: r.display_name }]))
   }
 
-  const enriched: TripWithUsers[] = trips.map(t => ({
+  const enriched: TripWithUsers[] = trips.map((t: TripWithUsers & { legs: TripWithUsers['legs'] }) => ({
     ...t,
     legs: t.legs ?? [],
     creator: roleMap.get(t.created_by) ?? { display_name: 'Unknown' },
@@ -66,24 +72,46 @@ export default async function DashboardPage() {
     })
     .reverse()
 
+  // ── Stat computations ──────────────────────────────────────────────────
+  const currentYear = new Date().getFullYear()
+
+  const thisYearTrips = enriched.filter(t =>
+    new Date(t.legs[0]?.departure_at ?? t.created_at).getFullYear() === currentYear
+  )
+
+  const totalDaysThisYear = thisYearTrips.reduce((s, t) => s + (t.days_outside_uk ?? 0), 0)
+  const journeysThisYear  = thisYearTrips.length
+  const multiCityCount    = upcoming.filter(t => t.trip_type === 'multi_city').length
+
+  const countriesThisYear = new Set(
+    thisYearTrips.flatMap(t =>
+      t.legs
+        .filter(l => l.to_airport)
+        .map(l => getAirportInfo(l.to_airport)?.country)
+        .filter((c): c is string => !!c && c !== 'United Kingdom')
+    )
+  ).size
+
+  const referenceDate = roleRow?.reference_date ?? null
+  const annualMax = 90
+  const firstName = user.displayName.split(' ')[0]
   const canDelete = user.role === 'main'
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">My Trips</h1>
-        <Link
-          href="/search"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          Search flights
-        </Link>
-      </div>
-
-      <div className="space-y-10">
-        <UpcomingTrips trips={upcoming} canDelete={canDelete} />
-        <PastTrips trips={past} canDelete={canDelete} />
-      </div>
-    </div>
+    <DashboardClient
+      firstName={firstName}
+      daysUsed={totalDaysThisYear}
+      annualMax={annualMax}
+      referenceDate={referenceDate}
+      upcoming={upcoming}
+      past={past}
+      allTrips={enriched}
+      multiCityCount={multiCityCount}
+      countriesThisYear={countriesThisYear}
+      totalDaysThisYear={totalDaysThisYear}
+      journeysThisYear={journeysThisYear}
+      currentYear={currentYear}
+      canDelete={canDelete}
+    />
   )
 }
