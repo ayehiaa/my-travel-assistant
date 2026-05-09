@@ -1,6 +1,6 @@
 # Product Requirements Document — Sojourn
 
-**Version**: 2.1  
+**Version**: 2.2  
 **Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
@@ -183,20 +183,29 @@ Detailed travel statistics (countries visited, journeys per year, Gantt-style ti
 
 ### 7.6 Manual Past Trip Entry
 
-Users can log a past trip directly from the dashboard without going through the flight search flow. This is useful for trips that were booked outside the app or taken before the app existed.
+Users can log a past trip directly from the dashboard without going through the flight search flow. This is useful for trips that were booked outside the app or taken before the app existed — including multi-destination itineraries.
 
-A **"+ Add past trip"** button in the Past Trips section opens a modal with the following fields:
+A **"+ Add past trip"** button in the Past Trips section opens a modal with a **Round trip / Multi-city tab switcher**.
+
+**Round trip mode:**
 
 | Field | Type | Notes |
 |---|---|---|
-| Origin airport | Autocomplete | IATA code lookup (same component as search form) |
+| Origin airport | Autocomplete | IATA code lookup |
 | Destination airport | Autocomplete | IATA code lookup |
-| Departure date | Date picker | Must be in the past (before today) |
-| Return date | Date picker | Must be after departure date and no later than today |
+| Departure date | Date picker | Must be before today |
+| Return date | Date picker | Must be after departure date; max = today |
 
-**Behaviour:**
-- Flight details (airline, flight number, times) are not required — the card displays "Manually added" in place of flight info
-- Days outside UK is calculated automatically from the two dates
+**Multi-city mode** (mirrors the search form):
+- 2–3 legs in a vertical stack; each leg has origin autocomplete, destination autocomplete, and date picker
+- Leg N origin auto-fills from leg N-1 destination; 3rd leg destination auto-fills from leg 0 origin
+- Remove button on legs 2+ when there are more than 2 legs; "+ Add leg" button when fewer than 3 legs
+- First leg date must be before today; subsequent leg dates must be ≥ the previous leg's date; the final leg has no upper-bound (supports in-progress trips where the user is still abroad)
+
+**Behaviour (both modes):**
+- Flight details (airline, flight number, times) are not captured — the card displays "Manually added" in place of flight info
+- Days outside UK = first leg departure → last leg departure (same formula as the search flow)
+- A yellow summary strip shows the full route chain and days count once all fields are complete
 - The trip is saved via `POST /api/trips` with `source: "manual"` and audited the same as search-derived trips
 - The `trips` table schema was updated (migration `002_add_manual_trips.sql`) to make flight detail columns nullable and add a `source` column (`search` | `manual`, default `search`)
 
