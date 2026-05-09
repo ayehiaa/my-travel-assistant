@@ -1,7 +1,14 @@
 export default function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-white p-10 text-center">
-      <p className="text-sm text-gray-400">{message}</p>
+    <div style={{
+      border: '2px dashed var(--rule)',
+      borderRadius: 'var(--r-lg)',
+      background: 'var(--paper)',
+      padding: '48px 24px',
+      textAlign: 'center',
+      color: 'var(--ink-3)',
+    }}>
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{message}</p>
     </div>
   )
 }

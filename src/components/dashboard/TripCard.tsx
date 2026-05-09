@@ -4,28 +4,37 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { TripWithUsers } from '@/types/database'
+import { getAirportInfo } from '@/lib/airportCountry'
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
+const COVERS = [
+  'linear-gradient(135deg,#ff6f5e,#ffb400)',
+  'linear-gradient(135deg,#4cc4f5,#1a73d6)',
+  'linear-gradient(135deg,#2bc28a,#1a8fc2)',
+  'linear-gradient(135deg,#8b6fdb,#ec4ea0)',
+  'linear-gradient(135deg,#ff9a6c,#ff6f5e)',
+  'linear-gradient(135deg,#ffb400,#ff9a6c)',
+  'linear-gradient(135deg,#1a73d6,#8b6fdb)',
+  'linear-gradient(135deg,#ec4ea0,#8b6fdb)',
+]
+
+function cover(id: string) {
+  return COVERS[id.charCodeAt(0) % 8]
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit', minute: '2-digit',
-  })
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function legLabel(index: number, total: number, tripType: string) {
-  if (tripType === 'round_trip') return index === 0 ? 'Out' : 'Return'
-  return `Leg ${index + 1}`
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
-type Props = {
-  trip: TripWithUsers
-  canDelete: boolean
+function legBadge(i: number, total: number, type: string) {
+  if (type === 'round_trip') return i === 0 ? 'OUT' : 'RTN'
+  return `L${i + 1}`
 }
+
+type Props = { trip: TripWithUsers; canDelete: boolean }
 
 export default function TripCard({ trip, canDelete }: Props) {
   const router = useRouter()
@@ -35,12 +44,25 @@ export default function TripCard({ trip, canDelete }: Props) {
   const legs = trip.legs ?? []
   const firstLeg = legs[0]
   const lastLeg = legs[legs.length - 1]
-  const routeStr = legs.length
-    ? [...legs.map(l => l.from_airport), lastLeg.to_airport].join(' → ')
-    : '?'
+  const destCode = lastLeg?.to_airport ?? '?'
+  const destInfo = getAirportInfo(destCode)
+  const country = destInfo?.country ?? ''
+  const flag = destInfo?.flag ?? ''
+
+  const routeParts: string[] = legs.length
+    ? [...legs.map(l => l.from_airport), lastLeg.to_airport]
+    : ['?']
+
+  const isMulti = trip.trip_type === 'multi_city'
+  const isManual = trip.source === 'manual'
+  const bg = cover(trip.id)
+
+  const creatorName = trip.creator?.display_name ?? 'Unknown'
+  const modifierName = trip.modifier?.display_name ?? 'Unknown'
+  const wasEdited = trip.last_modified_by !== trip.created_by
 
   async function handleDelete() {
-    if (!confirm(`Delete trip ${routeStr}? This cannot be undone.`)) return
+    if (!confirm(`Delete trip ${routeParts.join(' → ')}? This cannot be undone.`)) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/trips/${trip.id}`, { method: 'DELETE' })
@@ -53,68 +75,114 @@ export default function TripCard({ trip, canDelete }: Props) {
     }
   }
 
-  const creatorName = trip.creator?.display_name ?? 'Unknown'
-  const modifierName = trip.modifier?.display_name ?? 'Unknown'
-  const wasEdited = trip.last_modified_by !== trip.created_by
-
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-gray-900">{routeStr}</span>
-          </div>
-          {firstLeg && lastLeg && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {formatDate(firstLeg.departure_at)} → {formatDate(lastLeg.departure_at)}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className="inline-flex items-center justify-center bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg px-3 py-1 min-w-[4rem] text-center">
-            {trip.days_outside_uk}d
-          </span>
-          <span className="text-xs text-gray-400">outside UK</span>
-        </div>
+    <article style={{
+      background: 'var(--paper)',
+      borderRadius: 'var(--r-lg)',
+      overflow: 'hidden',
+      border: '1px solid var(--rule)',
+      transition: 'transform .15s, box-shadow .15s',
+      cursor: 'pointer',
+      display: 'flex',
+      flexDirection: 'column',
+    }}
+      onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)' }}
+      onMouseOut={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
+    >
+      {/* Cover */}
+      <div style={{ height: 140, position: 'relative', overflow: 'hidden', background: bg }}>
+        {/* Type tag — top left */}
+        <span style={{
+          position: 'absolute', top: 14, left: 14,
+          background: 'rgba(255,255,255,.92)', color: 'var(--ink)',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+          padding: '5px 10px', borderRadius: 999, backdropFilter: 'blur(4px)',
+        }}>
+          {isMulti ? `${legs.length}-city` : isManual ? 'Manual' : 'Round trip'}
+        </span>
+
+        {/* Days pill — top right */}
+        <span style={{
+          position: 'absolute', top: 14, right: 14,
+          background: 'var(--yellow)', color: 'var(--blue-900)',
+          borderRadius: 999, padding: '6px 12px 6px 10px',
+          fontWeight: 700, fontSize: 13,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>
+          {trip.days_outside_uk}d abroad
+        </span>
+
+        {/* Destination — bottom left */}
+        <span style={{
+          position: 'absolute', bottom: 14, left: 16,
+          color: 'white', fontFamily: 'var(--display)', fontWeight: 700,
+          fontSize: 28, letterSpacing: '-0.02em', lineHeight: 1,
+          textShadow: '0 2px 8px rgba(0,0,0,.3)',
+        }}>
+          {flag} {destCode}
+        </span>
       </div>
 
-      {/* Flights */}
-      {trip.source === 'manual' ? (
-        <p className="text-xs text-gray-400 italic">Manually added</p>
-      ) : (
-        <div className="space-y-2">
-          {legs.map((leg, i) => (
-            <div key={leg.id} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-xs font-medium text-gray-400 uppercase">
-                  {legLabel(i, legs.length, trip.trip_type)}
-                </span>
-                <span className="font-medium text-gray-900">{leg.airline}</span>
-                <span className="text-gray-400">{leg.flight_number}</span>
-              </div>
-              <span className="text-gray-600 tabular-nums">{formatTime(leg.departure_at)}</span>
-            </div>
+      {/* Body */}
+      <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Route chain */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22, letterSpacing: '-0.01em', flexWrap: 'wrap' }}>
+          {routeParts.map((code, i) => (
+            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <span>{code}</span>
+              {i < routeParts.length - 1 && <span style={{ color: 'var(--ink-4)', fontSize: 18 }}>→</span>}
+            </span>
           ))}
         </div>
-      )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <div className="text-xs text-gray-400">
-          <span>Added by {creatorName}</span>
-          {wasEdited && <span> · Edited by {modifierName}</span>}
+        {/* Meta */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ink-3)' }}>
+          {firstLeg && lastLeg && (
+            <span><strong style={{ color: 'var(--ink)', fontWeight: 600 }}>{fmtDate(firstLeg.departure_at)}</strong> – {fmtDate(lastLeg.departure_at)}</span>
+          )}
+          <span>{country}</span>
         </div>
-        {canDelete && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors p-2 -m-2"
-          >
-            {deleting ? 'Deleting…' : 'Delete'}
-          </button>
+
+        {/* Flights */}
+        {isManual ? (
+          <div style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: 12, borderTop: '1px dashed var(--rule)', paddingTop: 12 }}>
+            Manually added · flight details not recorded
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px dashed var(--rule)', paddingTop: 12, fontSize: 12 }}>
+            {legs.map((leg, i) => (
+              <div key={leg.id} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-2)' }}>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600, background: 'var(--paper-3)', color: 'var(--ink-2)', padding: '3px 6px', borderRadius: 4 }}>
+                  {legBadge(i, legs.length, trip.trip_type)}
+                </span>
+                <span style={{ fontWeight: 700 }}>{leg.airline}</span>
+                <span style={{ color: 'var(--ink-3)' }}>{leg.flight_number}</span>
+                <span style={{ marginLeft: 'auto', color: 'var(--ink-3)' }}>{fmtDate(leg.departure_at)} · {fmtTime(leg.departure_at)}</span>
+              </div>
+            ))}
+          </div>
         )}
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--ink-4)', borderTop: '1px solid var(--rule-soft)', paddingTop: 10 }}>
+          <span>
+            Added by {creatorName}
+            {wasEdited && <> · Edited by {modifierName}</>}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: 'var(--blue-700)', fontWeight: 700, cursor: 'pointer' }}>Manage →</span>
+            {canDelete && (
+              <button
+                onClick={e => { e.stopPropagation(); handleDelete() }}
+                disabled={deleting}
+                style={{ fontSize: 11, color: 'var(--coral)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', opacity: deleting ? 0.4 : 1 }}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </article>
   )
 }
