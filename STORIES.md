@@ -1,6 +1,6 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.9  
+**Version**: 2.0  
 **Date**: 2026-05-09  
 **Reference**: PRD v2.1  
 
@@ -356,22 +356,25 @@ src/app/api/trips/[id]/route.ts    (modified)
 
 ---
 
-## Story 9 — Polish, Error Handling & Responsive Layout
+## Story 9 — Polish, Error Handling & Responsive Layout ✅
 
 **As a** user,  
 **I want** the app to handle loading states, errors, and small screens gracefully,  
 **so that** it feels complete and reliable on any device.
 
 ### Acceptance Criteria
-- [ ] All data-fetching states have a loading skeleton (not a spinner) that matches the layout of the loaded content
-- [ ] All API errors surface a user-facing toast or inline message — no silent failures
-- [ ] The search form, results, and dashboard are fully usable on a 375px wide screen (iPhone SE)
-- [ ] Flight results columns stack vertically on mobile, side-by-side on desktop (≥768px)
-- [ ] Dashboard trip cards use a single-column layout on mobile
-- [ ] The nav is a hamburger menu on mobile
-- [ ] All interactive elements have focus-visible styles for keyboard accessibility
-- [ ] Page titles are set correctly via Next.js `metadata` on each page
-- [ ] A 404 page (`not-found.tsx`) and a global error boundary (`error.tsx`) exist
+- [x] All data-fetching states have a loading skeleton (not a spinner) that matches the layout of the loaded content
+- [x] All API errors surface a user-facing toast or inline message — no silent failures
+- [x] The search form, results, and dashboard are fully usable on a 375px wide screen (iPhone SE)
+- [x] Flight results columns stack vertically on mobile, side-by-side on desktop (≥768px)
+- [x] Dashboard upcoming trip cards use a single-column layout on mobile (`minmax(min(320px,100%),1fr)`)
+- [x] Dashboard past trips list collapses to 2 columns (route | dates) at 640px; swatch, flights, days, and action hidden
+- [x] The nav is a hamburger menu on mobile (`md:hidden` / `md:flex` Tailwind breakpoints)
+- [x] All interactive elements have focus-visible styles for keyboard accessibility
+- [x] Page titles are set correctly via Next.js `metadata` on each page
+- [x] A 404 page (`not-found.tsx`) and a global error boundary (`error.tsx`) exist
+- [x] All page container horizontal padding uses `clamp(16px, 4vw, 32px)` — no edge crowding on small screens
+- [x] Dashboard hero padding reduces to `28px 24px` when collapsed to single column on mobile
 
 ### Technical Tasks
 - Create `src/components/ui/Skeleton.tsx` — generic skeleton component
@@ -380,6 +383,8 @@ src/app/api/trips/[id]/route.ts    (modified)
 - Create `src/app/not-found.tsx`
 - Create `src/app/error.tsx`
 - Add `metadata` exports to all page files
+- Add `sj-past-row` / `sj-pr-*` class hooks to `PastRow` for 640px breakpoint
+- Apply `clamp()` horizontal padding to all page containers
 
 ### Files Created / Modified
 ```
@@ -388,10 +393,16 @@ src/components/ui/Toast.tsx
 src/context/ToastContext.tsx
 src/app/not-found.tsx
 src/app/error.tsx
-src/app/layout.tsx           (modified — add ToastProvider)
-src/app/page.tsx             (modified — metadata)
-src/app/search/page.tsx      (modified — metadata)
-src/app/audit/page.tsx       (modified — metadata)
+src/app/layout.tsx                               (modified — add ToastProvider)
+src/app/page.tsx                                 (modified — metadata)
+src/app/search/page.tsx                          (modified — metadata, clamp padding)
+src/app/audit/page.tsx                           (modified — metadata, clamp padding)
+src/app/timeline/page.tsx                        (modified — clamp padding)
+src/app/settings/page.tsx                        (modified — clamp padding)
+src/app/globals.css                              (modified — sj-past-row 640px block, hero padding)
+src/components/dashboard/PastTrips.tsx           (modified — sj-pr-* class hooks)
+src/components/dashboard/UpcomingTrips.tsx       (modified — minmax overflow fix)
+src/components/dashboard/DashboardClient.tsx     (modified — clamp padding)
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Product Requirements Document — Sojourn
 
-**Version**: 2.3  
+**Version**: 2.4  
 **Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
@@ -381,7 +381,7 @@ SERPAPI_KEY=
 ## 12. UI/UX Notes
 
 - Clean, minimal design — this is a personal utility tool
-- Mobile-responsive layout (Tailwind responsive classes)
+- **Mobile-responsive** down to 375px (iPhone SE): hamburger nav, single-column layouts, clamp-based horizontal padding, past-trip rows collapse to 2 columns (route | dates) at 640px
 - Flight cards have a clear selected/unselected state
 - British Airways flights display a prominent **BA badge** and always appear first in the list
 - The days outside UK count is visually prominent in the trip summary and dashboard cards
