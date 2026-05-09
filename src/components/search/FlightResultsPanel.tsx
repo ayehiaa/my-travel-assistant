@@ -22,7 +22,7 @@ export default function FlightResultsPanel({
     const to   = legs[0]?.destination?.iataCode ?? ''
     return (
       <div style={{ marginTop: 32 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="sj-results-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <FlightColumn
             title="Outbound"
             accentColor={LEG_COLORS[0]}

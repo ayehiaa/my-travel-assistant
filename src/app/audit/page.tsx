@@ -87,7 +87,7 @@ export default async function AuditPage({
       ) : (
         <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
           {/* Header row */}
-          <div style={{
+          <div className="sj-audit-header" style={{
             display: 'grid', gridTemplateColumns: '100px 1.6fr 1.4fr 1fr',
             gap: 16, padding: '10px 20px',
             background: 'var(--paper-2)',

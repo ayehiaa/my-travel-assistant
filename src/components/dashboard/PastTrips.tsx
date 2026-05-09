@@ -114,7 +114,7 @@ function PastRow({ trip }: { trip: TripWithUsers }) {
   )
 }
 
-export default function PastTrips({ trips, canDelete: _canDelete, showModal: controlledShow, onShowModal }: Props) {
+export default function PastTrips({ trips, showModal: controlledShow, onShowModal }: Omit<Props, 'canDelete'> & { canDelete?: boolean }) {
   const [internalShow, setInternalShow] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow

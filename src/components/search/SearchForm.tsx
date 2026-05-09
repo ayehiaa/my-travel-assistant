@@ -91,7 +91,7 @@ function RoundTripBar({
   return (
     <>
       {/* Yellow-bordered search bar */}
-      <div style={{
+      <div className="sj-search-bar" style={{
         background: 'white',
         border: '3px solid var(--yellow)',
         borderRadius: 'var(--r)',
@@ -220,7 +220,7 @@ function MultiCityStack({
             </div>
 
             {/* Fields */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: 12, alignItems: 'start' }}>
+            <div className="sj-leg-fields" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1fr', gap: 12, alignItems: 'start' }}>
               <AirportAutocomplete
                 label="From"
                 placeholder="Departure city or airport"
@@ -228,7 +228,7 @@ function MultiCityStack({
                 onChange={v => onUpdateLeg(i, { origin: v })}
               />
 
-              <span style={{ color: 'var(--ink-4)', fontSize: 20, paddingTop: 28 }}>→</span>
+              <span className="sj-leg-arrow" style={{ color: 'var(--ink-4)', fontSize: 20, paddingTop: 28 }}>→</span>
 
               <AirportAutocomplete
                 label="To"

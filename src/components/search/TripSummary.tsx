@@ -105,13 +105,13 @@ export default function TripSummary({
       </div>
 
       {/* Per-leg columns */}
-      <div style={{
+      <div className="sj-summary-legs" style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${selectedFlights.length}, 1fr)`,
         background: 'var(--paper)',
       }}>
         {selectedFlights.map((flight, i) => (
-          <div key={i} style={{
+          <div key={i} className="sj-summary-leg-item" style={{
             padding: '20px 24px',
             borderRight: i < selectedFlights.length - 1 ? '1px solid var(--rule)' : 'none',
           }}>

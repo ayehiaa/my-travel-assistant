@@ -19,7 +19,7 @@ export default function DashboardHero({ firstName, daysUsed, daysMax, referenceD
     : null
 
   return (
-    <section style={{
+    <section className="sj-hero-grid" style={{
       position: 'relative',
       background: 'linear-gradient(135deg, var(--blue-700) 0%, var(--blue-900) 100%)',
       borderRadius: 'var(--r-xl)',
@@ -67,7 +67,7 @@ export default function DashboardHero({ firstName, daysUsed, daysMax, referenceD
       </div>
 
       {/* Right — glass days card */}
-      <div style={{
+      <div className="sj-hero-glass" style={{
         position: 'relative', zIndex: 2,
         background: 'rgba(255,255,255,.08)',
         backdropFilter: 'blur(10px)',

@@ -100,7 +100,7 @@ export default async function SettingsPage() {
       </div>
 
       {/* 2×2 card grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+      <div className="sj-settings-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
 
         {/* Your account */}
         <section style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>

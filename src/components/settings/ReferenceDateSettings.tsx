@@ -40,7 +40,7 @@ export default function ReferenceDateSettings({ initialDate, annualDaysAbroad }:
   const fillPct = Math.min(100, (used / 90) * 100)
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, alignItems: 'stretch' }}>
+    <div className="sj-ref-body" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, alignItems: 'stretch' }}>
       {/* Left: date input + save */}
       <div>
         <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 8 }}>Reference date</div>

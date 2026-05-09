@@ -47,7 +47,7 @@ interface Props {
 
 export default function StatRow({ upcomingCount, multiCityCount, countriesThisYear, totalDaysThisYear, annualMax, journeysThisYear, currentYear }: Props) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 32 }}>
+    <div className="sj-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 32 }}>
       <StatTile
         tone="coral"
         icon="✈"

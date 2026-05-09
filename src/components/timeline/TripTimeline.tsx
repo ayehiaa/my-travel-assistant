@@ -142,7 +142,7 @@ export default function TripTimeline({ trips, today, referenceDate, annualDaysAb
   return (
     <div>
       {/* 4-up stat tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div className="sj-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         <StatTile tone="coral"    icon="↗" label="Upcoming"     value={String(upcoming.length)}   delta="next 6 months" />
         <StatTile tone="lavender" icon="↙" label="Past"         value={String(past.length)}        delta="last 6 months" />
         <StatTile tone="mint"     icon="🌍" label="Countries"   value={String(countries.size)}    delta="visited / planned" />

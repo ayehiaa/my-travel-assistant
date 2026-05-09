@@ -14,15 +14,31 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
-        <p className="text-sm text-gray-500 mb-6">An unexpected error occurred.</p>
+    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          fontFamily: 'var(--display)', fontWeight: 700,
+          fontSize: 'clamp(48px,8vw,80px)', letterSpacing: '-0.04em',
+          color: 'var(--coral-soft)', lineHeight: 1, marginBottom: 16,
+        }}>
+          ⚠
+        </div>
+        <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', color: 'var(--ink)', margin: '0 0 8px' }}>
+          Something went wrong
+        </h2>
+        <p style={{ fontSize: 15, color: 'var(--ink-3)', margin: '0 0 28px' }}>
+          An unexpected error occurred. Please try again.
+        </p>
         <button
           onClick={reset}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          style={{
+            background: 'var(--yellow)', color: 'var(--blue-900)',
+            border: 'none', borderRadius: 999, padding: '12px 28px',
+            fontWeight: 700, fontSize: 15, cursor: 'pointer',
+            fontFamily: 'var(--sans)',
+          }}
         >
-          Try again
+          Try again →
         </button>
       </div>
     </div>

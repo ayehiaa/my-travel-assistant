@@ -30,7 +30,7 @@ export default function AuditEntry({ entry, isLast }: { entry: AuditLogEntryWith
 
   return (
     <div style={{ borderBottom: isLast ? 'none' : '1px solid var(--rule-soft)' }}>
-      <div style={{
+      <div className="sj-audit-row" style={{
         display: 'grid', gridTemplateColumns: '100px 1.6fr 1.4fr 1fr',
         gap: 16, padding: '14px 20px', alignItems: 'center',
       }}>
