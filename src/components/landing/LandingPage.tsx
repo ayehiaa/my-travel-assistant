@@ -14,12 +14,12 @@ export default function LandingPage() {
     }}>
 
       {/* ── Nav ── */}
-      <header style={{ maxWidth: 1280, margin: '0 auto', padding: '22px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header style={{ maxWidth: 1280, margin: '0 auto', padding: '22px clamp(16px, 4vw, 48px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22 }}>
           <div style={{ width: 36, height: 36, background: 'var(--yellow)', color: 'var(--blue-900)', borderRadius: 10, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 20 }}>S</div>
           Sojourn
         </div>
-        <nav style={{ display: 'inline-flex', gap: 28, fontSize: 14, opacity: 0.85 }}>
+        <nav className="sj-landing-nav" style={{ display: 'inline-flex', gap: 28, fontSize: 14, opacity: 0.85 }}>
           <a href="#how" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">How it works</a>
           <a href="#assist" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">Assistants</a>
           <a href="#srt" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">90-day rule</a>
@@ -35,7 +35,7 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 48px 80px', display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 60, alignItems: 'center' }}>
+      <section className="sj-landing-hero" style={{ maxWidth: 1280, margin: '0 auto', padding: '60px clamp(16px, 4vw, 48px) 80px', display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 60, alignItems: 'center' }}>
         {/* Left */}
         <div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 999, padding: '6px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.85)', marginBottom: 20 }}>
@@ -66,7 +66,7 @@ export default function LandingPage() {
         </div>
 
         {/* Right — floating cards */}
-        <div style={{ position: 'relative', height: 480 }}>
+        <div className="sj-landing-hero-cards" style={{ position: 'relative', height: 480 }}>
           {/* Card A */}
           <div style={{ position: 'absolute', top: 20, left: 20, transform: 'rotate(-3deg)', background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 20, padding: '16px 18px', width: 280, boxShadow: '0 24px 60px -10px rgba(0,0,0,.4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center' }}>
@@ -124,8 +124,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── Stat strip ── */}
-      <div style={{ background: 'rgba(0,0,0,.25)', borderTop: '1px solid rgba(255,255,255,.1)', borderBottom: '1px solid rgba(255,255,255,.1)', padding: '28px 48px' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 24, textAlign: 'center' }}>
+      <div style={{ background: 'rgba(0,0,0,.25)', borderTop: '1px solid rgba(255,255,255,.1)', borderBottom: '1px solid rgba(255,255,255,.1)', padding: '28px clamp(16px, 4vw, 48px)' }}>
+        <div className="sj-landing-stat-strip" style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 24, textAlign: 'center' }}>
           {[
             { value: '2,400+', label: 'days logged abroad' },
             { value: '47',     label: 'countries on the platform' },
@@ -141,12 +141,12 @@ export default function LandingPage() {
       </div>
 
       {/* ── How it works ── */}
-      <section id="how" style={{ maxWidth: 1280, margin: '0 auto', padding: '90px 48px' }}>
+      <section id="how" style={{ maxWidth: 1280, margin: '0 auto', padding: '90px clamp(16px, 4vw, 48px)' }}>
         <div style={{ textAlign: 'center', marginBottom: 50 }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ How Sojourn works</span>
           <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 0' }}>Three things, done properly.</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
+        <div className="sj-landing-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
           {[
             {
               num: '01', title: 'Plan a trip',
@@ -184,7 +184,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Assistants ── */}
-      <section id="assist" style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 48px 90px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+      <section id="assist" className="sj-landing-assist" style={{ maxWidth: 1280, margin: '0 auto', padding: '60px clamp(16px, 4vw, 48px) 90px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
         <div>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ For people with people</span>
           <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0' }}>Let your assistant do the planning.</h2>
@@ -201,7 +201,7 @@ export default function LandingPage() {
             ))}
           </ul>
         </div>
-        <div style={{ background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 28, padding: 24, boxShadow: '0 30px 80px -10px rgba(0,0,0,.5)' }}>
+        <div className="sj-landing-assist-card" style={{ background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 28, padding: 24, boxShadow: '0 30px 80px -10px rgba(0,0,0,.5)' }}>
           {[
             { initial: 'Z', bg: '#1a73d6', name: 'Ziad Elsayed', email: 'ziad@example.com', role: 'Main', isMain: true },
             { initial: 'S', bg: '#ec4ea0', name: 'Sara Hassan',  email: 'sara@example.com',  role: 'Assistant', isMain: false },
@@ -228,10 +228,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── 90-day rule ── */}
-      <section id="srt" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 48px 90px', textAlign: 'center' }}>
+      <section id="srt" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 clamp(16px, 4vw, 48px) 90px', textAlign: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ The 90-day rule, baked in</span>
         <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 40px' }}>Why most spreadsheets get this wrong.</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, textAlign: 'left' }}>
+        <div className="sj-landing-srt-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, textAlign: 'left' }}>
           {[
             { title: 'Rolling, not calendar', body: 'The SRT counts days in a moving 12-month window — not Jan-to-Dec. Sojourn rolls automatically every day.' },
             { title: 'Inclusive of partial days', body: 'Departure and arrival dates count. Our day-counter does the inclusive math so you don\'t have to.' },
@@ -246,8 +246,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA block ── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 48px 60px' }}>
-        <div style={{ background: 'linear-gradient(135deg,var(--yellow),var(--coral))', color: 'var(--blue-900)', borderRadius: 28, padding: '60px 48px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 clamp(16px, 4vw, 48px) 60px' }}>
+        <div style={{ background: 'linear-gradient(135deg,var(--yellow),var(--coral))', color: 'var(--blue-900)', borderRadius: 28, padding: '60px clamp(16px, 4vw, 48px)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', width: 400, height: 400, right: -100, bottom: -200, background: 'radial-gradient(circle,rgba(10,31,77,.15),transparent 60%)', borderRadius: '50%' }} />
           <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4.5vw,60px)', letterSpacing: '-0.025em', margin: '0 0 12px', position: 'relative', zIndex: 2 }}>
             Plan your next trip without the maths.
@@ -267,7 +267,7 @@ export default function LandingPage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer style={{ maxWidth: 1280, margin: '0 auto', padding: '30px 48px 50px', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 30, alignItems: 'center', borderTop: '1px solid rgba(255,255,255,.1)' }}>
+      <footer className="sj-landing-footer" style={{ maxWidth: 1280, margin: '0 auto', padding: '30px clamp(16px, 4vw, 48px) 50px', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 30, alignItems: 'center', borderTop: '1px solid rgba(255,255,255,.1)' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18 }}>
           <div style={{ width: 28, height: 28, background: 'var(--yellow)', color: 'var(--blue-900)', borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 14 }}>S</div>
           Sojourn

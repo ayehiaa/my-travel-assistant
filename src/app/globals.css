@@ -194,6 +194,48 @@ textarea:focus-visible,
     grid-template-columns: 1fr !important;
   }
   .sj-leg-arrow { display: none !important; }
+
+  /* Landing page — nav links hidden on tablet/mobile */
+  .sj-landing-nav {
+    display: none !important;
+  }
+
+  /* Landing page — hero collapses to single column, float cards hidden */
+  .sj-landing-hero {
+    grid-template-columns: 1fr !important;
+    padding-top: 40px !important;
+    padding-bottom: 40px !important;
+  }
+  .sj-landing-hero-cards {
+    display: none !important;
+  }
+
+  /* Landing page — stat strip 4-col → 2×2 */
+  .sj-landing-stat-strip {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Landing page — how-it-works and 90-day rule cards → single column */
+  .sj-landing-how-grid,
+  .sj-landing-srt-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Landing page — assistants section → single column, mockup card hidden */
+  .sj-landing-assist {
+    grid-template-columns: 1fr !important;
+  }
+  .sj-landing-assist-card {
+    display: none !important;
+  }
+
+  /* Landing page — footer → stacked, centered */
+  .sj-landing-footer {
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    text-align: center !important;
+    gap: 16px !important;
+  }
 }
 
 /* ── Mobile-only overrides (max 640px) ────────────────────────── */
@@ -209,6 +251,19 @@ textarea:focus-visible,
   .sj-pr-days,
   .sj-pr-action {
     display: none !important;
+  }
+
+  /* Search skeleton: round-trip 2-col → 1-col */
+  .sj-results-skeleton {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Round-trip search bar → single column stacked */
+  .sj-search-bar {
+    grid-template-columns: 1fr !important;
+  }
+  .sj-search-bar > button[type="submit"] {
+    grid-column: auto !important;
   }
 }
 

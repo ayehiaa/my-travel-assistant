@@ -71,7 +71,7 @@ export default function SearchPage() {
       {/* Results area */}
       <div style={{ maxWidth: 896, margin: '0 auto', padding: '0 clamp(16px, 4vw, 32px)' }}>
         {searchStatus === 'loading' && (
-          <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round_trip' ? '1fr 1fr' : '1fr', gap: 24, marginTop: 32 }}>
+          <div className="sj-results-skeleton" style={{ display: 'grid', gridTemplateColumns: tripType === 'round_trip' ? '1fr 1fr' : '1fr', gap: 24, marginTop: 32 }}>
             {skeletonTitles.map(title => (
               <div key={title}>
                 <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 12 }}>{title}</p>
