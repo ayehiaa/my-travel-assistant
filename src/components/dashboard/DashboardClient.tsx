@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { TripWithUsers } from '@/types/database'
 import DashboardHero from './DashboardHero'
-import StatRow from './StatRow'
-import YearStrip from './YearStrip'
 import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
 
@@ -15,20 +13,12 @@ interface Props {
   referenceDate: string | null
   upcoming: TripWithUsers[]
   past: TripWithUsers[]
-  allTrips: TripWithUsers[]
-  multiCityCount: number
-  countriesThisYear: number
-  totalDaysThisYear: number
-  journeysThisYear: number
-  currentYear: number
   canDelete: boolean
 }
 
 export default function DashboardClient({
   firstName, daysUsed, annualMax, referenceDate,
-  upcoming, past, allTrips,
-  multiCityCount, countriesThisYear, totalDaysThisYear, journeysThisYear,
-  currentYear, canDelete,
+  upcoming, past, canDelete,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
 
@@ -42,18 +32,6 @@ export default function DashboardClient({
         referenceDate={referenceDate}
         onLogPastTrip={() => setShowModal(true)}
       />
-
-      <StatRow
-        upcomingCount={upcoming.length}
-        multiCityCount={multiCityCount}
-        countriesThisYear={countriesThisYear}
-        totalDaysThisYear={totalDaysThisYear}
-        annualMax={annualMax}
-        journeysThisYear={journeysThisYear}
-        currentYear={currentYear}
-      />
-
-      <YearStrip trips={allTrips} year={currentYear} />
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, margin: '36px 0 18px' }}>
         <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,3vw,36px)', letterSpacing: '-0.02em', margin: 0 }}>Upcoming trips</h2>

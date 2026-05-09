@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import DashboardClient from '@/components/dashboard/DashboardClient'
 import LandingPage from '@/components/landing/LandingPage'
 import { TripWithUsers, UserRoleRecord } from '@/types/database'
-import { getAirportInfo } from '@/lib/airportCountry'
+import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 
 export const metadata = {
   title: 'Sojourn — Dashboard',
@@ -72,45 +72,43 @@ export default async function DashboardPage() {
     })
     .reverse()
 
-  // ── Stat computations ──────────────────────────────────────────────────
-  const currentYear = new Date().getFullYear()
-
-  const thisYearTrips = enriched.filter(t =>
-    new Date(t.legs[0]?.departure_at ?? t.created_at).getFullYear() === currentYear
-  )
-
-  const totalDaysThisYear = thisYearTrips.reduce((s, t) => s + (t.days_outside_uk ?? 0), 0)
-  const journeysThisYear  = thisYearTrips.length
-  const multiCityCount    = upcoming.filter(t => t.trip_type === 'multi_city').length
-
-  const countriesThisYear = new Set(
-    thisYearTrips.flatMap(t =>
-      t.legs
-        .filter(l => l.to_airport)
-        .map(l => getAirportInfo(l.to_airport)?.country)
-        .filter((c): c is string => !!c && c !== 'United Kingdom')
-    )
-  ).size
-
   const referenceDate = roleRow?.reference_date ?? null
   const annualMax = 90
+
+  // Rolling 12-month days abroad ending at referenceDate (same logic as Timeline/Settings)
+  let annualDaysAbroad = 0
+  if (referenceDate) {
+    const refEnd   = new Date(referenceDate)
+    const refStart = new Date(referenceDate)
+    refStart.setFullYear(refStart.getFullYear() - 1)
+    const refStartIso = refStart.toISOString()
+    const refEndIso   = refEnd.toISOString()
+
+    annualDaysAbroad = enriched
+      .filter(t => {
+        if (!t.legs.length) return false
+        const firstDep = t.legs[0].departure_at
+        const lastDep  = t.legs[t.legs.length - 1].departure_at
+        return firstDep <= refEndIso && lastDep >= refStartIso
+      })
+      .reduce((acc, t) => acc + daysOutsideUKInWindow(
+        t.legs[0].departure_at,
+        t.legs[t.legs.length - 1].departure_at,
+        refStart,
+        refEnd,
+      ), 0)
+  }
   const firstName = user.displayName.split(' ')[0]
   const canDelete = user.role === 'main'
 
   return (
     <DashboardClient
       firstName={firstName}
-      daysUsed={totalDaysThisYear}
+      daysUsed={annualDaysAbroad}
       annualMax={annualMax}
       referenceDate={referenceDate}
       upcoming={upcoming}
       past={past}
-      allTrips={enriched}
-      multiCityCount={multiCityCount}
-      countriesThisYear={countriesThisYear}
-      totalDaysThisYear={totalDaysThisYear}
-      journeysThisYear={journeysThisYear}
-      currentYear={currentYear}
       canDelete={canDelete}
     />
   )
