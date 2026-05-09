@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Bricolage_Grotesque, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { getAuthUser } from '@/lib/auth'
 import { getActiveMainAccountId, getLinkedMainAccounts } from '@/lib/activeAccount'
@@ -7,19 +7,30 @@ import { UserProvider, UserContextValue } from '@/context/UserContext'
 import { ToastProvider } from '@/context/ToastContext'
 import Nav from '@/components/Nav'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const bricolage = Bricolage_Grotesque({
+  variable: '--font-bricolage',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
 })
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const jakarta = Plus_Jakarta_Sans({
+  variable: '--font-jakarta',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
+})
+
+const jetbrains = JetBrains_Mono({
+  variable: '--font-jetbrains',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'Travel Assistant',
-  description: 'Search and manage your trips',
+  title: 'Sojourn — Track your days abroad',
+  description: 'The calmer way to plan flights and stay on the right side of the 90-day rule.',
 }
 
 export default async function RootLayout({
@@ -39,8 +50,11 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-gray-50">
+    <html
+      lang="en"
+      className={`${bricolage.variable} ${jakarta.variable} ${jetbrains.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col bg-paper-2">
         {contextValue ? (
           <UserProvider user={contextValue}>
             <ToastProvider>
