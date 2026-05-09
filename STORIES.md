@@ -1,7 +1,7 @@
 # User Stories — My Travel Assistant
 
-**Version**: 1.5  
-**Date**: 2026-05-08  
+**Version**: 1.6  
+**Date**: 2026-05-09  
 **Reference**: PRD v1.9  
 
 Each story is scoped to fit within a single implementation session (~50K tokens). Stories must be built in order — each one depends on the previous.
@@ -844,6 +844,89 @@ src/app/page.tsx                           (modified — landing branch + metada
 ### Dependencies
 - Story 2 (Auth) — `getAuthUser()` must exist to branch on authentication state
 - Story 16 (Multi-city) — landing page references multi-city as a feature
+
+---
+
+---
+
+## Story 18 — Sojourn Visual Rebrand 🔄 IN PROGRESS
+
+**As a** user,
+**I want** every page and component to use the Sojourn design system,
+**so that** the app looks polished, branded, and consistent end-to-end.
+
+### Design reference
+`docs/sojourn-design/` — full prototype including `styles.css`, `dashboard.jsx`, `landing.jsx`, `search.jsx`, `settings.jsx`, `timeline.jsx`, `audit-login.jsx`.
+
+### Implementation plan
+11 steps, each verified on dev before committing.
+
+| Step | Scope | Status |
+|------|-------|--------|
+| 1 | Tokens + Fonts (`globals.css`, `layout.tsx`) | ✅ done |
+| 2 | Nav (navy bar, yellow brand tile, pill tabs) | ✅ done |
+| 3 | Landing page (full dark navy rewrite) | ✅ done |
+| 4 | Login + auth pages (two-column, passport stamps) | ✅ done |
+| 5 | Dashboard hero + StatRow + YearStrip + DashboardClient | ✅ done |
+| 6 | TripCard gradient covers, PastTrips dense list, AddPastTripModal lavender header, EmptyState | 🔄 built — needs dev verification |
+| 7 | Search page — navy hero, yellow-bordered bar, FlightCard selected state, TripSummary navy header | ⏳ |
+| 8 | Timeline — 4-up stats, gradient bars, coral TODAY line, tooltip | ⏳ |
+| 9 | Settings — 2×2 card grid, reference date navy readout, coral danger zone | ⏳ |
+| 10 | Audit — token restyle, action pills (mint/sky/coral) | ⏳ |
+| 11 | Polish — hover consistency, focus-visible, responsive, not-found/error, final build | ⏳ |
+
+### Acceptance Criteria
+- [ ] All pages use Sojourn tokens (no hardcoded grays or blue-600 remnants)
+- [ ] Three-font system applied: Bricolage Grotesque (display), Plus Jakarta Sans (body), JetBrains Mono (mono)
+- [ ] Nav: navy bar with yellow rotated brand tile, pill tab group, role-appropriate right section
+- [ ] Dashboard: navy hero card + glass days counter + 4 stat tiles + year strip + gradient trip cards + dense past list
+- [ ] Search: navy hero, yellow-bordered round-trip bar, "✓ Selected" overhanging pill on FlightCard, navy gradient TripSummary header
+- [ ] Timeline: gradient trip bars + coral TODAY line + working tooltip + 4 stat tiles
+- [ ] Settings: 2×2 card grid, coral danger zone
+- [ ] Audit: color-coded action pills (mint created / sky updated / coral deleted)
+- [ ] `npm run build` passes with 0 type errors
+- [ ] `npm test` passes (all tests green)
+- [ ] `npm run lint` passes
+
+### Technical notes
+- Tailwind v4: no `tailwind.config.ts` — all tokens in `globals.css :root`, exposed via `@theme inline {}`
+- `DashboardClient.tsx` (`'use client'`) owns `showModal` state; passed down to both `DashboardHero` (CTA) and `PastTrips` (modal)
+- `getAirportInfo()` from `src/lib/airportCountry.ts` — usable in client components (local lookup)
+- 8-gradient COVERS palette keyed by `id.charCodeAt(0) % 8` — shared by TripCard, PastTrips, YearStrip
+
+### Files Created / Modified
+```
+src/app/globals.css                              (modified — full token set)
+src/app/layout.tsx                               (modified — three fonts)
+src/components/Nav.tsx                           (modified — Sojourn nav)
+src/components/landing/LandingPage.tsx           (rewritten — dark navy)
+src/app/login/page.tsx                           (modified — two-column)
+src/app/forgot-password/page.tsx                 (modified — white card)
+src/app/reset-password/page.tsx                  (modified — white card)
+src/app/page.tsx                                 (modified — DashboardClient)
+src/components/dashboard/DashboardClient.tsx     (new — modal state wrapper)
+src/components/dashboard/DashboardHero.tsx       (new — navy gradient hero)
+src/components/dashboard/StatRow.tsx             (new — 4-tile stat grid)
+src/components/dashboard/YearStrip.tsx           (new — 12-month trip bar)
+src/components/dashboard/TripCard.tsx            (modified — gradient cover)
+src/components/dashboard/UpcomingTrips.tsx       (modified — clean grid)
+src/components/dashboard/PastTrips.tsx           (modified — dense list)
+src/components/dashboard/AddPastTripModal.tsx    (modified — lavender header)
+src/components/dashboard/EmptyState.tsx          (modified — dashed border)
+src/app/search/page.tsx                          (pending)
+src/components/search/SearchForm.tsx             (pending)
+src/components/search/FlightResultsPanel.tsx     (pending)
+src/components/search/FlightCard.tsx             (pending)
+src/components/search/TripSummary.tsx            (pending)
+src/app/timeline/page.tsx                        (pending)
+src/components/timeline/TripTimeline.tsx         (pending)
+src/components/timeline/Tooltip.tsx              (pending)
+src/app/settings/page.tsx                        (pending)
+src/app/audit/page.tsx                           (pending)
+```
+
+### Dependencies
+- Story 17 (Landing Page) — base app must exist before visual rebrand
 
 ---
 

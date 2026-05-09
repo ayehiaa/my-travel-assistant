@@ -1,7 +1,7 @@
 # Product Requirements Document — My Travel Assistant
 
-**Version**: 1.9  
-**Date**: 2026-05-08  
+**Version**: 2.0  
+**Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
 ---
@@ -406,6 +406,30 @@ SERPAPI_KEY=
 15. **Annual days abroad counter** — reference date setting, windowed calculation with boundary clipping, timeline stat card
 16. **Multi-city flight search** — trip-type tab switcher, per-leg search, `trip_legs` schema, unified dashboard/timeline display
 17. **Sojourn landing page** — public marketing page at `/` for unauthenticated visitors; app rebranded as Sojourn
+
+---
+
+## 13. Visual Design System (Sojourn Rebrand)
+
+The app is being visually rebranded from generic Tailwind utility classes to the **Sojourn design system**. The design prototype lives in `docs/sojourn-design/`.
+
+**Design tokens** (all in `globals.css :root`):
+- Colour scale: `--blue-900` → `--blue-50`, `--yellow`, `--coral`, `--mint`, `--peach`, `--lavender`, `--sky`, `--rose`, ink scale, paper scale, rule scale
+- Radii: `--r-sm` (8px), `--r` (14px), `--r-lg` (20px), `--r-xl` (28px)
+- Shadows: `--shadow-sm`, `--shadow`, `--shadow-lg` (all ink-tinted)
+- Font stacks: `--display` (Bricolage Grotesque), `--sans` (Plus Jakarta Sans), `--mono` (JetBrains Mono)
+
+**Key components:**
+- **Nav**: navy `--blue-700` bar, yellow rotated brand tile, pill tab group, yellow avatar
+- **DashboardHero**: navy gradient card (60/40 grid), glass days counter, dual CTAs
+- **StatRow**: 4 tinted tiles (coral / mint / sky / lavender)
+- **YearStrip**: 12-month grid with gradient trip bars and coral TODAY line
+- **TripCard**: 140px gradient cover (type pill + days pill + destination), display-font route chain
+- **PastTrips**: dense list with gradient swatch, route chain, days count in display font
+- **AddPastTripModal**: lavender-soft gradient header, yellow summary strip, modalIn/modalRise animations
+- **Landing**: dark navy with radial glows, 8 sections
+
+**Rebrand is tracked as Story 18 in STORIES.md.** Implementation is in progress — see plan file for remaining steps.
 
 ---
 
