@@ -2,382 +2,282 @@ import Link from 'next/link'
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div style={{
+      background: `
+        radial-gradient(1100px 600px at 80% -10%, rgba(255,180,0,.18), transparent 60%),
+        radial-gradient(900px 700px at -10% 90%, rgba(255,111,94,.18), transparent 55%),
+        linear-gradient(180deg, #050d24 0%, #0a1f4d 100%)
+      `,
+      color: 'white',
+      minHeight: '100vh',
+      fontFamily: 'var(--sans)',
+    }}>
 
-      {/* ── Sticky nav ──────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/90 backdrop-blur-sm border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <span className="text-white font-semibold text-lg tracking-tight">Sojourn</span>
-          <Link
-            href="/login"
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+      {/* ── Nav ── */}
+      <header style={{ maxWidth: 1280, margin: '0 auto', padding: '22px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22 }}>
+          <div style={{ width: 36, height: 36, background: 'var(--yellow)', color: 'var(--blue-900)', borderRadius: 10, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 20 }}>S</div>
+          Sojourn
+        </div>
+        <nav style={{ display: 'inline-flex', gap: 28, fontSize: 14, opacity: 0.85 }}>
+          <a href="#how" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">How it works</a>
+          <a href="#assist" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">Assistants</a>
+          <a href="#srt" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">90-day rule</a>
+        </nav>
+        <div style={{ display: 'inline-flex', gap: 8 }}>
+          <Link href="/login" style={{ background: 'rgba(255,255,255,.1)', color: 'white', border: '1px solid rgba(255,255,255,.25)', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }} className="hover:bg-white/20 transition-colors">
             Sign in
           </Link>
-        </div>
-      </nav>
-
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="bg-slate-950 pt-36 pb-28 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="mb-10 flex justify-center">
-            <img
-              src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1000&q=80"
-              alt="Airplane in flight"
-              className="w-full max-w-2xl rounded-2xl object-cover ring-1 ring-white/10 shadow-2xl shadow-blue-900/40"
-              style={{ aspectRatio: '2/1' }}
-            />
-          </div>
-
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.08] mb-6">
-            Your trusted<br />
-            <span className="text-blue-400">travel tracker</span>
-          </h1>
-
-          <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Track every day you spend outside the UK — without the spreadsheets.
-          </p>
-
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-base shadow-lg shadow-blue-900/40"
-          >
-            Get started
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
+          <Link href="/login" style={{ background: 'var(--yellow)', color: 'var(--blue-900)', boxShadow: '0 2px 0 #d99500', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }} className="hover:brightness-110 transition-all">
+            Start free
           </Link>
         </div>
+      </header>
 
-        {/* Stat strip */}
-        <div className="max-w-2xl mx-auto mt-20 grid grid-cols-3 gap-4">
+      {/* ── Hero ── */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 48px 80px', display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 60, alignItems: 'center' }}>
+        {/* Left */}
+        <div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 999, padding: '6px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.85)', marginBottom: 20 }}>
+            ⬢ A travel planner that respects the 90-day rule
+          </span>
+          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(48px,6vw,84px)', lineHeight: 1.0, letterSpacing: '-0.03em', margin: '0 0 22px' }}>
+            Every trip.<br />
+            Every day abroad.<br />
+            <span style={{ color: 'var(--yellow)' }}>One quiet planner.</span>
+          </h1>
+          <p style={{ fontSize: 18, lineHeight: 1.55, opacity: 0.85, maxWidth: '50ch', margin: '0 0 28px' }}>
+            Sojourn is the calmer way to plan flights, log past trips, and track how many days
+            you&apos;ve spent outside the UK — built for people whose calendar matters legally.
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            <Link href="/login" style={{ background: 'var(--yellow)', color: 'var(--blue-900)', boxShadow: '0 2px 0 #d99500', borderRadius: 14, padding: '16px 24px', fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }} className="hover:brightness-110 transition-all">
+              Start planning · free →
+            </Link>
+            <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--yellow)' }} className="hover:text-white transition-colors">
+              Sign in to existing account →
+            </Link>
+          </div>
+          <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 36, fontSize: 12, opacity: 0.65 }}>
+            <span>· Built around the Statutory Residence Test</span>
+            <span>· British Airways flights surfaced first</span>
+            <span>· Read-only audit trail for every change</span>
+          </div>
+        </div>
+
+        {/* Right — floating cards */}
+        <div style={{ position: 'relative', height: 480 }}>
+          {/* Card A */}
+          <div style={{ position: 'absolute', top: 20, left: 20, transform: 'rotate(-3deg)', background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 20, padding: '16px 18px', width: 280, boxShadow: '0 24px 60px -10px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontSize: 26 }}>🇫🇷</span>
+              <div>
+                <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, letterSpacing: '-0.01em' }}>LHR → CDG</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>04 Jun · BA304</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                <strong style={{ fontFamily: 'var(--display)', fontSize: 26, lineHeight: 1, letterSpacing: '-0.02em' }}>4</strong>
+                <small style={{ color: 'var(--ink-3)', fontSize: 11 }}>d</small>
+              </div>
+            </div>
+          </div>
+          {/* Card B */}
+          <div style={{ position: 'absolute', top: 130, right: 0, transform: 'rotate(2deg)', background: 'linear-gradient(135deg,white,var(--yellow-soft))', color: 'var(--ink)', borderRadius: 20, padding: '16px 18px', width: 290, boxShadow: '0 24px 60px -10px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontSize: 26 }}>🇩🇪🇫🇷</span>
+              <div>
+                <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, letterSpacing: '-0.01em' }}>3-city · DUS · CDG</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>03 Jul · multi-city</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                <strong style={{ fontFamily: 'var(--display)', fontSize: 26, lineHeight: 1, letterSpacing: '-0.02em' }}>7</strong>
+                <small style={{ color: 'var(--ink-3)', fontSize: 11 }}>d</small>
+              </div>
+            </div>
+          </div>
+          {/* Card C */}
+          <div style={{ position: 'absolute', top: 260, left: 60, transform: 'rotate(-1deg)', background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 20, padding: '16px 18px', width: 280, boxShadow: '0 24px 60px -10px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontSize: 26 }}>🇦🇪</span>
+              <div>
+                <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, letterSpacing: '-0.01em' }}>LHR → DXB</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>22 Jul · EK0002</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                <strong style={{ fontFamily: 'var(--display)', fontSize: 26, lineHeight: 1, letterSpacing: '-0.02em' }}>13</strong>
+                <small style={{ color: 'var(--ink-3)', fontSize: 11 }}>d</small>
+              </div>
+            </div>
+          </div>
+          {/* Meter card */}
+          <div style={{ position: 'absolute', bottom: 0, right: 30, transform: 'rotate(2deg)', background: 'var(--ink)', color: 'white', borderRadius: 20, padding: '16px 20px', width: 260, boxShadow: '0 24px 60px -10px rgba(0,0,0,.5)' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.7, marginBottom: 4 }}>Annual days abroad</div>
+            <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 42, lineHeight: 1, letterSpacing: '-0.03em' }}>
+              73<span style={{ fontSize: 18, opacity: 0.5, fontWeight: 500 }}>/90</span>
+            </div>
+            <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,.18)', overflow: 'hidden', margin: '10px 0 6px' }}>
+              <div style={{ height: '100%', width: '81%', background: 'linear-gradient(90deg,var(--mint),var(--yellow) 70%,var(--coral))' }} />
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>17 days remaining · till 5 Apr 2027</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Stat strip ── */}
+      <div style={{ background: 'rgba(0,0,0,.25)', borderTop: '1px solid rgba(255,255,255,.1)', borderBottom: '1px solid rgba(255,255,255,.1)', padding: '28px 48px' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 24, textAlign: 'center' }}>
           {[
-            { value: '183', label: 'Days abroad' },
-            { value: '5', label: 'Countries visited' },
-            { value: '3', label: 'Legs per trip' },
+            { value: '2,400+', label: 'days logged abroad' },
+            { value: '47',     label: 'countries on the platform' },
+            { value: '90',     label: 'day SRT cap, baked in' },
+            { value: '0',      label: 'spreadsheets required' },
           ].map(s => (
-            <div key={s.label} className="text-center bg-slate-900 border border-slate-800 rounded-xl px-4 py-5">
-              <div className="text-3xl font-bold text-white">{s.value}</div>
-              <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+            <div key={s.label}>
+              <strong style={{ display: 'block', fontFamily: 'var(--display)', fontWeight: 700, fontSize: 36, letterSpacing: '-0.02em', color: 'var(--yellow)' }}>{s.value}</strong>
+              <span style={{ fontSize: 13, opacity: 0.7 }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── How it works ── */}
+      <section id="how" style={{ maxWidth: 1280, margin: '0 auto', padding: '90px 48px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 50 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ How Sojourn works</span>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 0' }}>Three things, done properly.</h2>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
+          {[
+            {
+              num: '01', title: 'Plan a trip',
+              body: 'Round-trip or multi-city up to three legs. Pick origins, destinations and morning-or-evening — we surface British Airways first, then everything else, side-by-side.',
+              pills: [{ label: 'Round trip', on: true }, { label: 'Multi-city · 3 legs', on: false }],
+            },
+            {
+              num: '02', title: 'Log past trips',
+              body: 'Whether booked elsewhere or taken before Sojourn, log every prior trip in seconds. Days outside the UK roll into your annual counter automatically.',
+              pills: [{ label: 'Manual entry', on: false, manual: true }, { label: 'Auto day-count', on: false }],
+            },
+            {
+              num: '03', title: 'Stay under 90',
+              body: 'Set your reference date once. We compute the rolling 12-month total and warn before you cross it — green, amber, or stop.',
+              pills: [{ label: '73 / 90 days', on: true }],
+            },
+          ].map(card => (
+            <div key={card.num} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 20, padding: '28px 26px', position: 'relative' }}>
+              <span style={{ position: 'absolute', top: -12, right: 22, background: 'var(--yellow)', color: 'var(--blue-900)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 12, padding: '4px 10px', borderRadius: 999, letterSpacing: '0.06em' }}>{card.num}</span>
+              <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em', margin: '0 0 10px' }}>{card.title}</h3>
+              <p style={{ color: 'rgba(255,255,255,.72)', fontSize: 14, lineHeight: 1.55, margin: '0 0 18px' }}>{card.body}</p>
+              <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                {card.pills.map(p => (
+                  <span key={p.label} style={{
+                    background: p.on ? 'var(--yellow)' : p.manual ? 'var(--lavender-soft)' : 'rgba(255,255,255,.06)',
+                    color: p.on ? 'var(--blue-900)' : p.manual ? 'var(--lavender)' : 'inherit',
+                    border: `1px solid ${p.on ? 'var(--yellow)' : p.manual ? 'var(--lavender)' : 'rgba(255,255,255,.14)'}`,
+                    borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 600,
+                  }}>{p.label}</span>
+                ))}
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Feature 1: Days counter ──────────────────────────────────────── */}
-      <section className="py-24 px-4 bg-white">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div>
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">Residence tracking</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-5 leading-tight">
-              Always know your SRT position
-            </h2>
-            <p className="text-gray-500 text-lg leading-relaxed mb-8">
-              Sojourn automatically calculates your days outside the UK for every trip and keeps a running total — so you&apos;re never caught off guard at tax time.
-            </p>
-            <ul className="space-y-3.5">
-              {[
-                'Automatic day count per trip and in total',
-                'Annual total benchmarked against your reference date',
-                'Upcoming and past trips in one dashboard',
-              ].map(item => (
-                <li key={item} className="flex items-start gap-3 text-gray-700">
-                  <span className="mt-0.5 shrink-0 w-5 h-5 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Mockup */}
-          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-500">Days outside UK</span>
-                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">2025</span>
+      {/* ── Assistants ── */}
+      <section id="assist" style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 48px 90px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+        <div>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ For people with people</span>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0' }}>Let your assistant do the planning.</h2>
+          <p style={{ color: 'rgba(255,255,255,.78)', fontSize: 16, lineHeight: 1.55, marginBottom: 22, maxWidth: '50ch' }}>
+            Invite an assistant by email. They get their own login and book everything on your behalf —
+            same trips, same counter, full audit trail. You stay in control; they save the time.
+          </p>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {['Read-only audit log of every change', 'Switch between multiple principals from one account', 'Unlink any time — no data is shared, only delegated'].map(item => (
+              <li key={item} style={{ fontSize: 14, opacity: 0.9 }}>
+                <span style={{ display: 'inline-grid', placeItems: 'center', width: 22, height: 22, borderRadius: '50%', background: 'var(--mint)', color: 'white', fontSize: 11, fontWeight: 800, marginRight: 10 }}>✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 28, padding: 24, boxShadow: '0 30px 80px -10px rgba(0,0,0,.5)' }}>
+          {[
+            { initial: 'Z', bg: '#1a73d6', name: 'Ziad Elsayed', email: 'ziad@example.com', role: 'Main', isMain: true },
+            { initial: 'S', bg: '#ec4ea0', name: 'Sara Hassan',  email: 'sara@example.com',  role: 'Assistant', isMain: false },
+            { initial: 'M', bg: '#2bc28a', name: 'Maya Chen',   email: 'maya@example.com',  role: 'Assistant', isMain: false },
+          ].map((row, i) => (
+            <div key={row.name}>
+              {i === 1 && (
+                <div style={{ textAlign: 'center', padding: '10px 0 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', position: 'relative' }}>
+                  <span style={{ position: 'relative', zIndex: 1, background: 'white', padding: '0 8px' }}>delegates to</span>
+                  <div style={{ position: 'absolute', top: '50%', left: 12, right: 12, height: 1, background: 'var(--rule)' }} />
                 </div>
-                <div className="flex items-end gap-3 mb-3">
-                  <span className="text-5xl font-bold text-gray-900">42</span>
-                  <span className="text-gray-400 mb-1.5 text-sm">/ 183 days</span>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center', padding: 12, background: row.isMain ? 'var(--blue-100)' : 'var(--paper-2)', border: `1px solid ${row.isMain ? 'var(--blue-500)' : 'var(--rule)'}`, borderRadius: 14, marginTop: i > 1 ? 8 : 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: row.bg, color: 'white', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14, fontFamily: 'var(--display)' }}>{row.initial}</div>
+                <div>
+                  <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 16 }}>{row.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{row.email}</div>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '23%' }} />
-                </div>
-                <div className="mt-1.5 flex justify-between text-xs text-gray-400">
-                  <span>23% used</span>
-                  <span>141 remaining</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Upcoming trips', value: '3' },
-                  { label: 'Past trips', value: '7' },
-                ].map(s => (
-                  <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <div className="text-xs text-gray-400 mb-1">{s.label}</div>
-                    <div className="text-2xl font-bold text-gray-900">{s.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                <div className="text-xs text-gray-400 mb-2">Upcoming</div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-semibold text-gray-900">LHR → FCO</span>
-                  <span className="text-gray-500">15 Jun — 22 Jun</span>
-                  <span className="text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded">7d</span>
-                </div>
+                <span style={{ background: row.isMain ? 'var(--blue-100)' : 'var(--paper-3)', color: row.isMain ? 'var(--blue-700)' : 'var(--ink-2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 10px', borderRadius: 999, textTransform: 'uppercase' }}>{row.role}</span>
               </div>
             </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Feature 2: Flight search ─────────────────────────────────────── */}
-      <section className="py-24 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Mockup */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm order-2 lg:order-1">
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">From</div>
-                  <div className="font-semibold text-gray-900 text-sm">LHR · London Heathrow</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">To</div>
-                  <div className="font-semibold text-gray-900 text-sm">CDG · Paris Charles de Gaulle</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">Departure</div>
-                  <div className="font-semibold text-gray-900 text-sm">15 Jun 2025</div>
-                </div>
-                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-                  <div className="flex-1 py-3 text-center bg-blue-600 text-white font-medium">Morning</div>
-                  <div className="flex-1 py-3 text-center text-gray-400 bg-gray-50">Evening</div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4 space-y-2">
-                {[
-                  { code: 'BA304', time: '07:15 → 09:35', price: '£189', isBA: true, selected: true },
-                  { code: 'AF1281', time: '09:00 → 11:20', price: '£142', isBA: false, selected: false },
-                  { code: 'EZ8823', time: '11:45 → 14:05', price: '£98', isBA: false, selected: false },
-                ].map(f => (
-                  <div
-                    key={f.code}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      f.selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="font-semibold text-gray-900 text-sm">{f.code}</span>
-                        {f.isBA && (
-                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">BA</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400">{f.time}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-gray-900 text-sm">{f.price}</div>
-                      {f.selected && <div className="text-[10px] text-blue-600 font-medium">Selected ✓</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* ── 90-day rule ── */}
+      <section id="srt" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 48px 90px', textAlign: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ The 90-day rule, baked in</span>
+        <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 40px' }}>Why most spreadsheets get this wrong.</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, textAlign: 'left' }}>
+          {[
+            { title: 'Rolling, not calendar', body: 'The SRT counts days in a moving 12-month window — not Jan-to-Dec. Sojourn rolls automatically every day.' },
+            { title: 'Inclusive of partial days', body: 'Departure and arrival dates count. Our day-counter does the inclusive math so you don\'t have to.' },
+            { title: 'One source of truth', body: 'Booked, manually-logged, assistant-added — every trip touches the same counter. No double-counting, no gaps.' },
+          ].map(card => (
+            <div key={card.title} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 20, padding: 24 }}>
+              <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', marginBottom: 10, color: 'var(--yellow)' }}>{card.title}</div>
+              <p style={{ color: 'rgba(255,255,255,.75)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>{card.body}</p>
             </div>
-          </div>
-
-          <div className="order-1 lg:order-2">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">Flight search</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-5 leading-tight">
-              Search flights, log trips in one flow
-            </h2>
-            <p className="text-gray-500 text-lg leading-relaxed mb-8">
-              Search live flight data, pick your preferred option, and save the trip — all without leaving the app. British Airways preference and time-slot filtering built in.
-            </p>
-            <ul className="space-y-3.5">
-              {[
-                'Live flight data via Google Flights',
-                'Morning and evening time-slot filtering',
-                'British Airways flights highlighted automatically',
-              ].map(item => (
-                <li key={item} className="flex items-start gap-3 text-gray-700">
-                  <span className="mt-0.5 shrink-0 w-5 h-5 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Feature 3: Timeline ──────────────────────────────────────────── */}
-      <section className="py-24 px-4 bg-slate-950">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div>
-            <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">Visual timeline</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5 leading-tight">
-              See your whole year at a glance
-            </h2>
-            <p className="text-slate-400 text-lg leading-relaxed mb-8">
-              A 12-month visual timeline shows every trip as a bar — past trips faded, upcoming highlighted. Hover any bar for full trip details.
-            </p>
-            <ul className="space-y-3.5">
-              {[
-                '6 months back and 6 months forward',
-                'Country flags colour-coded per destination',
-                'Annual days abroad vs your reference date',
-              ].map(item => (
-                <li key={item} className="flex items-start gap-3 text-slate-300">
-                  <span className="mt-0.5 shrink-0 w-5 h-5 bg-slate-800 text-blue-400 rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Timeline mockup */}
-          <div className="bg-[#1e2130] border border-[#2d3348] rounded-2xl p-6">
-            {/* Month headers */}
-            <div className="flex mb-5 ml-20 text-[0.6rem] font-semibold uppercase tracking-widest text-slate-600">
-              {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map(m => (
-                <div key={m} className="flex-1 text-center">{m}</div>
-              ))}
-            </div>
-
-            {/* Bars */}
-            <div className="space-y-3">
-              {[
-                { label: 'LHR → DUS', flag: '🇩🇪', left: '4%',  width: '13%', past: true },
-                { label: 'LHR → CDG', flag: '🇫🇷', left: '28%', width: '10%', past: true },
-                { label: 'LHR → FCO', flag: '🇮🇹', left: '52%', width: '16%', past: false },
-                { label: 'LHR → MAD', flag: '🇪🇸', left: '76%', width: '13%', past: false },
-              ].map(bar => (
-                <div key={bar.label} className="flex items-center h-9">
-                  <div className="w-20 text-right pr-3 text-xs font-semibold text-slate-500 truncate">{bar.label}</div>
-                  <div className="relative flex-1 h-9">
-                    <div
-                      className="absolute top-0.5 h-8 rounded-lg flex items-center justify-center"
-                      style={{
-                        left: bar.left,
-                        width: bar.width,
-                        border: `1.5px solid ${bar.past ? '#475569' : '#94a3b8'}`,
-                        opacity: bar.past ? 0.45 : 1,
-                        minWidth: 32,
-                      }}
-                    >
-                      <span className="text-base leading-none select-none">{bar.flag}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Today indicator */}
-            <div className="mt-5 pt-4 border-t border-[#2d3348] flex items-center gap-2.5 text-xs text-slate-500">
-              <div className="w-2.5 h-2.5 rounded-sm bg-amber-400" />
-              <span>Today — 15 Mar 2025</span>
-              <span className="ml-auto text-slate-600">4 countries visited</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Feature 4: Multi-city ────────────────────────────────────────── */}
-      <section className="py-24 px-4 bg-white">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Mockup */}
-          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <div className="space-y-3">
-              {[
-                { leg: 'Leg 1', from: 'LHR', to: 'DUS', date: '3 Jul 2025', flag: '🇩🇪', home: false },
-                { leg: 'Leg 2', from: 'DUS', to: 'CDG', date: '7 Jul 2025', flag: '🇫🇷', home: false },
-                { leg: 'Leg 3', from: 'CDG', to: 'LHR', date: '10 Jul 2025', flag: '🇬🇧', home: true },
-              ].map(leg => (
-                <div key={leg.leg} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{leg.leg}</span>
-                    {leg.home && (
-                      <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">↩ Home</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-gray-900">{leg.from}</span>
-                    <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                    <span className="text-lg font-bold text-gray-900">{leg.to}</span>
-                    <span className="text-xl ml-0.5">{leg.flag}</span>
-                    <span className="ml-auto text-sm text-gray-400">{leg.date}</span>
-                  </div>
-                </div>
-              ))}
-
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
-                <div className="text-sm font-bold text-blue-900 tracking-wide">LHR → DUS → CDG → LHR</div>
-                <div className="text-xs text-blue-500 mt-0.5 font-medium">7 days outside UK · 2 countries</div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">Multi-city trips</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-5 leading-tight">
-              Complex itineraries, handled properly
-            </h2>
-            <p className="text-gray-500 text-lg leading-relaxed mb-8">
-              Log trips like LHR → DUS → CDG → LHR as a single multi-city itinerary. Sojourn tracks every leg, auto-fills connections, and calculates total days correctly.
-            </p>
-            <ul className="space-y-3.5">
-              {[
-                'Up to 3 legs per trip',
-                'Next leg origin auto-filled from previous destination',
-                'Return leg auto-fills your home airport',
-              ].map(item => (
-                <li key={item} className="flex items-start gap-3 text-gray-700">
-                  <span className="mt-0.5 shrink-0 w-5 h-5 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold">✓</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA ─────────────────────────────────────────────────────────── */}
-      <section className="py-28 px-4 bg-slate-950">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-4xl sm:text-5xl font-bold text-white mb-5 leading-tight">
-            Ready to take control?
+      {/* ── CTA block ── */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 48px 60px' }}>
+        <div style={{ background: 'linear-gradient(135deg,var(--yellow),var(--coral))', color: 'var(--blue-900)', borderRadius: 28, padding: '60px 48px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', width: 400, height: 400, right: -100, bottom: -200, background: 'radial-gradient(circle,rgba(10,31,77,.15),transparent 60%)', borderRadius: '50%' }} />
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4.5vw,60px)', letterSpacing: '-0.025em', margin: '0 0 12px', position: 'relative', zIndex: 2 }}>
+            Plan your next trip without the maths.
           </h2>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-base shadow-xl shadow-blue-900/40"
-          >
-            Sign in to Sojourn
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </Link>
+          <p style={{ fontSize: 16, opacity: 0.8, margin: '0 0 28px', position: 'relative', zIndex: 2 }}>
+            Free to start. Add assistants when you need them.
+          </p>
+          <div style={{ display: 'inline-flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
+            <Link href="/login" style={{ background: 'var(--blue-900)', color: 'var(--yellow)', boxShadow: '0 2px 0 #050d24', borderRadius: 14, padding: '16px 24px', fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }} className="hover:bg-[--ink] transition-colors">
+              Start free →
+            </Link>
+            <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue-900)' }} className="hover:opacity-70 transition-opacity">
+              I already have an account
+            </Link>
+          </div>
         </div>
-      </section>
+      </div>
 
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="bg-slate-950 border-t border-slate-800 py-6 px-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <span className="text-slate-600 text-sm font-medium">Sojourn</span>
-          <span className="text-slate-700 text-xs">© {new Date().getFullYear()} All rights reserved</span>
-          <Link href="/login" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
-            Sign in →
-          </Link>
+      {/* ── Footer ── */}
+      <footer style={{ maxWidth: 1280, margin: '0 auto', padding: '30px 48px 50px', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 30, alignItems: 'center', borderTop: '1px solid rgba(255,255,255,.1)' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18 }}>
+          <div style={{ width: 28, height: 28, background: 'var(--yellow)', color: 'var(--blue-900)', borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 14 }}>S</div>
+          Sojourn
         </div>
+        <div style={{ display: 'inline-flex', gap: 24, justifyContent: 'center', fontSize: 13, opacity: 0.8 }}>
+          {['Privacy', 'Terms', 'Status', 'hello@sojourn.travel'].map(l => (
+            <a key={l} href="#" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">{l}</a>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.55 }}>© {new Date().getFullYear()} Sojourn Ltd · Built for people on the move</div>
       </footer>
     </div>
   )
