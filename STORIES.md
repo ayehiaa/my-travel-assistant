@@ -407,27 +407,27 @@ src/components/dashboard/DashboardClient.tsx     (modified — clamp padding)
 
 ---
 
-## Story 11 — Password Reset
+## Story 11 — Password Reset ✅
 
 **As a** user (Owner or Assistant),
 **I want** to reset my password via a secure email link,
 **so that** I can regain access to my account if I forget my password.
 
 ### Acceptance Criteria
-- [ ] The `/login` page has a "Forgot password?" link below the password field
-- [ ] Clicking the link navigates to `/forgot-password`
-- [ ] `/forgot-password` shows a single email input and a "Send reset link" button
-- [ ] Submitting the form calls Supabase `resetPasswordForEmail` with `redirectTo` set to `${origin}/reset-password`
-- [ ] A success state is shown regardless of whether the email exists (prevents user enumeration)
-- [ ] The reset email uses the custom template configured in the Supabase dashboard (see Setup Note below)
-- [ ] Clicking the link in the email navigates the user to `/reset-password` with a Supabase `code` param
-- [ ] `/reset-password` exchanges the code for a session, then shows a "New password" field and a "Confirm password" field
-- [ ] The form is disabled and shows a clear error if the reset link is invalid or expired
-- [ ] New password must be at least 8 characters; confirm field must match
-- [ ] Inline validation errors appear before submit (no round-trip needed)
-- [ ] On successful password update, the user is redirected to `/login?message=password_updated`
-- [ ] `/login` shows a green success banner when `?message=password_updated` is present in the URL
-- [ ] Both `/forgot-password` and `/reset-password` are public routes (no auth required)
+- [x] The `/login` page has a "Forgot password?" link below the password field
+- [x] Clicking the link navigates to `/forgot-password`
+- [x] `/forgot-password` shows a single email input and a "Send reset link" button
+- [x] Submitting the form calls Supabase `resetPasswordForEmail` with `redirectTo` set to `${origin}/reset-password`
+- [x] A success state is shown regardless of whether the email exists (prevents user enumeration)
+- [x] The reset email uses the custom template configured in the Supabase dashboard (see Setup Note below)
+- [x] Clicking the link in the email navigates the user to `/reset-password` with a Supabase `code` param
+- [x] `/reset-password` exchanges the code for a session, then shows a "New password" field and a "Confirm password" field
+- [x] The form is disabled and shows a clear error if the reset link is invalid or expired
+- [x] New password must be at least 8 characters; confirm field must match
+- [x] Inline validation errors appear before submit (no round-trip needed)
+- [x] On successful password update, the user is redirected to `/login?message=password_updated`
+- [x] `/login` shows a green success banner when `?message=password_updated` is present in the URL
+- [x] Both `/forgot-password` and `/reset-password` are public routes (no auth required)
 
 ### Setup Note — Supabase Email Template
 In the Supabase dashboard → Auth → Email Templates → Reset Password, set the template to:
