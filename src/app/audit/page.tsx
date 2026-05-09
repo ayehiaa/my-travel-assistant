@@ -7,7 +7,7 @@ import AuditEntry from '@/components/audit/AuditEntry'
 import { AuditLogEntryWithUser, UserRoleRecord } from '@/types/database'
 
 export const metadata = {
-  title: 'Audit Log — Travel Assistant',
+  title: 'Audit log — Sojourn',
 }
 
 const PAGE_SIZE = 20
@@ -36,7 +36,6 @@ export default async function AuditPage({
     .order('created_at', { ascending: false })
     .range(from, to)
 
-  // Collect all user IDs to resolve display names
   const performerIds = [...new Set((entries ?? []).map(e => e.performed_by))]
   const onBehalfOfIds = [...new Set(
     (entries ?? []).map(e => e.on_behalf_of).filter(Boolean) as string[]
@@ -63,48 +62,80 @@ export default async function AuditPage({
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex items-center justify-between mb-8">
+    <div style={{ maxWidth: 896, margin: '0 auto', padding: '40px 32px' }}>
+      {/* Page head */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
-          <p className="text-sm text-gray-500 mt-1">{count ?? 0} total entries</p>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 4 }}>
+            Audit log
+          </div>
+          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-0.02em', color: 'var(--ink)', margin: 0 }}>
+            Audit log
+          </h1>
         </div>
+        <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{count ?? 0} total entries</span>
       </div>
 
       {enriched.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-white p-10 text-center">
-          <p className="text-sm text-gray-400">No audit log entries yet.</p>
+        <div style={{
+          border: '2px dashed var(--rule)', borderRadius: 'var(--r-lg)',
+          background: 'var(--paper)', padding: '60px 20px', textAlign: 'center',
+          color: 'var(--ink-3)', fontSize: 14,
+        }}>
+          No audit log entries yet.
         </div>
       ) : (
-        <div className="space-y-3">
-          {enriched.map(entry => (
-            <AuditEntry key={entry.id} entry={entry} />
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+          {/* Header row */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '100px 1.6fr 1.4fr 1fr',
+            gap: 16, padding: '10px 20px',
+            background: 'var(--paper-2)',
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)',
+            borderBottom: '1px solid var(--rule)',
+          }}>
+            <span>Action</span>
+            <span>Performer</span>
+            <span>Trip</span>
+            <span>When</span>
+          </div>
+
+          {enriched.map((entry, i) => (
+            <AuditEntry
+              key={entry.id}
+              entry={entry}
+              isLast={i === enriched.length - 1}
+            />
           ))}
         </div>
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-8">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24 }}>
           <Link
             href={`/audit?page=${page - 1}`}
-            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              page <= 1
-                ? 'border-gray-100 text-gray-300 pointer-events-none'
-                : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900'
-            }`}
+            style={{
+              padding: '8px 18px', fontSize: 13, fontWeight: 600,
+              borderRadius: 999, border: '1.5px solid var(--rule)',
+              color: page <= 1 ? 'var(--ink-4)' : 'var(--ink-2)',
+              pointerEvents: page <= 1 ? 'none' : 'auto',
+              textDecoration: 'none',
+            }}
           >
-            Previous
+            ← Previous
           </Link>
-          <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+          <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Page {page} of {totalPages}</span>
           <Link
             href={`/audit?page=${page + 1}`}
-            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              page >= totalPages
-                ? 'border-gray-100 text-gray-300 pointer-events-none'
-                : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900'
-            }`}
+            style={{
+              padding: '8px 18px', fontSize: 13, fontWeight: 600,
+              borderRadius: 999, border: '1.5px solid var(--rule)',
+              color: page >= totalPages ? 'var(--ink-4)' : 'var(--ink-2)',
+              pointerEvents: page >= totalPages ? 'none' : 'auto',
+              textDecoration: 'none',
+            }}
           >
-            Next
+            Next →
           </Link>
         </div>
       )}

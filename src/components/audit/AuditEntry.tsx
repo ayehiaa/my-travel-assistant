@@ -1,11 +1,15 @@
 import { AuditLogEntryWithUser } from '@/types/database'
 import ChangesDetail from './ChangesDetail'
 
-const ACTION_STYLES = {
-  created: 'bg-green-50 text-green-700',
-  updated: 'bg-yellow-50 text-yellow-700',
-  deleted: 'bg-red-50 text-red-700',
+const ACTION_PILLS = {
+  created: { bg: 'var(--mint-soft)',    color: '#1a6b4a' },
+  updated: { bg: 'var(--sky-soft)',     color: '#1a8fc2' },
+  deleted: { bg: 'var(--coral-soft)',   color: '#b8493d' },
 } as const
+
+function initials(name: string) {
+  return name.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
+}
 
 function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString('en-GB', {
@@ -14,7 +18,8 @@ function formatTimestamp(iso: string) {
   })
 }
 
-export default function AuditEntry({ entry }: { entry: AuditLogEntryWithUser }) {
+export default function AuditEntry({ entry, isLast }: { entry: AuditLogEntryWithUser; isLast: boolean }) {
+  const pill = ACTION_PILLS[entry.action] ?? ACTION_PILLS.updated
   const snapshot = entry.trip_snapshot
   const legs = snapshot?.legs ?? []
   const dest = legs[0]?.to_airport ?? '?'
@@ -24,29 +29,59 @@ export default function AuditEntry({ entry }: { entry: AuditLogEntryWithUser }) 
     : '?'
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${ACTION_STYLES[entry.action]}`}>
-              {entry.action}
-            </span>
-            <span className="text-sm font-medium text-gray-900">{entry.performer.display_name}</span>
+    <div style={{ borderBottom: isLast ? 'none' : '1px solid var(--rule-soft)' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '100px 1.6fr 1.4fr 1fr',
+        gap: 16, padding: '14px 20px', alignItems: 'center',
+      }}>
+        {/* Action pill */}
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: pill.bg, color: pill.color,
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'capitalize',
+          padding: '4px 10px', borderRadius: 999, width: 'fit-content',
+        }}>
+          {entry.action}
+        </span>
+
+        {/* Performer */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+            background: 'var(--blue-100)', color: 'var(--blue-700)',
+            fontFamily: 'var(--display)', fontWeight: 700, fontSize: 11,
+            display: 'grid', placeItems: 'center',
+          }}>
+            {initials(entry.performer.display_name)}
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+              {entry.performer.display_name}
+            </div>
             {entry.on_behalf_of_user && (
-              <span className="text-sm text-gray-400">
-                on behalf of <span className="text-gray-600">{entry.on_behalf_of_user.display_name}</span>
-              </span>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                on behalf of <span style={{ color: 'var(--ink-2)', fontWeight: 500 }}>{entry.on_behalf_of_user.display_name}</span>
+              </div>
             )}
           </div>
-          <p className="text-sm text-gray-600">
-            Trip to <span className="font-medium">{dest}</span> departing {depDate}
-          </p>
         </div>
-        <span className="text-xs text-gray-400 whitespace-nowrap">{formatTimestamp(entry.created_at)}</span>
+
+        {/* Trip */}
+        <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+          Trip to <strong style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: 12 }}>{dest}</strong>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>departing {depDate}</div>
+        </div>
+
+        {/* Timestamp */}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
+          {formatTimestamp(entry.created_at)}
+        </span>
       </div>
 
       {entry.action === 'updated' && entry.changed_fields && (
-        <ChangesDetail changedFields={entry.changed_fields} />
+        <div style={{ padding: '0 20px 14px' }}>
+          <ChangesDetail changedFields={entry.changed_fields} />
+        </div>
       )}
     </div>
   )
