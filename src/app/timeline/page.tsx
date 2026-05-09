@@ -6,7 +6,7 @@ import TripTimeline from '@/components/timeline/TripTimeline'
 import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 
 export const metadata = {
-  title: 'Timeline — Travel Assistant',
+  title: 'Timeline — Sojourn',
 }
 
 export default async function TimelinePage() {
@@ -22,10 +22,9 @@ export default async function TimelinePage() {
   const chartWindowEnd = new Date()
   chartWindowEnd.setDate(chartWindowEnd.getDate() + 180)
 
-  // Fetch all trips with legs; filter by first leg departure in code
   const { data: rawTrips } = await supabase
     .from('trips')
-    .select('id, days_outside_uk, legs:trip_legs(from_airport, to_airport, departure_at, leg_order)')
+    .select('id, days_outside_uk, trip_type, source, legs:trip_legs(from_airport, to_airport, departure_at, leg_order)')
     .eq('owner_id', activeMainAccountId)
     .order('leg_order', { referencedTable: 'trip_legs', ascending: true })
 
@@ -43,7 +42,6 @@ export default async function TimelinePage() {
       return aDate.localeCompare(bDate)
     })
 
-  // Fetch reference date for the active main account
   const { data: roleRow } = await supabase
     .from('user_roles')
     .select('reference_date')
@@ -87,12 +85,41 @@ export default async function TimelinePage() {
       }, 0)
   }
 
+  const windowStart = chartWindowStart
+  const windowEnd   = chartWindowEnd
+  const eyebrow = `${windowStart.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })} → ${windowEnd.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-100">Trip Timeline</h1>
-        <p className="text-sm text-slate-500 mt-1">6 months back · Today · 6 months ahead</p>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 32px' }}>
+      {/* Page head */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 4 }}>
+            12-month view · {eyebrow}
+          </div>
+          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-0.02em', color: 'var(--ink)', margin: 0 }}>
+            Timeline
+          </h1>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button style={{
+            background: 'none', border: '1.5px solid var(--rule)', borderRadius: 999,
+            padding: '8px 18px', fontSize: 14, fontWeight: 600, color: 'var(--ink-2)',
+            cursor: 'pointer', fontFamily: 'var(--sans)',
+          }}>
+            Export ical
+          </button>
+          <a href="/search" style={{
+            background: 'var(--yellow)', color: 'var(--blue-900)',
+            border: 'none', borderRadius: 999, padding: '8px 18px',
+            fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            fontFamily: 'var(--sans)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+          }}>
+            + New trip
+          </a>
+        </div>
       </div>
+
       <TripTimeline
         trips={filteredTrips}
         today={new Date().toISOString()}
