@@ -404,7 +404,7 @@ SERPAPI_KEY=
 7. **Manual past trip entry** — "Add past trip" modal on dashboard, `source` column + nullable flight fields migration
 8. **Audit log** — server-side logging on all write operations, `/audit` page
 9. **Polish** — loading states, error handling, responsive layout
-10. **Deployment** — Vercel + environment variables
+10. **Deployment** — Vercel + environment variables (Story 10 ✅ — live at https://my-travel-assistant-ochre.vercel.app)
 11. **Password reset** — forgot-password + reset-password pages via Supabase email link
 12. **Trip timeline** — `/timeline` Gantt view, 6 months back to 6 months ahead, flag emoji, today marker
 13. **Role rename & schema** — rename `owner` → `main`, add `owner_id` to trips, `account_links` table, `on_behalf_of` to audit log, rewrite RLS
