@@ -957,6 +957,73 @@ src/app/error.tsx                                (modified — coral error, yell
 
 ---
 
+## Story 19 — Delete Trip on Past Trips List ✅
+
+**As a** main account user,  
+**I want** to delete a past trip directly from the dashboard list,  
+**so that** I can remove incorrectly logged trips without navigating elsewhere.
+
+### Acceptance Criteria
+- [x] Each past trip row shows a trash icon in the rightmost column when the row is hovered (main accounts only; hidden for assistants)
+- [x] Clicking the trash icon shows a browser `confirm()` dialog asking the user to confirm deletion
+- [x] On confirmation, a `DELETE /api/trips/:id` request is sent; the row disappears and a success toast is shown
+- [x] On cancellation or API error, nothing changes; an error toast is shown if the API call fails
+- [x] Hover detection uses `onMouseEnter` / `onMouseLeave` (not `onMouseOver` / `onMouseOut`) so the icon stays visible when the cursor moves over the button itself
+- [x] The action is recorded in the audit log as `deleted`
+- [x] `canDelete` prop flows from `DashboardClient` → `PastTrips` → `PastRow` and defaults to `false`
+
+### Technical Tasks
+- Update `src/components/dashboard/PastTrips.tsx` — add hover state, trash SVG, `confirm()`, delete API call
+- Update `src/components/dashboard/DashboardClient.tsx` — thread `canDelete` prop
+
+### Files Created / Modified
+```
+src/components/dashboard/PastTrips.tsx        (modified)
+src/components/dashboard/DashboardClient.tsx  (modified)
+```
+
+### Dependencies
+- Story 7 (Dashboard) — PastTrips component must exist
+- Story 7.5 (Manual Past Trip Entry) — `canDelete` prop pattern established
+
+---
+
+## Story 20 — Mobile Responsiveness Pass 2 ✅
+
+**As a** user on a mobile device,  
+**I want** the landing page and search page to render correctly on screens as narrow as 375px,  
+**so that** the app is fully usable without horizontal scrolling or broken layouts.
+
+### Acceptance Criteria
+- [x] All `48px` fixed horizontal padding on the landing page is replaced with `clamp(16px, 4vw, 48px)`
+- [x] Landing page nav links ("How it works", "Assistants", "90-day rule") are hidden at ≤980px; logo and CTA buttons remain
+- [x] Landing page hero collapses from 2-column to 1-column at ≤980px; floating trip card panel is hidden
+- [x] Stat strip collapses from 4-column to 2×2 at ≤980px
+- [x] "How it works" and "90-day rule" card grids collapse from 3-column to 1-column at ≤980px
+- [x] Assistants section collapses from 2-column to 1-column at ≤980px; white mockup card is hidden
+- [x] Footer collapses from 3-column to stacked, centred at ≤980px
+- [x] Search page loading skeleton collapses from side-by-side (round-trip) to 1-column at ≤640px
+- [x] Round-trip search bar stacks to 1-column at ≤640px (all 4 fields + submit button)
+
+### Technical Tasks
+- Update `src/components/landing/LandingPage.tsx` — replace all `48px` padding with `clamp`, add `sj-landing-*` class hooks to every multi-column section
+- Update `src/app/search/page.tsx` — add `sj-results-skeleton` class to skeleton grid div
+- Update `src/app/globals.css` — add `sj-landing-*` rules in ≤980px block; add `sj-results-skeleton` and search bar 1-col override in ≤640px block
+
+### Files Created / Modified
+```
+src/components/landing/LandingPage.tsx   (modified)
+src/app/search/page.tsx                  (modified)
+src/app/globals.css                      (modified)
+```
+
+### Dependencies
+- Story 9 (Polish) — responsive system and `sj-*` class hook pattern established
+- Story 17 (Landing Page) — landing page must exist before it can be made responsive
+- Story 18 (Rebrand) — Sojourn design tokens and class hooks must be in place
+
+---
+
 ## Story Dependency Map
 
 ```
@@ -968,6 +1035,7 @@ Story 1 (Foundation)
             │       │               └── Story 6 (Trip Summary + Save)
             │       │                       ├── Story 7 (Dashboard)
             │       │                       │       ├── Story 7.5 (Manual Past Trip Entry)
+            │       │                       │       │       └── Story 19 (Delete Trip on Past List)
             │       │                       │       └── Story 12 (Timeline View)
             │       │                       └── Story 8 (Audit Log)
             │       │                               └── Story 9 (Polish)
@@ -979,8 +1047,10 @@ Story 13 (Role Rename & Schema) ← depends on Story 1
             └── Story 15 (Annual Days Abroad Counter) ← depends on Story 14
                     └── Story 16 (Multi-city Flight Search) ← depends on Story 15
                             └── Story 17 (Sojourn Landing Page) ← depends on Story 16
+                                    └── Story 18 (Sojourn Visual Rebrand) ← depends on Story 17
+                                            └── Story 20 (Mobile Responsiveness Pass 2) ← depends on Story 18
 ```
 
 ---
 
-## Total Estimated Stories: 18
+## Total Estimated Stories: 20

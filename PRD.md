@@ -1,6 +1,6 @@
 # Product Requirements Document — Sojourn
 
-**Version**: 2.4  
+**Version**: 2.5  
 **Date**: 2026-05-09  
 **Owner**: Ziad Elsayed  
 
@@ -381,7 +381,7 @@ SERPAPI_KEY=
 ## 12. UI/UX Notes
 
 - Clean, minimal design — this is a personal utility tool
-- **Mobile-responsive** down to 375px (iPhone SE): hamburger nav, single-column layouts, clamp-based horizontal padding, past-trip rows collapse to 2 columns (route | dates) at 640px
+- **Mobile-responsive** down to 375px (iPhone SE): hamburger nav, single-column layouts, clamp-based horizontal padding, past-trip rows collapse to 2 columns (route | dates) at 640px; landing page collapses all multi-column sections and hides decorative panels at ≤980px; round-trip search bar and loading skeleton stack to 1-column at ≤640px
 - Flight cards have a clear selected/unselected state
 - British Airways flights display a prominent **BA badge** and always appear first in the list
 - The days outside UK count is visually prominent in the trip summary and dashboard cards
@@ -412,6 +412,9 @@ SERPAPI_KEY=
 15. **Annual days abroad counter** — reference date setting, windowed calculation with boundary clipping, timeline stat card
 16. **Multi-city flight search** — trip-type tab switcher, per-leg search, `trip_legs` schema, unified dashboard/timeline display
 17. **Sojourn landing page** — public marketing page at `/` for unauthenticated visitors; app rebranded as Sojourn
+18. **Sojourn visual rebrand** — full Sojourn design system applied across all pages (Story 18 ✅)
+19. **Delete trip on past trips list** — hover-reveal trash icon on PastRow for main accounts, confirm dialog, DELETE API call (Story 19 ✅)
+20. **Mobile responsiveness pass 2** — landing page and search page fully responsive down to 375px (Story 20 ✅)
 
 ---
 
