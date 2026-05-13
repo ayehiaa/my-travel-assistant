@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
   const { data: linkData, error: genError } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo: `${appUrl}/auth/callback?next=/reset-password` },
+    options: { redirectTo: `${appUrl}/auth/invite-callback` },
   })
 
   if (genError || !linkData?.properties?.action_link) {

@@ -8,23 +8,23 @@ Each story is scoped to fit within a single implementation session (~50K tokens)
 
 ---
 
-## Story 1 — Project Foundation & Database Schema
+## Story 1 — Project Foundation & Database Schema ✅
 
 **As a** developer,  
 **I want** the Next.js project wired up to Supabase with the full database schema in place,  
 **so that** all subsequent stories have a stable foundation to build on.
 
 ### Acceptance Criteria
-- [ ] Supabase client is initialised and accessible from both server and client components
-- [ ] `.env.local` template file (`.env.example`) lists all required variables with placeholder values
-- [ ] `user_roles` table exists with `user_id`, `role`, `display_name`, `created_at`
-- [ ] `trips` table exists with all columns defined in PRD §8
-- [ ] `audit_log` table exists with all columns defined in PRD §8
-- [ ] RLS is enabled on all three tables
-- [ ] RLS policies: authenticated users can read all trips; authenticated users can insert trips; only owner role can delete trips; audit_log is readable by all authenticated users, writable only via service role
-- [ ] `updated_at` on `trips` auto-updates via a Postgres trigger
-- [ ] A SQL migration file (`supabase/migrations/001_initial_schema.sql`) contains the full schema so it can be re-run from scratch
-- [ ] TypeScript types generated from the schema are available in `src/types/database.ts`
+- [x] Supabase client is initialised and accessible from both server and client components
+- [x] `.env.local` template file (`.env.example`) lists all required variables with placeholder values
+- [x] `user_roles` table exists with `user_id`, `role`, `display_name`, `created_at`
+- [x] `trips` table exists with all columns defined in PRD §8
+- [x] `audit_log` table exists with all columns defined in PRD §8
+- [x] RLS is enabled on all three tables
+- [x] RLS policies: authenticated users can read all trips; authenticated users can insert trips; only owner role can delete trips; audit_log is readable by all authenticated users, writable only via service role
+- [x] `updated_at` on `trips` auto-updates via a Postgres trigger
+- [x] A SQL migration file (`supabase/migrations/001_initial_schema.sql`) contains the full schema so it can be re-run from scratch
+- [x] TypeScript types generated from the schema are available in `src/types/database.ts`
 
 ### Technical Tasks
 - Install `@supabase/supabase-js` and `@supabase/ssr`
@@ -46,22 +46,22 @@ src/types/database.ts
 
 ---
 
-## Story 2 — Authentication & Role-Based Access
+## Story 2 — Authentication & Role-Based Access ✅
 
 **As a** user (Owner or Assistant),  
 **I want** to log in with my email and password (or Google, if I'm the owner),  
 **so that** I can access the app and no one else can.
 
 ### Acceptance Criteria
-- [ ] `/login` page renders an email/password form and a "Sign in with Google" button
-- [ ] Successful email/password login redirects to `/`
-- [ ] Successful Google OAuth login redirects to `/`
-- [ ] All routes except `/login` and `/auth/callback` are protected by middleware
-- [ ] Unauthenticated requests to any protected route redirect to `/login`
-- [ ] After login, the user's role is fetched from `user_roles` and stored in the session/context
-- [ ] A `useUser` hook (or equivalent server context) exposes `{ user, role, displayName }` to all components
-- [ ] Signing out clears the session and redirects to `/login`
-- [ ] A sign-out button is visible in the app's nav/header on all protected pages
+- [x] `/login` page renders an email/password form and a "Sign in with Google" button
+- [x] Successful email/password login redirects to `/`
+- [x] Successful Google OAuth login redirects to `/`
+- [x] All routes except `/login` and `/auth/callback` are protected by middleware
+- [x] Unauthenticated requests to any protected route redirect to `/login`
+- [x] After login, the user's role is fetched from `user_roles` and stored in the session/context
+- [x] A `useUser` hook (or equivalent server context) exposes `{ user, role, displayName }` to all components
+- [x] Signing out clears the session and redirects to `/login`
+- [x] A sign-out button is visible in the app's nav/header on all protected pages
 
 ### Technical Tasks
 - Configure Supabase Auth Google OAuth provider (instructions in README)
@@ -85,23 +85,23 @@ src/components/Nav.tsx
 
 ---
 
-## Story 3 — Amadeus Flight Search API Route
+## Story 3 — Amadeus Flight Search API Route ✅
 
 **As a** developer,  
 **I want** a server-side API route that queries Amadeus and returns the top 3 ranked flights per direction,  
 **so that** the frontend can display real flight options without exposing API credentials.
 
 ### Acceptance Criteria
-- [ ] `POST /api/flights/search` accepts `{ origin, destination, departureDate, returnDate, outboundSlot, returnSlot }` in the request body
-- [ ] Route authenticates with Amadeus using client credentials (token cached for reuse within its validity window)
-- [ ] Route calls Amadeus Flight Offers Search API for outbound leg and return leg in parallel
-- [ ] Results are filtered to only include flights departing within the requested time slot (Morning 06:00–13:00 / Evening 13:00–23:59)
-- [ ] Results are ranked: British Airways first, then fewest stops, then fastest duration
-- [ ] Only the top 3 results per direction are returned
-- [ ] Response shape: `{ outbound: FlightOffer[], return: FlightOffer[] }` with a normalised `FlightOffer` type
-- [ ] If Amadeus returns no results for a slot, the response returns an empty array (not an error)
-- [ ] Amadeus credentials are read from env vars and never sent to the client
-- [ ] Returns 401 if the caller is not authenticated
+- [x] `POST /api/flights/search` accepts `{ origin, destination, departureDate, returnDate, outboundSlot, returnSlot }` in the request body
+- [x] Route authenticates with Amadeus using client credentials (token cached for reuse within its validity window)
+- [x] Route calls Amadeus Flight Offers Search API for outbound leg and return leg in parallel
+- [x] Results are filtered to only include flights departing within the requested time slot (Morning 06:00–13:00 / Evening 13:00–23:59)
+- [x] Results are ranked: British Airways first, then fewest stops, then fastest duration
+- [x] Only the top 3 results per direction are returned
+- [x] Response shape: `{ outbound: FlightOffer[], return: FlightOffer[] }` with a normalised `FlightOffer` type
+- [x] If Amadeus returns no results for a slot, the response returns an empty array (not an error)
+- [x] Amadeus credentials are read from env vars and never sent to the client
+- [x] Returns 401 if the caller is not authenticated
 
 ### Normalised `FlightOffer` type
 ```typescript
@@ -138,20 +138,20 @@ src/types/flights.ts
 
 ---
 
-## Story 4 — Flight Search Form UI
+## Story 4 — Flight Search Form UI ✅
 
 **As a** user,  
 **I want** to fill in a search form with my trip details and time preferences,  
 **so that** I can trigger a flight search without knowing IATA codes by heart.
 
 ### Acceptance Criteria
-- [ ] `/search` page renders a form with: origin airport, destination airport, departure date, return date, outbound time slot toggle (Morning / Evening), return time slot toggle (Morning / Evening)
-- [ ] Airport fields use an autocomplete that queries Amadeus Airport & City Search API as the user types (debounced, min 2 chars), showing city name + IATA code
-- [ ] Date pickers enforce: departure date ≥ today; return date > departure date
-- [ ] All fields are required — the submit button is disabled until the form is complete
-- [ ] On submit, the form calls `POST /api/flights/search` and shows a loading state (skeleton cards) while waiting
-- [ ] If the API returns an error or empty results, a clear message is shown ("No flights found for this route and time slot")
-- [ ] Form state is preserved if the user navigates back from results
+- [x] `/search` page renders a form with: origin airport, destination airport, departure date, return date, outbound time slot toggle (Morning / Evening), return time slot toggle (Morning / Evening)
+- [x] Airport fields use an autocomplete that queries Amadeus Airport & City Search API as the user types (debounced, min 2 chars), showing city name + IATA code
+- [x] Date pickers enforce: departure date ≥ today; return date > departure date
+- [x] All fields are required — the submit button is disabled until the form is complete
+- [x] On submit, the form calls `POST /api/flights/search` and shows a loading state (skeleton cards) while waiting
+- [x] If the API returns an error or empty results, a clear message is shown ("No flights found for this route and time slot")
+- [x] Form state is preserved if the user navigates back from results
 
 ### Technical Tasks
 - Create `src/app/search/page.tsx` — page shell
@@ -171,21 +171,21 @@ src/hooks/useFlightSearch.ts
 
 ---
 
-## Story 5 — Flight Results UI & Selection
+## Story 5 — Flight Results UI & Selection ✅
 
 **As a** user,  
 **I want** to see the top 3 outbound and top 3 return flights after searching,  
 **so that** I can compare options and select one of each to build my trip.
 
 ### Acceptance Criteria
-- [ ] After a successful search, the `/search` page shows two columns (or stacked sections on mobile): Outbound Flights and Return Flights
-- [ ] Each column shows up to 3 flight cards
-- [ ] Each flight card displays: airline name, airline logo/icon, flight number, departure time → arrival time, duration, stops ("Direct" / "1 stop"), price in GBP, and a "BA" badge if the airline is British Airways
-- [ ] Clicking a card selects it; selected card has a distinct highlighted style; clicking again deselects
-- [ ] Only one card can be selected per direction at a time
-- [ ] A "Review Trip" button appears (and is enabled) only when both an outbound and a return flight are selected
-- [ ] Clicking "Review Trip" navigates to or scrolls to the trip summary panel (Story 6)
-- [ ] BA flights are visually distinguishable from other airlines (badge + subtle highlight)
+- [x] After a successful search, the `/search` page shows two columns (or stacked sections on mobile): Outbound Flights and Return Flights
+- [x] Each column shows up to 3 flight cards
+- [x] Each flight card displays: airline name, airline logo/icon, flight number, departure time → arrival time, duration, stops ("Direct" / "1 stop"), price in GBP, and a "BA" badge if the airline is British Airways
+- [x] Clicking a card selects it; selected card has a distinct highlighted style; clicking again deselects
+- [x] Only one card can be selected per direction at a time
+- [x] A "Review Trip" button appears (and is enabled) only when both an outbound and a return flight are selected
+- [x] Clicking "Review Trip" navigates to or scrolls to the trip summary panel (Story 6)
+- [x] BA flights are visually distinguishable from other airlines (badge + subtle highlight)
 
 ### Technical Tasks
 - Create `src/components/search/FlightResultsPanel.tsx` — two-column results layout
@@ -205,21 +205,21 @@ src/hooks/useFlightSearch.ts  (modified)
 
 ---
 
-## Story 6 — Trip Summary, Days Calculation & Save
+## Story 6 — Trip Summary, Days Calculation & Save ✅
 
 **As a** user,  
 **I want** to review a summary of my selected flights with the days outside UK calculated,  
 **so that** I can confirm the trip looks correct before saving it.
 
 ### Acceptance Criteria
-- [ ] After selecting both flights, a trip summary panel is shown on the `/search` page below the results
-- [ ] Summary displays: outbound flight (airline, number, departure date/time, arrival date/time), return flight (airline, number, departure date/time, arrival date/time), route (departure city → destination city), days outside UK (prominently displayed)
-- [ ] Days outside UK is calculated as `return_date - departure_date - 1` (date portion only, timezone-safe)
-- [ ] A "Save Trip" button saves the trip to Supabase via `POST /api/trips`
-- [ ] On save, `created_by` is set to the current user's ID server-side; `last_modified_by` is also set to the same user
-- [ ] On successful save, the user is redirected to `/` (the dashboard)
-- [ ] On save failure, an inline error message is shown and the button returns to its normal state
-- [ ] A "Back to results" link lets the user change their selection without losing the search form state
+- [x] After selecting both flights, a trip summary panel is shown on the `/search` page below the results
+- [x] Summary displays: outbound flight (airline, number, departure date/time, arrival date/time), return flight (airline, number, departure date/time, arrival date/time), route (departure city → destination city), days outside UK (prominently displayed)
+- [x] Days outside UK is calculated as `return_date - departure_date - 1` (date portion only, timezone-safe)
+- [x] A "Save Trip" button saves the trip to Supabase via `POST /api/trips`
+- [x] On save, `created_by` is set to the current user's ID server-side; `last_modified_by` is also set to the same user
+- [x] On successful save, the user is redirected to `/` (the dashboard)
+- [x] On save failure, an inline error message is shown and the button returns to its normal state
+- [x] A "Back to results" link lets the user change their selection without losing the search form state
 
 ### Technical Tasks
 - Create `src/components/search/TripSummary.tsx` — summary panel component
@@ -320,20 +320,20 @@ src/types/database.ts                   (modified)
 
 ---
 
-## Story 8 — Audit Log
+## Story 8 — Audit Log ✅
 
 **As a** user (Owner or Assistant),  
 **I want** to view a chronological log of all actions taken on trips,  
 **so that** I know who created, changed, or deleted any trip and when.
 
 ### Acceptance Criteria
-- [ ] `/audit` page is accessible to both Owner and Assistant roles
-- [ ] Page shows a table/list of audit log entries, newest first
-- [ ] Each entry shows: timestamp (formatted, local time), user display name + email, action type (Created / Updated / Deleted) with a colour-coded badge, trip destination + departure date, and for Updates a collapsible "Changes" section showing before/after values for each changed field
-- [ ] Deleted trips show the trip details from the snapshot (since the trip row may no longer exist)
-- [ ] Audit entries are paginated (20 per page) or use infinite scroll
-- [ ] All three write API routes (`POST /api/trips`, `DELETE /api/trips/[id]`, any future `PATCH`) write to `audit_log` using the service role client before returning their response
-- [ ] The `audit_log` table has an RLS policy preventing any client-side writes
+- [x] `/audit` page is accessible to both Owner and Assistant roles
+- [x] Page shows a table/list of audit log entries, newest first
+- [x] Each entry shows: timestamp (formatted, local time), user display name + email, action type (Created / Updated / Deleted) with a colour-coded badge, trip destination + departure date, and for Updates a collapsible "Changes" section showing before/after values for each changed field
+- [x] Deleted trips show the trip details from the snapshot (since the trip row may no longer exist)
+- [x] Audit entries are paginated (20 per page) or use infinite scroll
+- [x] All three write API routes (`POST /api/trips`, `DELETE /api/trips/[id]`, any future `PATCH`) write to `audit_log` using the service role client before returning their response
+- [x] The `audit_log` table has an RLS policy preventing any client-side writes
 
 ### Technical Tasks
 - Create `src/app/audit/page.tsx` — audit log page with SSR data fetching
@@ -475,8 +475,8 @@ src/proxy.ts                           (modified — public route allowlist)
 ### Acceptance Criteria
 - [x] App is deployed to Vercel and accessible at a stable URL
 - [x] All environment variables from `.env.example` are set in Vercel project settings (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SERPAPI_KEY`)
-- [ ] Supabase Auth redirect URLs are configured to include the Vercel production URL
-- [ ] Google OAuth redirect URI is updated to include the production URL
+- [x] Supabase Auth redirect URLs are configured to include the Vercel production URL
+- [x] Google OAuth redirect URI is updated to include the production URL
 - [x] Production build (`next build`) passes with no type errors or build warnings
 - [x] All 19 app routes deployed successfully (19/19 static pages generated, 0 type errors)
 
@@ -1026,25 +1026,25 @@ src/app/globals.css                      (modified)
 
 ---
 
-## Story 21 — Assistant Invitation Flow
+## Story 21 — Assistant Invitation Flow ✅
 
 **As a** main account user,
 **I want** to invite an assistant by entering their name and email,
 **so that** they receive an invitation email, can set their password, and immediately get access to my account — without me needing to create their account manually.
 
 ### Acceptance Criteria
-- [ ] The invite form in Settings collects two fields: assistant's full name and email address (both required)
-- [ ] Submitting the form calls `POST /api/invitations`
-- [ ] If the email is new: a Supabase auth account is created automatically (role: assistant), a password recovery link is generated, and a custom Resend email is sent containing the assistant's name, the main account's name, the reset link, and a "expires in 3 days" notice
-- [ ] If the email already belongs to an existing assistant: no new account is created; a notification email is sent (no reset link); the link is created as pending
-- [ ] If the email belongs to an existing main account: API returns 400 displayed in the form
-- [ ] The new link is stored in `account_links` with `status = 'pending'`, `invited_at`, and `expires_at = now() + 3 days`
-- [ ] The assistant row in Settings shows a status badge: **Pending** (amber, with expiry date), **Active** (green), or **Expired** (red)
-- [ ] Pending and expired rows show a **Resend** button; clicking it calls `POST /api/invitations/resend`, generates a fresh recovery link, resets `expires_at`, and sends a new email
-- [ ] When the assistant logs in for the first time after accepting, their pending `account_links` rows are automatically flipped to `active` (handled in root layout server component)
-- [ ] When Settings renders, any pending links past `expires_at` are marked `expired` before the page data is fetched
-- [ ] `getLinkedMainAccounts` and `getActiveMainAccountId` only return `active` links — pending/expired assistants have no active access
-- [ ] The invite button label changes to "Sending…" while in flight; the form shows inline error on failure
+- [x] The invite form in Settings collects two fields: assistant's full name and email address (both required)
+- [x] Submitting the form calls `POST /api/invitations`
+- [x] If the email is new: a Supabase auth account is created automatically (role: assistant), a password recovery link is generated, and a custom Resend email is sent containing the assistant's name, the main account's name, the reset link, and a "expires in 3 days" notice
+- [x] If the email already belongs to an existing assistant: no new account is created; a notification email is sent (no reset link); the link is created as pending
+- [x] If the email belongs to an existing main account: API returns 400 displayed in the form
+- [x] The new link is stored in `account_links` with `status = 'pending'`, `invited_at`, and `expires_at = now() + 3 days`
+- [x] The assistant row in Settings shows a status badge: **Pending** (amber, with expiry date), **Active** (green), or **Expired** (red)
+- [x] Pending and expired rows show a **Resend** button; clicking it calls `POST /api/invitations/resend`, generates a fresh recovery link, resets `expires_at`, and sends a new email
+- [x] When the assistant logs in for the first time after accepting, their pending `account_links` rows are automatically flipped to `active` (handled in root layout server component)
+- [x] When Settings renders, any pending links past `expires_at` are marked `expired` before the page data is fetched
+- [x] `getLinkedMainAccounts` and `getActiveMainAccountId` only return `active` links — pending/expired assistants have no active access
+- [x] The invite button label changes to "Sending…" while in flight; the form shows inline error on failure
 
 ### Technical Tasks
 - Add migration `006_invitation_flow.sql` — adds `status`, `invited_at`, `expires_at` to `account_links`

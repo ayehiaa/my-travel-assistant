@@ -18,7 +18,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(() =>
     searchParams.get('error') === 'auth_callback_failed'
-      ? 'Google sign-in failed. Please try again.'
+      ? 'Sign-in failed. Please try again.'
+      : searchParams.get('error') === 'invite_link_expired'
+      ? 'This invitation link has expired or already been used. Ask your account owner to resend the invite.'
       : ''
   )
   const [loading, setLoading] = useState(false)
