@@ -70,15 +70,17 @@ export async function POST(request: NextRequest) {
     options: { redirectTo: `${appUrl}/auth/invite-callback` },
   })
 
-  if (genError || !linkData?.properties?.action_link) {
+  if (genError || !linkData?.properties?.hashed_token) {
     return NextResponse.json({ error: 'Failed to generate invitation link' }, { status: 500 })
   }
+
+  const inviteUrl = `${appUrl}/auth/invite-callback?token_hash=${linkData.properties.hashed_token}&type=recovery`
 
   await sendInvitationEmail({
     assistantEmail: authUser.user.email,
     assistantName: assistantRole?.display_name ?? 'Assistant',
     mainName: roleRecord.display_name,
-    resetLink: linkData.properties.action_link,
+    resetLink: inviteUrl,
     expiresAt,
   })
 
