@@ -99,7 +99,7 @@ export default async function DashboardPage() {
       ), 0)
   }
   const firstName = user.displayName.split(' ')[0]
-  const canDelete = user.role === 'main'
+  const canDelete = true
 
   let ownerFirstName = firstName
   if (user.role === 'assistant') {
