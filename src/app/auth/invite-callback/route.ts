@@ -27,13 +27,16 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) console.error('[invite-callback] exchangeCodeForSession error:', error.message)
     if (!error) return NextResponse.redirect(`${origin}/reset-password`)
   }
 
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
+    if (error) console.error('[invite-callback] verifyOtp error:', error.message, { type, token_hash_prefix: token_hash?.slice(0, 8) })
     if (!error) return NextResponse.redirect(`${origin}/reset-password`)
   }
 
+  console.error('[invite-callback] fallthrough — params:', { hasCode: !!code, hasTokenHash: !!token_hash, type })
   return NextResponse.redirect(`${origin}/login?error=invite_link_expired`)
 }
