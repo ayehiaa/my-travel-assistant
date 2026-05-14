@@ -26,7 +26,7 @@ export default async function DashboardPage() {
       .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
     supabase
       .from('user_roles')
-      .select('reference_date')
+      .select('reference_date, display_name')
       .eq('user_id', activeMainAccountId)
       .single(),
   ])
@@ -101,9 +101,17 @@ export default async function DashboardPage() {
   const firstName = user.displayName.split(' ')[0]
   const canDelete = user.role === 'main'
 
+  let ownerFirstName = firstName
+  if (user.role === 'assistant') {
+    const ownerDisplayName = roleRow && 'display_name' in roleRow ? (roleRow as { display_name?: string }).display_name : undefined
+    if (ownerDisplayName) ownerFirstName = ownerDisplayName.split(' ')[0]
+  }
+
   return (
     <DashboardClient
       firstName={firstName}
+      ownerFirstName={ownerFirstName}
+      role={user.role}
       daysUsed={annualDaysAbroad}
       annualMax={annualMax}
       referenceDate={referenceDate}

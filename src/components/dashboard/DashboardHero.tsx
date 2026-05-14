@@ -1,16 +1,20 @@
 'use client'
 
 import Link from 'next/link'
+import { UserRole } from '@/types/database'
 
 interface Props {
   firstName: string
+  ownerFirstName: string
+  role: UserRole
   daysUsed: number
   daysMax: number
   referenceDate: string | null
   onLogPastTrip: () => void
 }
 
-export default function DashboardHero({ firstName, daysUsed, daysMax, referenceDate, onLogPastTrip }: Props) {
+export default function DashboardHero({ firstName, ownerFirstName, role, daysUsed, daysMax, referenceDate, onLogPastTrip }: Props) {
+  const isAssistant = role === 'assistant'
   const pct = Math.min(100, (daysUsed / daysMax) * 100)
   const remaining = daysMax - daysUsed
 
@@ -44,11 +48,19 @@ export default function DashboardHero({ firstName, daysUsed, daysMax, referenceD
           </div>
         )}
         <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4.4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.025em', margin: '0 0 14px' }}>
-          Hello, <span style={{ color: 'var(--yellow)' }}>{firstName}</span><br />
-          where to next?
+          {isAssistant ? (
+            <>Hello, <span style={{ color: 'var(--yellow)' }}>{firstName}</span><br />
+            you&rsquo;re viewing <span style={{ color: 'var(--yellow)' }}>{ownerFirstName}</span>&rsquo;s account</>
+          ) : (
+            <>Hello, <span style={{ color: 'var(--yellow)' }}>{firstName}</span><br />
+            where to next?</>
+          )}
         </h1>
         <p style={{ margin: '0 0 22px', fontSize: 16, opacity: 0.85, maxWidth: '38ch' }}>
-          Plan flights, log every day abroad, stay on the right side of the SRT — without spreadsheets.
+          {isAssistant
+            ? `Search and log trips on ${ownerFirstName}'s behalf — all changes are recorded in the audit log.`
+            : 'Plan flights, log every day abroad, stay on the right side of the SRT — without spreadsheets.'
+          }
         </p>
         <div style={{ display: 'inline-flex', gap: 10 }}>
           <Link
@@ -76,7 +88,7 @@ export default function DashboardHero({ firstName, daysUsed, daysMax, referenceD
         padding: '22px 24px',
       }}>
         <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.7, marginBottom: 6 }}>
-          Annual days abroad{windowEnd ? ` · till ${windowEnd}` : ''}
+          {isAssistant ? `${ownerFirstName}'s days abroad` : 'Annual days abroad'}{windowEnd ? ` · till ${windowEnd}` : ''}
         </div>
         <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 92, lineHeight: 0.95, letterSpacing: '-0.04em' }}>
           {daysUsed}<span style={{ fontSize: 28, opacity: 0.6, fontWeight: 500 }}> / {daysMax}</span>

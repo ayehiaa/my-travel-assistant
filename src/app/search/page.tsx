@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import { useFlightSearch } from '@/hooks/useFlightSearch'
+import { useUser } from '@/context/UserContext'
 import SearchForm from '@/components/search/SearchForm'
 import FlightResultsPanel from '@/components/search/FlightResultsPanel'
 import TripSummary from '@/components/search/TripSummary'
@@ -10,6 +11,11 @@ import { FlightOffer } from '@/types/flights'
 
 export default function SearchPage() {
   const summaryRef = useRef<HTMLDivElement>(null)
+  const user = useUser()
+  const isAssistant = user.role === 'assistant'
+  const ownerFirstName = isAssistant
+    ? (user.linkedMainAccounts.find(a => a.id === user.activeMainAccountId)?.displayName?.split(' ')[0] ?? 'the traveller')
+    : null
   const {
     tripType, setTripType,
     legs, updateLeg, addLeg, removeLeg,
@@ -49,10 +55,13 @@ export default function SearchPage() {
             fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-0.02em',
             color: 'white', margin: '0 0 6px',
           }}>
-            Where are you going?
+            {isAssistant ? `Where is ${ownerFirstName} going?` : 'Where are you going?'}
           </h2>
           <p style={{ color: 'rgba(255,255,255,.75)', margin: '0 0 28px', fontSize: 15 }}>
-            Round-trip or multi-city · British Airways flights surface first.
+            {isAssistant
+              ? `Searching on ${ownerFirstName}'s behalf · British Airways flights surface first.`
+              : 'Round-trip or multi-city · British Airways flights surface first.'
+            }
           </p>
 
           <SearchForm

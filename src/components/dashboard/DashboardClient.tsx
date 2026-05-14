@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { TripWithUsers } from '@/types/database'
+import { TripWithUsers, UserRole } from '@/types/database'
 import DashboardHero from './DashboardHero'
 import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
 
 interface Props {
   firstName: string
+  ownerFirstName: string
+  role: UserRole
   daysUsed: number
   annualMax: number
   referenceDate: string | null
@@ -17,7 +19,7 @@ interface Props {
 }
 
 export default function DashboardClient({
-  firstName, daysUsed, annualMax, referenceDate,
+  firstName, ownerFirstName, role, daysUsed, annualMax, referenceDate,
   upcoming, past, canDelete,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
@@ -27,6 +29,8 @@ export default function DashboardClient({
 
       <DashboardHero
         firstName={firstName}
+        ownerFirstName={ownerFirstName}
+        role={role}
         daysUsed={daysUsed}
         daysMax={annualMax}
         referenceDate={referenceDate}
