@@ -427,7 +427,7 @@ NEXT_PUBLIC_APP_URL=         # Used in invitation email links
 18. **Sojourn visual rebrand** — full Sojourn design system applied across all pages (Story 18 ✅)
 19. **Delete trip on past trips list** — hover-reveal trash icon on PastRow for main accounts, confirm dialog, DELETE API call (Story 19 ✅)
 20. **Mobile responsiveness pass 2** — landing page and search page fully responsive down to 375px (Story 20 ✅)
-21. **Assistant invitation flow** — main accounts invite assistants by name + email; account auto-created, Resend invitation email with 3-day expiry, pending/active/expired status badges in Settings, resend button (Story 21)
+21. **Assistant invitation flow** — main accounts invite assistants by name + email; account auto-created, Resend invitation email with 3-day expiry, pending/active/expired status badges in Settings, resend button (Story 21 ✅)
 
 ---
 

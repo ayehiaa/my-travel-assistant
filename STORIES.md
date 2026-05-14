@@ -1079,6 +1079,9 @@ RESEND_FROM_EMAIL=           # Verified sender (e.g. Sojourn <noreply@yourdomain
 NEXT_PUBLIC_APP_URL=         # Production URL for reset link redirect
 ```
 
+### Bug Fix (post-completion)
+- **PKCE bypass on invite links** — both `POST /api/invitations` and `POST /api/invitations/resend` were sending Supabase's `action_link` in the email. When clicked from a fresh browser session, Supabase redirected back with a PKCE `code`, but `exchangeCodeForSession` failed because no `code_verifier` cookie existed. Fixed by constructing the invite URL directly with `hashed_token` from the `generateLink` response (`/auth/invite-callback?token_hash=...&type=recovery`), so `verifyOtp` handles verification without any PKCE state.
+
 ### Dependencies
 - Story 14 (Multi-Account UI) — `account_links` table and Settings page must exist
 
