@@ -63,8 +63,10 @@ export default async function SettingsPage() {
     expiresAt: l.expires_at,
   }))
 
-  atAssistantLimit =
-    (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
+  if (!isPremium) {
+    atAssistantLimit =
+      (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
+  }
 
   const { data: roleRow } = await supabase
     .from('user_roles')

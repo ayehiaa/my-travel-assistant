@@ -23,26 +23,28 @@ export async function POST(request: NextRequest) {
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main') {
-    return NextResponse.json({ error: 'Only main accounts can invite assistants' }, { status: 403 })
+  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium') {
+    return NextResponse.json({ error: 'Only main or premium accounts can invite assistants' }, { status: 403 })
   }
 
-  // ── Beta assistant limit ──────────────────────────────────────────────────
-  const { count: linkCount, error: linkCountError } = await supabase
-    .from('account_links')
-    .select('id', { count: 'exact', head: true })
-    .eq('main_user_id', user.id)
-    .in('status', ['pending', 'active'])
+  // ── Beta assistant limit (main accounts only) ─────────────────────────────
+  if (roleRecord?.role === 'main') {
+    const { count: linkCount, error: linkCountError } = await supabase
+      .from('account_links')
+      .select('id', { count: 'exact', head: true })
+      .eq('main_user_id', user.id)
+      .in('status', ['pending', 'active'])
 
-  if (linkCountError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  if ((linkCount ?? 0) >= 1) {
-    return NextResponse.json(
-      {
-        error: 'BETA_ASSISTANT_LIMIT_REACHED',
-        message: 'Your beta plan includes 1 assistant. More seats are coming with our commercial launch!',
-      },
-      { status: 403 },
-    )
+    if (linkCountError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    if ((linkCount ?? 0) >= 1) {
+      return NextResponse.json(
+        {
+          error: 'BETA_ASSISTANT_LIMIT_REACHED',
+          message: 'Your beta plan includes 1 assistant. More seats are coming with our commercial launch!',
+        },
+        { status: 403 },
+      )
+    }
   }
 
   let raw: unknown
