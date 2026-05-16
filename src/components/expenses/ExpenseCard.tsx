@@ -22,6 +22,21 @@ function fmtDate(isoDate: string) {
 export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: Props) {
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
+  const [receiptLoading, setReceiptLoading] = useState(false)
+
+  async function handleOpenReceipt() {
+    setReceiptLoading(true)
+    try {
+      const res = await fetch(`/api/expenses/${expense.id}/receipt`)
+      if (!res.ok) throw new Error('Failed to fetch receipt')
+      const { signedUrl } = await res.json() as { signedUrl: string }
+      window.open(signedUrl, '_blank')
+    } catch {
+      toast('Could not open receipt', 'error')
+    } finally {
+      setReceiptLoading(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirm('Delete this expense?')) return
@@ -131,13 +146,26 @@ export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: P
 
         {/* Receipt indicator */}
         {expense.receipt_name && (
-          <span style={{
-            fontSize: 12,
-            color: 'var(--ink-3)',
-            fontStyle: 'italic',
-          }}>
-            {'📎'} {expense.receipt_name}
-          </span>
+          <button
+            type="button"
+            onClick={handleOpenReceipt}
+            aria-label={`Open receipt: ${expense.receipt_name}`}
+            style={{
+              fontSize: 12,
+              color: 'var(--ink-3)',
+              fontStyle: 'italic',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: receiptLoading ? 'not-allowed' : 'pointer',
+              textDecoration: 'underline',
+              fontFamily: 'var(--sans)',
+              opacity: receiptLoading ? 0.5 : 1,
+              pointerEvents: receiptLoading ? 'none' : 'auto',
+            }}
+          >
+            {receiptLoading ? 'Opening…' : `📎 ${expense.receipt_name}`}
+          </button>
         )}
       </div>
 

@@ -65,8 +65,11 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
   const [categoryId,  setCategoryId]  = useState(expenseToEdit?.category_id ?? categories[0]?.id ?? '')
   const [expenseDate, setExpenseDate] = useState(expenseToEdit?.expense_date ?? '')
   const [tripId,      setTripId]      = useState(expenseToEdit?.trip_id ?? '')
-  const [notes,       setNotes]       = useState(expenseToEdit?.notes ?? '')
-  const [saving,      setSaving]      = useState(false)
+  const [notes,            setNotes]            = useState(expenseToEdit?.notes ?? '')
+  const [saving,           setSaving]           = useState(false)
+  const [receiptFile,      setReceiptFile]      = useState<File | null>(null)
+  const [removeReceipt,    setRemoveReceipt]    = useState(false)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
 
   const parsedAmount = parseFloat(amount)
   const isValid =
@@ -106,7 +109,24 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
         throw new Error(data.error ?? 'Failed to save expense')
       }
 
-      const saved: ExpenseWithCategory = await res.json()
+      let saved: ExpenseWithCategory = await res.json()
+
+      // Handle receipt changes
+      if (removeReceipt && expenseToEdit?.receipt_name) {
+        await fetch(`/api/expenses/${saved.id}/receipt`, { method: 'DELETE' })
+      } else if (receiptFile) {
+        setUploadingReceipt(true)
+        const fd = new FormData()
+        fd.append('file', receiptFile)
+        const receiptRes = await fetch(`/api/expenses/${saved.id}/receipt`, { method: 'POST', body: fd })
+        if (receiptRes.ok) {
+          saved = await receiptRes.json()
+        } else {
+          toast('Expense saved but receipt upload failed.', 'error')
+        }
+        setUploadingReceipt(false)
+      }
+
       onSaved(saved)
       onClose()
     } catch (err) {
@@ -324,6 +344,47 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
               }}
             />
           </div>
+
+          {/* Receipt */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={labelStyle}>Receipt</label>
+            {expenseToEdit?.receipt_name && !removeReceipt ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>📎 {expenseToEdit.receipt_name}</span>
+                <button
+                  type="button"
+                  onClick={() => { setRemoveReceipt(true); setReceiptFile(null) }}
+                  style={{ fontSize: 12, color: 'var(--coral, #b8493d)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  style={{ fontSize: 13 }}
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    if (!['image/jpeg', 'image/png', 'application/pdf'].includes(f.type)) {
+                      toast('Invalid file type. JPG, PNG or PDF only.', 'error')
+                      e.target.value = ''
+                      return
+                    }
+                    if (f.size > 10 * 1024 * 1024) {
+                      toast('File too large. Max 10 MB.', 'error')
+                      e.target.value = ''
+                      return
+                    }
+                    setReceiptFile(f)
+                  }}
+                />
+                <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>JPG, PNG or PDF · max 10 MB</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -354,21 +415,21 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
           </button>
           <button
             onClick={handleSave}
-            disabled={!isValid || saving}
+            disabled={!isValid || saving || uploadingReceipt}
             style={{
               padding: '10px 20px',
               borderRadius: 'var(--r)',
               fontSize: 14,
               fontWeight: 700,
               border: 'none',
-              background: isValid && !saving ? 'var(--blue-700)' : 'var(--rule)',
-              color: isValid && !saving ? 'white' : 'var(--ink-4)',
-              cursor: isValid && !saving ? 'pointer' : 'not-allowed',
+              background: isValid && !saving && !uploadingReceipt ? 'var(--blue-700)' : 'var(--rule)',
+              color: isValid && !saving && !uploadingReceipt ? 'white' : 'var(--ink-4)',
+              cursor: isValid && !saving && !uploadingReceipt ? 'pointer' : 'not-allowed',
               fontFamily: 'var(--sans)',
               transition: 'background .12s',
             }}
           >
-            {saving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add expense'}
+            {uploadingReceipt ? 'Uploading receipt…' : saving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add expense'}
           </button>
         </div>
       </div>
