@@ -31,42 +31,40 @@ export default async function SettingsPage() {
   let initial: { id: string; assistantUserId: string; displayName: string; createdAt: string; status: 'pending' | 'active' | 'expired'; expiresAt: string | null }[] = []
   let atAssistantLimit = false
 
-  if (!isPremium) {
-    await admin
-      .from('account_links')
-      .update({ status: 'expired' })
-      .eq('main_user_id', user.id)
-      .eq('status', 'pending')
-      .lt('expires_at', now)
+  await admin
+    .from('account_links')
+    .update({ status: 'expired' })
+    .eq('main_user_id', user.id)
+    .eq('status', 'pending')
+    .lt('expires_at', now)
 
-    const { data: links } = await supabase
-      .from('account_links')
-      .select('id, assistant_user_id, created_at, status, expires_at')
-      .eq('main_user_id', user.id)
-      .order('created_at', { ascending: true })
+  const { data: links } = await supabase
+    .from('account_links')
+    .select('id, assistant_user_id, created_at, status, expires_at')
+    .eq('main_user_id', user.id)
+    .order('created_at', { ascending: true })
 
-    const assistantIds = (links ?? []).map(l => l.assistant_user_id)
-    let nameMap = new Map<string, Pick<UserRoleRecord, 'display_name'>>()
-    if (assistantIds.length > 0) {
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('user_id, display_name')
-        .in('user_id', assistantIds)
-      nameMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name }]))
-    }
-
-    initial = (links ?? []).map(l => ({
-      id: l.id,
-      assistantUserId: l.assistant_user_id,
-      displayName: nameMap.get(l.assistant_user_id)?.display_name ?? 'Unknown',
-      createdAt: l.created_at,
-      status: l.status as 'pending' | 'active' | 'expired',
-      expiresAt: l.expires_at,
-    }))
-
-    atAssistantLimit =
-      (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
+  const assistantIds = (links ?? []).map(l => l.assistant_user_id)
+  let nameMap = new Map<string, Pick<UserRoleRecord, 'display_name'>>()
+  if (assistantIds.length > 0) {
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('user_id, display_name')
+      .in('user_id', assistantIds)
+    nameMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name }]))
   }
+
+  initial = (links ?? []).map(l => ({
+    id: l.id,
+    assistantUserId: l.assistant_user_id,
+    displayName: nameMap.get(l.assistant_user_id)?.display_name ?? 'Unknown',
+    createdAt: l.created_at,
+    status: l.status as 'pending' | 'active' | 'expired',
+    expiresAt: l.expires_at,
+  }))
+
+  atAssistantLimit =
+    (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
 
   const { data: roleRow } = await supabase
     .from('user_roles')
@@ -176,8 +174,8 @@ export default async function SettingsPage() {
           />
         </section>
 
-        {/* Linked assistants — main accounts only */}
-        {!isPremium && (
+        {/* Linked assistants */}
+        {(
           <section style={{ gridColumn: 'span 2', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Linked assistants</h3>
