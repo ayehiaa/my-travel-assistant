@@ -180,8 +180,12 @@ export function useFlightSearch() {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error ?? 'Failed to save trip')
+        const data = await res.json().catch(() => ({}))
+        const msg =
+          data.error === 'BETA_TRIP_LIMIT_REACHED'
+            ? "You've hit your beta limit of 10 trips. Hang tight — a full plan is launching soon!"
+            : 'Failed to save trip'
+        throw new Error(msg)
       }
 
       router.push('/')

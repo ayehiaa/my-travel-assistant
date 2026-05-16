@@ -57,6 +57,9 @@ export default async function SettingsPage() {
     expiresAt: l.expires_at,
   }))
 
+  const atAssistantLimit =
+    (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
+
   const { data: roleRow } = await supabase
     .from('user_roles')
     .select('reference_date')
@@ -172,7 +175,7 @@ export default async function SettingsPage() {
           <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 18px' }}>
             Assistants can plan, edit, and view all your trips on your behalf. Every change they make is logged in the audit trail.
           </p>
-          <AssistantsManager initial={initial} />
+          <AssistantsManager initial={initial} atAssistantLimit={atAssistantLimit} />
         </section>
 
         {/* Danger zone — full width */}

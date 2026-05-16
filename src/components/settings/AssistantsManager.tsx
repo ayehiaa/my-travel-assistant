@@ -55,10 +55,11 @@ function StatusBadge({ status, expiresAt }: { status: InvitationStatus; expiresA
   )
 }
 
-export default function AssistantsManager({ initial }: { initial: Assistant[] }) {
+export default function AssistantsManager({ initial, atAssistantLimit }: { initial: Assistant[]; atAssistantLimit: boolean }) {
   const router = useRouter()
   const [assistants, setAssistants] = useState<Assistant[]>(initial)
-  const [inviting, setInviting] = useState(false)
+  const [invitingRaw, setInviting] = useState(false)
+  const inviting = atAssistantLimit ? false : invitingRaw
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
@@ -190,6 +191,18 @@ export default function AssistantsManager({ initial }: { initial: Assistant[] })
             {loading ? 'Sending…' : 'Send invite'}
           </button>
         </form>
+      ) : atAssistantLimit ? (
+        <div style={{
+          padding: '10px 16px',
+          background: 'var(--paper-2)',
+          border: '1.5px solid var(--rule)',
+          borderRadius: 999,
+          fontSize: 13,
+          color: 'var(--ink-3)',
+          fontFamily: 'var(--sans)',
+        }}>
+          Your beta plan includes 1 assistant. More seats are coming with our commercial launch!
+        </div>
       ) : (
         <button
           onClick={() => setInviting(true)}

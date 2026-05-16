@@ -84,6 +84,23 @@ export async function POST(request: NextRequest) {
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
+  // ── Beta trip limit ───────────────────────────────────────────────────────
+  const { count: tripCount, error: countError } = await supabase
+    .from('trips')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner_id', activeMainAccountId)
+
+  if (countError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if ((tripCount ?? 0) >= 10) {
+    return NextResponse.json(
+      {
+        error: 'BETA_TRIP_LIMIT_REACHED',
+        message: "You've hit your beta limit of 10 trips. Hang tight — a full plan is launching soon!",
+      },
+      { status: 429 },
+    )
+  }
+
   let raw: unknown
   try {
     raw = await request.json()

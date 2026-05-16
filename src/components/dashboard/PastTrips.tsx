@@ -32,6 +32,7 @@ type Props = {
   canDelete: boolean
   showModal?: boolean
   onShowModal?: (v: boolean) => void
+  atTripLimit?: boolean
 }
 
 function TrashIcon() {
@@ -162,20 +163,31 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
   )
 }
 
-export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal }: Props) {
+export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit }: Props) {
   const [internalShow, setInternalShow] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow
 
   return (
     <section>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: 12 }}>
         <button
           onClick={() => setShowModal(true)}
-          style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)' }}
+          disabled={!!atTripLimit}
+          title={atTripLimit ? "You've reached your beta limit of 10 trips" : undefined}
+          style={{
+            fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none',
+            cursor: atTripLimit ? 'not-allowed' : 'pointer', fontFamily: 'var(--sans)',
+            opacity: atTripLimit ? 0.4 : 1,
+          }}
         >
           + Add past trip
         </button>
+        {atTripLimit && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>
+            Beta limit reached — more trips coming with our commercial plan.
+          </p>
+        )}
       </div>
 
       {trips.length === 0 ? (

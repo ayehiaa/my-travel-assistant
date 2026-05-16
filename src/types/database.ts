@@ -1,6 +1,6 @@
 export type UserRole = 'main' | 'assistant'
 
-export type AuditAction = 'created' | 'updated' | 'deleted'
+export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited'
 
 export interface UserRoleRecord {
   user_id: string
