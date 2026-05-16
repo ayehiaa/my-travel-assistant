@@ -18,7 +18,7 @@ export async function GET() {
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
-  if (roleRecord.role === 'main') {
+  if (roleRecord.role === 'main' || roleRecord.role === 'premium') {
     // Expire any pending links past their expires_at
     await admin
       .from('account_links')
@@ -95,8 +95,8 @@ export async function DELETE(request: NextRequest) {
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main') {
-    return NextResponse.json({ error: 'Only main accounts can remove assistants' }, { status: 403 })
+  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium') {
+    return NextResponse.json({ error: 'Only main or premium accounts can remove assistants' }, { status: 403 })
   }
 
   const linkId = request.nextUrl.searchParams.get('id')
