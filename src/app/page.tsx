@@ -26,7 +26,7 @@ export default async function DashboardPage() {
       .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
     supabase
       .from('user_roles')
-      .select('reference_date, display_name')
+      .select('reference_date, display_name, role')
       .eq('user_id', activeMainAccountId)
       .single(),
   ])
@@ -98,7 +98,7 @@ export default async function DashboardPage() {
         refEnd,
       ), 0)
   }
-  const atTripLimit = enriched.length >= 10
+  const atTripLimit = roleRow?.role !== 'premium' && enriched.length >= 10
 
   const firstName = user.displayName.split(' ')[0]
   const canDelete = true
