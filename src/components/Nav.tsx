@@ -33,6 +33,7 @@ export default function Nav() {
 
   const links = [
     { href: '/',         label: 'Dashboard'  },
+    { href: '/expenses', label: 'Expenses'   },
     { href: '/search',   label: 'Plan a trip' },
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },

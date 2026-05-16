@@ -3,9 +3,16 @@ export type UserRole = 'main' | 'assistant' | 'premium'
 export type UserRoleStatus = 'active' | 'deactivated'
 
 export type AuditAction =
-  | 'created' | 'updated' | 'deleted'
-  | 'assistant_invited' | 'assistant_deactivated' | 'assistant_unlinked'
-  | 'expense_created' | 'expense_updated' | 'expense_deleted' | 'expense_reclaimed'
+  | 'created'
+  | 'updated'
+  | 'deleted'
+  | 'assistant_invited'
+  | 'assistant_deactivated'
+  | 'assistant_unlinked'
+  | 'expense_created'
+  | 'expense_updated'
+  | 'expense_deleted'
+  | 'expense_reclaimed'
 
 export interface UserRoleRecord {
   user_id: string
@@ -121,3 +128,5 @@ export interface Expense {
 }
 
 export type ExpenseInsert = Omit<Expense, 'id' | 'created_at' | 'updated_at'>
+
+export type ExpenseWithCategory = Expense & { category: Pick<ExpenseCategory, 'name'> }
