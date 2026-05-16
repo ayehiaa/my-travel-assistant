@@ -123,7 +123,9 @@ export default function Nav() {
               )}
             </div>
           ) : (
-            <span style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>{firstName} · Main</span>
+            <span style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>
+              {firstName} · {user.role === 'premium' ? 'Premium' : 'Main'}
+            </span>
           )}
 
           {/* Avatar */}
@@ -205,7 +207,7 @@ export default function Nav() {
 
           <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.1)' }}>
             <p className="text-[11px] px-3 mb-1" style={{ opacity: 0.5 }}>
-              {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · Main`}
+              {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · ${user.role === 'premium' ? 'Premium' : 'Main'}`}
             </p>
             <button
               onClick={handleSignOut}
