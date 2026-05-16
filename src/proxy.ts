@@ -43,7 +43,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && (pathname === '/login' || pathname === '/signup')) {
+  const signupHasToken = pathname === '/signup' && request.nextUrl.searchParams.has('token')
+
+  if (user && (pathname === '/login' || pathname === '/signup') && !signupHasToken) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
