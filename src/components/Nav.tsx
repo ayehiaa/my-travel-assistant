@@ -36,7 +36,7 @@ export default function Nav() {
     { href: '/search',   label: 'Plan a trip' },
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
-    ...(user.role === 'main' ? [{ href: '/settings', label: 'Settings' }] : []),
+    ...(user.role === 'main' || user.role === 'premium' ? [{ href: '/settings', label: 'Settings' }] : []),
   ]
 
   const initials = user.displayName
