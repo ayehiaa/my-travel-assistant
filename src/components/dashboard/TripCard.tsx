@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
-import { TripWithUsers } from '@/types/database'
+import { TripWithUsers, ExpenseWithCategory } from '@/types/database'
 import { getAirportInfo } from '@/lib/airportCountry'
 
 const COVERS = [
@@ -34,9 +34,11 @@ function legBadge(i: number, total: number, type: string) {
   return `L${i + 1}`
 }
 
-type Props = { trip: TripWithUsers; canDelete: boolean }
+type Props = { trip: TripWithUsers; canDelete: boolean; expenses?: ExpenseWithCategory[] }
 
-export default function TripCard({ trip, canDelete }: Props) {
+export default function TripCard(props: Props) {
+  const { trip, canDelete } = props
+  const expenses = props.expenses ?? []
   const router = useRouter()
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
@@ -182,6 +184,60 @@ export default function TripCard({ trip, canDelete }: Props) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Expense panel */}
+      <div style={{ borderTop: '1px solid var(--rule-soft)', padding: '14px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+            Expenses
+          </span>
+          <a
+            href={`/expenses?trip_id=${trip.id}`}
+            style={{ fontSize: 12, color: 'var(--blue-700)', fontWeight: 600, textDecoration: 'none', fontFamily: 'var(--sans)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            Add expense →
+          </a>
+        </div>
+        {expenses.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-4)', fontStyle: 'italic' }}>No expenses for this trip</p>
+        ) : (
+          <>
+            {expenses.slice(0, 3).map(exp => (
+              <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6, fontSize: 12 }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>
+                  {exp.title}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-2)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {exp.amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {exp.currency}
+                </span>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '2px 7px',
+                  borderRadius: 999,
+                  background: exp.reclaimed ? '#d1fae5' : 'var(--paper-2)',
+                  color: exp.reclaimed ? '#065f46' : 'var(--ink-4)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  flexShrink: 0,
+                }}>
+                  {exp.reclaimed ? 'Reclaimed' : 'Pending'}
+                </span>
+              </div>
+            ))}
+            {expenses.length > 3 && (
+              <a
+                href={`/expenses?trip_id=${trip.id}`}
+                style={{ fontSize: 12, color: 'var(--ink-3)', textDecoration: 'none' }}
+                onClick={e => e.stopPropagation()}
+              >
+                + {expenses.length - 3} more
+              </a>
+            )}
+          </>
+        )}
       </div>
     </article>
   )

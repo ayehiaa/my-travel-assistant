@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
-import { TripWithUsers } from '@/types/database'
+import { TripWithUsers, ExpenseWithCategory } from '@/types/database'
 import { getAirportInfo } from '@/lib/airportCountry'
 import EmptyState from './EmptyState'
 import AddPastTripModal from './AddPastTripModal'
@@ -33,6 +33,7 @@ type Props = {
   showModal?: boolean
   onShowModal?: (v: boolean) => void
   atTripLimit?: boolean
+  expensesByTripId: Record<string, ExpenseWithCategory[]>
 }
 
 function TrashIcon() {
@@ -43,7 +44,7 @@ function TrashIcon() {
   )
 }
 
-function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean }) {
+function PastRow({ trip, canDelete, expenses }: { trip: TripWithUsers; canDelete: boolean; expenses: ExpenseWithCategory[] }) {
   const router = useRouter()
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
@@ -78,92 +79,125 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
   }
 
   return (
-    <div
-      className="sj-past-row"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '56px 1.2fr 1fr 1fr 0.7fr 0.6fr',
-        gap: 14,
-        padding: '14px 18px',
-        alignItems: 'center',
-        borderBottom: '1px solid var(--rule-soft)',
-        cursor: 'pointer',
-        transition: 'background .12s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--paper-2)' }}
-      onMouseLeave={e => { e.currentTarget.style.background = '' }}
-    >
-      {/* Gradient swatch */}
-      <div className="sj-pr-swatch" style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
-        <span style={{ position: 'absolute', bottom: 4, left: 4, fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'white', textShadow: '0 1px 2px rgba(0,0,0,.3)' }}>{flag}</span>
-      </div>
+    <>
+      <div
+        className="sj-past-row"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '56px 1.2fr 1fr 1fr 0.7fr 0.6fr',
+          gap: 14,
+          padding: '14px 18px',
+          alignItems: 'center',
+          borderBottom: '1px solid var(--rule-soft)',
+          cursor: 'pointer',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--paper-2)' }}
+        onMouseLeave={e => { e.currentTarget.style.background = '' }}
+      >
+        {/* Gradient swatch */}
+        <div className="sj-pr-swatch" style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
+          <span style={{ position: 'absolute', bottom: 4, left: 4, fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'white', textShadow: '0 1px 2px rgba(0,0,0,.3)' }}>{flag}</span>
+        </div>
 
-      {/* Route + tags */}
-      <div className="sj-pr-route">
-        <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0 }}>
-          {routeParts.map((code, i) => (
-            <span key={i}>
-              {code}
-              {i < routeParts.length - 1 && <span style={{ color: 'var(--ink-4)', margin: '0 4px', fontWeight: 500 }}>→</span>}
-            </span>
+        {/* Route + tags */}
+        <div className="sj-pr-route">
+          <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0 }}>
+            {routeParts.map((code, i) => (
+              <span key={i}>
+                {code}
+                {i < routeParts.length - 1 && <span style={{ color: 'var(--ink-4)', margin: '0 4px', fontWeight: 500 }}>→</span>}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
+            {destInfo?.country ?? destCode}
+            {isMulti && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--sky-soft)', color: '#1a8fc2', padding: '2px 6px', borderRadius: 999 }}>multi</span>}
+            {isManual && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--lavender-soft)', color: 'var(--lavender)', padding: '2px 6px', borderRadius: 999 }}>manual</span>}
+          </div>
+        </div>
+
+        {/* Dates */}
+        <div className="sj-pr-dates" style={{ fontSize: 13 }}>
+          {firstLeg && lastLeg && (
+            <>
+              <strong>{fmtDate(firstLeg.departure_at)}</strong>
+              <small style={{ display: 'block', color: 'var(--ink-3)', fontSize: 11 }}>→ {fmtDate(lastLeg.departure_at)}</small>
+            </>
+          )}
+        </div>
+
+        {/* Flight numbers */}
+        <div className="sj-pr-flights" style={{ fontSize: 13 }}>
+          <small style={{ display: 'block', color: 'var(--ink-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Flights</small>
+          {isManual ? <span style={{ color: 'var(--ink-4)', fontStyle: 'italic' }}>—</span> : flightNums}
+        </div>
+
+        {/* Days count */}
+        <div className="sj-pr-days" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+          <span style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22 }}>{trip.days_outside_uk}</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>days</span>
+        </div>
+
+        {/* Chevron / delete */}
+        <div className="sj-pr-action" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {canDelete ? (
+            <button
+              onClick={e => { e.stopPropagation(); handleDelete() }}
+              disabled={deleting}
+              title="Delete trip"
+              style={{
+                background: 'none', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer',
+                color: 'var(--coral)', opacity: deleting ? 0.4 : 1,
+                padding: '6px', borderRadius: 6, display: 'grid', placeItems: 'center',
+                transition: 'background .1s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--coral-soft)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+            >
+              {deleting ? '…' : <TrashIcon />}
+            </button>
+          ) : (
+            <span style={{ color: 'var(--ink-4)', fontSize: 18 }}>›</span>
+          )}
+        </div>
+      </div>
+      {expenses.length > 0 && (
+        <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--rule-soft)', background: 'var(--paper-2)' }}>
+          {expenses.slice(0, 2).map(exp => (
+            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, paddingBottom: 4 }}>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>
+                {exp.title}
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {exp.amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {exp.currency}
+              </span>
+              <span style={{
+                display: 'inline-block',
+                padding: '1px 6px',
+                borderRadius: 999,
+                background: exp.reclaimed ? '#d1fae5' : 'var(--paper-3)',
+                color: exp.reclaimed ? '#065f46' : 'var(--ink-4)',
+                fontSize: 10,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}>
+                {exp.reclaimed ? 'Reclaimed' : 'Pending'}
+              </span>
+            </div>
           ))}
+          {expenses.length > 2 && (
+            <a href={`/expenses?trip_id=${expenses[0].trip_id}`} style={{ fontSize: 11, color: 'var(--ink-4)', textDecoration: 'none' }}>
+              + {expenses.length - 2} more
+            </a>
+          )}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
-          {destInfo?.country ?? destCode}
-          {isMulti && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--sky-soft)', color: '#1a8fc2', padding: '2px 6px', borderRadius: 999 }}>multi</span>}
-          {isManual && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--lavender-soft)', color: 'var(--lavender)', padding: '2px 6px', borderRadius: 999 }}>manual</span>}
-        </div>
-      </div>
-
-      {/* Dates */}
-      <div className="sj-pr-dates" style={{ fontSize: 13 }}>
-        {firstLeg && lastLeg && (
-          <>
-            <strong>{fmtDate(firstLeg.departure_at)}</strong>
-            <small style={{ display: 'block', color: 'var(--ink-3)', fontSize: 11 }}>→ {fmtDate(lastLeg.departure_at)}</small>
-          </>
-        )}
-      </div>
-
-      {/* Flight numbers */}
-      <div className="sj-pr-flights" style={{ fontSize: 13 }}>
-        <small style={{ display: 'block', color: 'var(--ink-3)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Flights</small>
-        {isManual ? <span style={{ color: 'var(--ink-4)', fontStyle: 'italic' }}>—</span> : flightNums}
-      </div>
-
-      {/* Days count */}
-      <div className="sj-pr-days" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
-        <span style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 22 }}>{trip.days_outside_uk}</span>
-        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>days</span>
-      </div>
-
-      {/* Chevron / delete */}
-      <div className="sj-pr-action" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-        {canDelete ? (
-          <button
-            onClick={e => { e.stopPropagation(); handleDelete() }}
-            disabled={deleting}
-            title="Delete trip"
-            style={{
-              background: 'none', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer',
-              color: 'var(--coral)', opacity: deleting ? 0.4 : 1,
-              padding: '6px', borderRadius: 6, display: 'grid', placeItems: 'center',
-              transition: 'background .1s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--coral-soft)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
-          >
-            {deleting ? '…' : <TrashIcon />}
-          </button>
-        ) : (
-          <span style={{ color: 'var(--ink-4)', fontSize: 18 }}>›</span>
-        )}
-      </div>
-    </div>
+      )}
+    </>
   )
 }
 
-export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit }: Props) {
+export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit, expensesByTripId }: Props) {
   const [internalShow, setInternalShow] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow
@@ -196,7 +230,7 @@ export default function PastTrips({ trips, canDelete = false, showModal: control
         <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
           {trips.map((trip, i) => (
             <div key={trip.id} style={{ borderBottom: i === trips.length - 1 ? 'none' : undefined }}>
-              <PastRow trip={trip} canDelete={canDelete} />
+              <PastRow trip={trip} canDelete={canDelete} expenses={expensesByTripId[trip.id] ?? []} />
             </div>
           ))}
         </div>

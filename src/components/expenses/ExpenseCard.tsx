@@ -7,8 +7,10 @@ import { ExpenseWithCategory } from '@/types/database'
 interface Props {
   expense: ExpenseWithCategory
   canDelete: boolean
+  canUnreclaim: boolean
   onEdit: (expense: ExpenseWithCategory) => void
   onDeleted: (id: string) => void
+  onReclaimed: (expense: ExpenseWithCategory) => void
 }
 
 function fmtDate(isoDate: string) {
@@ -19,10 +21,11 @@ function fmtDate(isoDate: string) {
   })
 }
 
-export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: Props) {
+export default function ExpenseCard({ expense, canDelete, canUnreclaim, onEdit, onDeleted, onReclaimed }: Props) {
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
   const [receiptLoading, setReceiptLoading] = useState(false)
+  const [reclaiming, setReclaiming] = useState(false)
 
   async function handleOpenReceipt() {
     setReceiptLoading(true)
@@ -35,6 +38,40 @@ export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: P
       toast('Could not open receipt', 'error')
     } finally {
       setReceiptLoading(false)
+    }
+  }
+
+  async function handleReclaim() {
+    setReclaiming(true)
+    try {
+      const res = await fetch(`/api/expenses/${expense.id}/reclaim`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('Reclaim failed')
+      const updated = await res.json() as ExpenseWithCategory
+      onReclaimed(updated)
+    } catch {
+      toast('Failed to mark as reclaimed', 'error')
+    } finally {
+      setReclaiming(false)
+    }
+  }
+
+  async function handleUnreclaim() {
+    setReclaiming(true)
+    try {
+      const res = await fetch(`/api/expenses/${expense.id}/unreclaim`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('Unreclaim failed')
+      const updated = await res.json() as ExpenseWithCategory
+      onReclaimed(updated)
+    } catch {
+      toast('Failed to undo reclaim', 'error')
+    } finally {
+      setReclaiming(false)
     }
   }
 
@@ -117,18 +154,25 @@ export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: P
 
         {/* Reclaim badge */}
         {expense.reclaimed ? (
-          <span style={{
-            display: 'inline-block',
-            padding: '3px 10px',
-            borderRadius: 999,
-            background: '#d1fae5',
-            color: '#065f46',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-          }}>
-            Reclaimed
-          </span>
+          <>
+            <span style={{
+              display: 'inline-block',
+              padding: '3px 10px',
+              borderRadius: 999,
+              background: '#d1fae5',
+              color: '#065f46',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+            }}>
+              Reclaimed
+            </span>
+            {expense.reclaimed_at && (
+              <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>
+                Reclaimed on {new Date(expense.reclaimed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            )}
+          </>
         ) : (
           <span style={{
             display: 'inline-block',
@@ -192,6 +236,42 @@ export default function ExpenseCard({ expense, canDelete, onEdit, onDeleted }: P
         borderTop: '1px solid var(--rule-soft)',
         paddingTop: 10,
       }}>
+        {!expense.reclaimed ? (
+          <button
+            onClick={handleReclaim}
+            disabled={reclaiming}
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--blue-700)',
+              background: 'none',
+              border: 'none',
+              cursor: reclaiming ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--sans)',
+              opacity: reclaiming ? 0.4 : 1,
+            }}
+          >
+            Mark as reclaimed
+          </button>
+        ) : canUnreclaim ? (
+          <button
+            onClick={handleUnreclaim}
+            disabled={reclaiming}
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--ink-3)',
+              background: 'none',
+              border: 'none',
+              cursor: reclaiming ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--sans)',
+              opacity: reclaiming ? 0.4 : 1,
+            }}
+          >
+            Undo reclaim
+          </button>
+        ) : null}
+
         <button
           onClick={() => onEdit(expense)}
           style={{
