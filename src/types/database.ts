@@ -1,4 +1,4 @@
-export type UserRole = 'main' | 'assistant'
+export type UserRole = 'main' | 'assistant' | 'premium'
 
 export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited'
 
