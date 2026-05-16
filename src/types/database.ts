@@ -13,6 +13,7 @@ export type AuditAction =
   | 'expense_updated'
   | 'expense_deleted'
   | 'expense_reclaimed'
+  | 'expense_unreclaimed'
 
 export interface UserRoleRecord {
   user_id: string
@@ -121,6 +122,7 @@ export interface Expense {
   reclaimed: boolean
   reclaimed_at: string | null
   reclaimed_by: string | null
+  reclaim_reference: string | null
   created_by: string
   last_modified_by: string
   created_at: string

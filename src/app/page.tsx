@@ -3,7 +3,7 @@ import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import DashboardClient from '@/components/dashboard/DashboardClient'
 import LandingPage from '@/components/landing/LandingPage'
-import { TripWithUsers, UserRoleRecord } from '@/types/database'
+import { TripWithUsers, UserRoleRecord, ExpenseWithCategory } from '@/types/database'
 import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 
 export const metadata = {
@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
-  const [{ data: rawTrips }, { data: roleRow }] = await Promise.all([
+  const [{ data: rawTrips }, { data: roleRow }, { data: rawExpenses }] = await Promise.all([
     supabase
       .from('trips')
       .select('*, legs:trip_legs(*)')
@@ -29,6 +29,11 @@ export default async function DashboardPage() {
       .select('reference_date, display_name, role')
       .eq('user_id', activeMainAccountId)
       .single(),
+    supabase
+      .from('expenses')
+      .select('*, category:expense_categories(name)')
+      .eq('owner_id', activeMainAccountId)
+      .order('expense_date', { ascending: false }),
   ])
 
   const trips = (rawTrips ?? []).sort((a, b) => {
@@ -100,6 +105,12 @@ export default async function DashboardPage() {
   }
   const atTripLimit = roleRow?.role !== 'premium' && enriched.length >= 10
 
+  const expensesByTripId = ((rawExpenses ?? []) as ExpenseWithCategory[]).reduce<Record<string, ExpenseWithCategory[]>>((acc, e) => {
+    if (!e.trip_id) return acc
+    acc[e.trip_id] = [...(acc[e.trip_id] ?? []), e]
+    return acc
+  }, {})
+
   const firstName = user.displayName.split(' ')[0]
   const canDelete = true
 
@@ -121,6 +132,7 @@ export default async function DashboardPage() {
       past={past}
       canDelete={canDelete}
       atTripLimit={atTripLimit}
+      expensesByTripId={expensesByTripId}
     />
   )
 }

@@ -3,18 +3,24 @@ import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ExpenseList from '@/components/expenses/ExpenseList'
-import { ExpenseWithCategory, ExpenseCategory, TripWithUsers } from '@/types/database'
+import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
 
 export const metadata = { title: 'Expenses — Sojourn' }
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ trip_id?: string }>
+}) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+
+  const { trip_id: initialTripId } = await searchParams
 
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
-  const [{ data: expenses }, { data: categories }, { data: rawTrips }] = await Promise.all([
+  const [{ data: expenses }, { data: categories }, { data: rawTrips }, { data: ownerRoleRow }] = await Promise.all([
     supabase
       .from('expenses')
       .select('*, category:expense_categories(name)')
@@ -29,8 +35,15 @@ export default async function ExpensesPage() {
       .select('*, legs:trip_legs(*)')
       .eq('owner_id', activeMainAccountId)
       .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
+    supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', activeMainAccountId)
+      .single(),
   ])
 
+  const ownerRole: UserRole = (ownerRoleRow?.role as UserRole) ?? 'main'
+  const expenseCount = (expenses ?? []).length
   const canDelete = user.role !== 'assistant'
 
   return (
@@ -50,6 +63,9 @@ export default async function ExpensesPage() {
         categories={(categories ?? []) as ExpenseCategory[]}
         trips={(rawTrips ?? []) as TripWithUsers[]}
         canDelete={canDelete}
+        ownerRole={ownerRole}
+        expenseCount={expenseCount}
+        initialTripId={initialTripId}
       />
     </main>
   )

@@ -10,6 +10,7 @@ interface Props {
   expenseToEdit: ExpenseWithCategory | null
   onClose: () => void
   onSaved: (expense: ExpenseWithCategory) => void
+  defaultTripId?: string
 }
 
 function fmtTripDate(iso: string) {
@@ -56,7 +57,8 @@ const labelStyle: React.CSSProperties = {
 // Inner component receives a stable `key` from the parent shell so that
 // React fully remounts it whenever expenseToEdit changes identity.
 // This avoids the anti-pattern of calling setState inside useEffect.
-function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: Props) {
+function AddExpenseForm(props: Props) {
+  const { categories, trips, expenseToEdit, onClose, onSaved } = props
   const toast = useToast()
 
   const [title,       setTitle]       = useState(expenseToEdit?.title ?? '')
@@ -64,7 +66,7 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
   const [currency,    setCurrency]    = useState(expenseToEdit?.currency ?? 'GBP')
   const [categoryId,  setCategoryId]  = useState(expenseToEdit?.category_id ?? categories[0]?.id ?? '')
   const [expenseDate, setExpenseDate] = useState(expenseToEdit?.expense_date ?? '')
-  const [tripId,      setTripId]      = useState(expenseToEdit?.trip_id ?? '')
+  const [tripId,      setTripId]      = useState(expenseToEdit?.trip_id ?? props.defaultTripId ?? '')
   const [notes,            setNotes]            = useState(expenseToEdit?.notes ?? '')
   const [saving,           setSaving]           = useState(false)
   const [receiptFile,      setReceiptFile]      = useState<File | null>(null)
@@ -440,5 +442,5 @@ function AddExpenseForm({ categories, trips, expenseToEdit, onClose, onSaved }: 
 // Exported shell: provides a stable `key` so React fully remounts AddExpenseForm
 // whenever expenseToEdit identity changes, avoiding setState-in-effect anti-patterns.
 export default function AddExpenseModal(props: Props) {
-  return <AddExpenseForm key={props.expenseToEdit?.id ?? 'new'} {...props} />
+  return <AddExpenseForm key={`${props.expenseToEdit?.id ?? 'new'}-${props.defaultTripId ?? ''}`} {...props} />
 }

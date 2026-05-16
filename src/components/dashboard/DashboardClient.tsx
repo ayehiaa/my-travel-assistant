@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TripWithUsers, UserRole } from '@/types/database'
+import { TripWithUsers, UserRole, ExpenseWithCategory } from '@/types/database'
 import DashboardHero from './DashboardHero'
 import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
@@ -17,11 +17,12 @@ interface Props {
   past: TripWithUsers[]
   canDelete: boolean
   atTripLimit: boolean
+  expensesByTripId: Record<string, ExpenseWithCategory[]>
 }
 
 export default function DashboardClient({
   firstName, ownerFirstName, role, daysUsed, annualMax, referenceDate,
-  upcoming, past, canDelete, atTripLimit,
+  upcoming, past, canDelete, atTripLimit, expensesByTripId,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
 
@@ -62,7 +63,7 @@ export default function DashboardClient({
           {upcoming.length} on the board
         </span>
       </div>
-      <UpcomingTrips trips={upcoming} canDelete={canDelete} atTripLimit={atTripLimit} />
+      <UpcomingTrips trips={upcoming} canDelete={canDelete} atTripLimit={atTripLimit} expensesByTripId={expensesByTripId} />
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, margin: '36px 0 18px' }}>
         <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,3vw,36px)', letterSpacing: '-0.02em', margin: 0 }}>Past trips</h2>
@@ -76,6 +77,7 @@ export default function DashboardClient({
         showModal={showModal}
         onShowModal={setShowModal}
         atTripLimit={atTripLimit}
+        expensesByTripId={expensesByTripId}
       />
 
     </div>

@@ -57,6 +57,22 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
+  const [{ count }, { data: ownerRoleRow }] = await Promise.all([
+    supabase
+      .from('expenses')
+      .select('*', { count: 'exact', head: true })
+      .eq('owner_id', activeMainAccountId),
+    supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', activeMainAccountId)
+      .single(),
+  ])
+
+  if (ownerRoleRow?.role === 'main' && (count ?? 0) >= 10) {
+    return NextResponse.json({ error: 'EXPENSE_LIMIT_REACHED' }, { status: 403 })
+  }
+
   const { data, error } = await supabase
     .from('expenses')
     .insert({
