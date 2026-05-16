@@ -164,8 +164,8 @@ export default function TripCard({ trip, canDelete }: Props) {
         )}
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--ink-4)', borderTop: '1px solid var(--rule-soft)', paddingTop: 10 }}>
-          <span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px 12px', fontSize: 11, color: 'var(--ink-4)', borderTop: '1px solid var(--rule-soft)', paddingTop: 10 }}>
+          <span style={{ minWidth: 0 }}>
             Added by {creatorName}
             {wasEdited && <> · Edited by {modifierName}</>}
           </span>

@@ -45,7 +45,6 @@ function TrashIcon() {
 function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean }) {
   const router = useRouter()
   const toast = useToast()
-  const [hovered, setHovered] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const legs = trip.legs ?? []
@@ -90,8 +89,8 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
         cursor: 'pointer',
         transition: 'background .12s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--paper-2)'; setHovered(true) }}
-      onMouseLeave={e => { e.currentTarget.style.background = ''; setHovered(false) }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--paper-2)' }}
+      onMouseLeave={e => { e.currentTarget.style.background = '' }}
     >
       {/* Gradient swatch */}
       <div className="sj-pr-swatch" style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', position: 'relative', background: cover(trip.id), flexShrink: 0 }}>
@@ -139,7 +138,7 @@ function PastRow({ trip, canDelete }: { trip: TripWithUsers; canDelete: boolean 
 
       {/* Chevron / delete */}
       <div className="sj-pr-action" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-        {canDelete && hovered ? (
+        {canDelete ? (
           <button
             onClick={e => { e.stopPropagation(); handleDelete() }}
             disabled={deleting}
