@@ -30,6 +30,7 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname === '/' ||
     pathname === '/login' ||
+    pathname === '/signup' ||
     pathname.startsWith('/auth/') ||
     pathname === '/forgot-password' ||
     pathname === '/reset-password'
@@ -40,7 +41,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && pathname === '/login') {
+  if (user && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
