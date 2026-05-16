@@ -130,6 +130,36 @@ export async function sendCustomerInvitationEmail({
   })
 }
 
+export async function sendDeactivationEmail({
+  assistantEmail,
+  assistantName,
+}: {
+  assistantEmail: string
+  assistantName: string
+}) {
+  const safeName = escapeHtml(assistantName)
+
+  const body = `
+    <h1 style="font-size:22px;font-weight:700;color:#111827;margin:0 0 8px;">Hi ${safeName},</h1>
+    <p style="font-size:15px;color:#374151;margin:0 0 20px;line-height:1.6;">
+      Your Sojourn assistant account is no longer active.
+    </p>
+    <p style="font-size:15px;color:#374151;margin:0 0 20px;line-height:1.6;">
+      This happens when all of the main accounts that linked to you have removed the connection.
+    </p>
+    <p style="font-size:15px;color:#374151;margin:0 0 8px;line-height:1.6;">
+      If you receive a new invitation in the future, you can sign up again using this same email address.
+    </p>
+  `
+
+  await getResend().emails.send({
+    from: FROM,
+    to: assistantEmail,
+    subject: 'Your Sojourn assistant account has been deactivated',
+    html: baseTemplate(body),
+  })
+}
+
 export async function sendAssistantAddedEmail({
   assistantEmail,
   assistantName,

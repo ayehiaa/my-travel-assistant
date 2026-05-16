@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { deactivateAssistant } from '@/lib/deactivateAssistant'
+import { logAudit } from '@/lib/auditLogger'
 
 export async function GET() {
   const supabase = await createClient()
@@ -99,17 +102,56 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Only main or premium accounts can remove assistants' }, { status: 403 })
   }
 
-  const linkId = request.nextUrl.searchParams.get('id')
-  if (!linkId) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const deleteSchema = z.object({ id: z.string().uuid() })
+  const parsed = deleteSchema.safeParse({ id: request.nextUrl.searchParams.get('id') })
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid link id' }, { status: 400 })
+  const linkId = parsed.data.id
 
   const admin = createAdminClient()
-  const { error } = await admin
+
+  // Fetch the link row to get assistant_user_id before deleting
+  const { data: linkRow, error: fetchError } = await admin
+    .from('account_links')
+    .select('assistant_user_id')
+    .eq('id', linkId)
+    .eq('main_user_id', user.id)
+    .single()
+
+  if (fetchError || !linkRow) {
+    return NextResponse.json({ error: 'Link not found' }, { status: 404 })
+  }
+
+  const assistantUserId = linkRow.assistant_user_id
+
+  const { error: deleteError } = await admin
     .from('account_links')
     .delete()
     .eq('id', linkId)
     .eq('main_user_id', user.id)
 
-  if (error) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (deleteError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
 
-  return new NextResponse(null, { status: 204 })
+  // Count remaining active or pending links for this assistant
+  const { count, error: countError } = await admin
+    .from('account_links')
+    .select('id', { count: 'exact', head: true })
+    .eq('assistant_user_id', assistantUserId)
+    .in('status', ['active', 'pending'])
+
+  if (countError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+
+  const remainingCount = count ?? 0
+
+  if (remainingCount === 0) {
+    try {
+      await deactivateAssistant(assistantUserId, user.id)
+    } catch {
+      console.error('[DELETE /api/account-links] deactivateAssistant failed')
+      return NextResponse.json({ error: 'Failed to deactivate assistant account' }, { status: 500 })
+    }
+  } else {
+    await logAudit({ performedBy: user.id, action: 'assistant_unlinked', tripId: null })
+  }
+
+  return NextResponse.json({ deactivated: remainingCount === 0 }, { status: 200 })
 }
