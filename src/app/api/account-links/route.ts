@@ -102,7 +102,8 @@ export async function DELETE(request: NextRequest) {
   const linkId = request.nextUrl.searchParams.get('id')
   if (!linkId) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const { error } = await supabase
+  const admin = createAdminClient()
+  const { error } = await admin
     .from('account_links')
     .delete()
     .eq('id', linkId)
