@@ -2,12 +2,16 @@ import { AuditLogEntryWithUser } from '@/types/database'
 import ChangesDetail from './ChangesDetail'
 
 const ACTION_PILLS = {
-  created:                { bg: 'var(--mint-soft)',     color: '#1a6b4a' },
-  updated:                { bg: 'var(--sky-soft)',      color: '#1a8fc2' },
-  deleted:                { bg: 'var(--coral-soft)',    color: '#b8493d' },
-  assistant_invited:      { bg: 'var(--lavender-soft)', color: 'var(--lavender)' },
-  assistant_deactivated:  { bg: 'var(--coral-soft)',    color: '#b8493d' },
-  assistant_unlinked:     { bg: 'var(--coral-soft)',    color: '#b8493d' },
+  created:                { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Created' },
+  updated:                { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Updated' },
+  deleted:                { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Deleted' },
+  assistant_invited:      { bg: 'var(--lavender-soft)', color: 'var(--lavender)', label: 'Assistant invited' },
+  assistant_deactivated:  { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Assistant deactivated' },
+  assistant_unlinked:     { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Assistant unlinked' },
+  expense_created:        { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Expense created' },
+  expense_updated:        { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Expense updated' },
+  expense_deleted:        { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Expense deleted' },
+  expense_reclaimed:      { bg: 'var(--lavender-soft)', color: 'var(--lavender)', label: 'Expense reclaimed' },
 } as const
 
 function initials(name: string) {
@@ -22,7 +26,7 @@ function formatTimestamp(iso: string) {
 }
 
 export default function AuditEntry({ entry, isLast }: { entry: AuditLogEntryWithUser; isLast: boolean }) {
-  const pill = ACTION_PILLS[entry.action] ?? ACTION_PILLS.updated
+  const pill = ACTION_PILLS[entry.action as keyof typeof ACTION_PILLS] ?? ACTION_PILLS.updated
   const snapshot = entry.trip_snapshot
   const legs = snapshot?.legs ?? []
   const dest = legs[0]?.to_airport ?? '?'
@@ -44,7 +48,7 @@ export default function AuditEntry({ entry, isLast }: { entry: AuditLogEntryWith
           fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'capitalize',
           padding: '4px 10px', borderRadius: 999, width: 'fit-content',
         }}>
-          {entry.action}
+          {pill.label}
         </span>
 
         {/* Performer */}
