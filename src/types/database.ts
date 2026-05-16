@@ -1,11 +1,14 @@
 export type UserRole = 'main' | 'assistant' | 'premium'
 
-export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited'
+export type UserRoleStatus = 'active' | 'deactivated'
+
+export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited' | 'assistant_deactivated' | 'assistant_unlinked'
 
 export interface UserRoleRecord {
   user_id: string
   role: UserRole
   display_name: string
+  status: UserRoleStatus
   created_at: string
 }
 

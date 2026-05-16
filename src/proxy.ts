@@ -31,6 +31,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/' ||
     pathname === '/login' ||
     pathname === '/signup' ||
+    pathname === '/deactivated' ||
     pathname.startsWith('/auth/') ||
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
@@ -50,6 +51,20 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
+  }
+
+  if (user && pathname !== '/deactivated' && !isPublicRoute) {
+    const { data: roleStatus } = await supabase
+      .from('user_roles')
+      .select('status')
+      .eq('user_id', user.id)
+      .single()
+
+    if (roleStatus?.status === 'deactivated') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/deactivated'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
