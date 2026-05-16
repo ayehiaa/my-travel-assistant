@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -30,7 +31,27 @@ export async function GET(request: NextRequest) {
   // PKCE flow — code exchanged for session
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return NextResponse.redirect(`${origin}${next}`)
+    if (!error) {
+      const { data: { user: sessionUser } } = await supabase.auth.getUser()
+      if (sessionUser) {
+        const admin = createAdminClient()
+        const { data: existingRole } = await admin
+          .from('user_roles')
+          .select('user_id')
+          .eq('user_id', sessionUser.id)
+          .maybeSingle()
+        if (!existingRole) {
+          const displayName =
+            (sessionUser.user_metadata?.display_name as string | undefined) ??
+            sessionUser.email ??
+            'User'
+          await admin
+            .from('user_roles')
+            .insert({ user_id: sessionUser.id, role: 'main', display_name: displayName })
+        }
+      }
+      return NextResponse.redirect(`${origin}${next}`)
+    }
   }
 
   // OTP / email-link flow — token_hash verified directly (used by password recovery emails)

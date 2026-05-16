@@ -126,6 +126,13 @@ export default function LoginPage() {
           Sign in with Google
         </button>
 
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20, marginBottom: 0 }}>
+          New to Sojourn?{' '}
+          <Link href="/signup" style={{ fontWeight: 600, color: 'var(--blue-700)' }}>
+            Create account →
+          </Link>
+        </p>
+
       </div>
     </div>
   )
