@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path'); if echo \"$f\" | grep -qE '\\.claude/(agents|skills)/'; then git -C /workspaces/my-travel-assistant add \"$f\" && git -C /workspaces/my-travel-assistant diff --cached --quiet || (git -C /workspaces/my-travel-assistant commit -m 'chore: update Claude Code agent/skill definitions' && git -C /workspaces/my-travel-assistant push origin main); fi 2>/dev/null || true",
+            "command": "f=$(jq -r '.tool_input.file_path'); if echo \"$f\" | grep -qE '\\.claude/(agents|skills)/'; then root=$(git -C \"$(dirname \"$f\")\" rev-parse --show-toplevel) && git -C \"$root\" add \"$f\" && git -C \"$root\" diff --cached --quiet || (git -C \"$root\" commit -m 'chore: update Claude Code agent/skill definitions' && git -C \"$root\" push origin main); fi 2>/dev/null || true",
             "statusMessage": "Syncing to GitHub..."
           }
         ]
