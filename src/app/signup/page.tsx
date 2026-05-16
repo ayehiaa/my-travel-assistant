@@ -16,7 +16,6 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     const t = searchParams.get('token')
@@ -43,29 +42,30 @@ export default function SignupPage() {
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
 
     setLoading(true)
-    const supabase = createClient()
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: fullName.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+
+    // Create account server-side via admin client — no confirmation email needed
+    // because the invitation token already proves the customer owns this email.
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, fullName, password }),
     })
+    const data = await res.json()
 
-    if (signUpError) { setError(signUpError.message); setLoading(false); return }
+    if (!res.ok) { setError(data.error ?? 'Something went wrong'); setLoading(false); return }
 
-    // Consume the invitation token — fire and don't block on failure
-    if (token) {
-      fetch('/api/customer-invitations/accept', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      }).catch(() => {})
+    // Account created — sign in directly and go to dashboard
+    const supabase = createClient()
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (signInError) {
+      // Account was created but sign-in failed — tell them to use the login page
+      setError('Account created! Please sign in from the login page.')
+      setLoading(false)
+      return
     }
 
-    setLoading(false)
-    setSubmitted(true)
+    window.location.href = '/'
   }
 
   if (validating) {
@@ -73,33 +73,6 @@ export default function SignupPage() {
       <div style={{ minHeight: '100vh', background: 'var(--paper)', display: 'grid', placeItems: 'center' }}>
         <div style={{ width: 32, height: 32, border: '3px solid var(--rule)', borderTopColor: 'var(--blue-700)', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
-    )
-  }
-
-  if (submitted) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-        <div style={{ background: 'white', borderRadius: 18, padding: '48px 40px', maxWidth: 420, width: '100%', boxShadow: '0 4px 24px rgba(0,0,0,.07)', textAlign: 'center' }}>
-          <div style={{ width: 56, height: 56, background: '#dcfce7', borderRadius: '50%', display: 'grid', placeItems: 'center', margin: '0 auto 24px', fontSize: 28 }}>✉️</div>
-          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', margin: '0 0 12px' }}>Check your inbox</h2>
-          <p style={{ color: 'var(--ink-2)', fontSize: 15, lineHeight: 1.6, margin: '0 0 8px' }}>
-            We sent a confirmation link to <strong>{email}</strong>.
-          </p>
-          <p style={{ color: 'var(--ink-2)', fontSize: 15, lineHeight: 1.6, margin: '0 0 28px' }}>
-            Click it to activate your account and be taken straight to your dashboard.
-          </p>
-          <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>
-            Didn&apos;t get it? Check spam, or{' '}
-            <button
-              onClick={() => setSubmitted(false)}
-              style={{ background: 'none', border: 'none', color: 'var(--blue-700)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'var(--sans)' }}
-            >
-              try again
-            </button>
-            .
-          </p>
-        </div>
       </div>
     )
   }

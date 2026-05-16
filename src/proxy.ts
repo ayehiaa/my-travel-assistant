@@ -35,7 +35,8 @@ export async function proxy(request: NextRequest) {
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname === '/api/customer-invitations/validate' ||
-    pathname === '/api/customer-invitations/accept'
+    pathname === '/api/customer-invitations/accept' ||
+    pathname === '/api/auth/signup'
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
