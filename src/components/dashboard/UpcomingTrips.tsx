@@ -5,6 +5,7 @@ import EmptyState from './EmptyState'
 type Props = {
   trips: TripWithUsers[]
   canDelete: boolean
+  atTripLimit?: boolean
 }
 
 export default function UpcomingTrips({ trips, canDelete }: Props) {

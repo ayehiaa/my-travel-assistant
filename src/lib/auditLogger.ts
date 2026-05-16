@@ -5,7 +5,7 @@ export async function logAudit(params: {
   performedBy: string
   action: AuditAction
   tripId: string | null
-  tripSnapshot: Trip & { legs: TripLeg[] }
+  tripSnapshot?: (Trip & { legs: TripLeg[] }) | null
   changedFields?: Record<string, { before: unknown; after: unknown }>
   onBehalfOf?: string
 }) {

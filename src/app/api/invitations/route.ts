@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendInvitationEmail, sendAssistantAddedEmail } from '@/lib/email'
+import { logAudit } from '@/lib/auditLogger'
 
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -26,10 +27,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Only main accounts can invite assistants' }, { status: 403 })
   }
 
-  const body = await request.json()
-  const parsed = schema.safeParse(body)
+  // ── Beta assistant limit ──────────────────────────────────────────────────
+  const { count: linkCount, error: linkCountError } = await supabase
+    .from('account_links')
+    .select('id', { count: 'exact', head: true })
+    .eq('main_user_id', user.id)
+    .in('status', ['pending', 'active'])
+
+  if (linkCountError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if ((linkCount ?? 0) >= 1) {
+    return NextResponse.json(
+      {
+        error: 'BETA_ASSISTANT_LIMIT_REACHED',
+        message: 'Your beta plan includes 1 assistant. More seats are coming with our commercial launch!',
+      },
+      { status: 403 },
+    )
+  }
+
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const parsed = schema.safeParse(raw)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
   const { email, assistantName } = parsed.data
@@ -94,6 +118,8 @@ export async function POST(request: NextRequest) {
       assistantName: existingRole?.display_name ?? assistantName,
       mainName,
     })
+
+    await logAudit({ performedBy: user.id, action: 'assistant_invited', tripId: null })
 
     return NextResponse.json({
       id: link.id,
@@ -168,6 +194,8 @@ export async function POST(request: NextRequest) {
     resetLink: inviteUrl,
     expiresAt,
   })
+
+  await logAudit({ performedBy: user.id, action: 'assistant_invited', tripId: null })
 
   return NextResponse.json({
     id: link.id,

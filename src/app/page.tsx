@@ -98,6 +98,8 @@ export default async function DashboardPage() {
         refEnd,
       ), 0)
   }
+  const atTripLimit = enriched.length >= 10
+
   const firstName = user.displayName.split(' ')[0]
   const canDelete = true
 
@@ -118,6 +120,7 @@ export default async function DashboardPage() {
       upcoming={upcoming}
       past={past}
       canDelete={canDelete}
+      atTripLimit={atTripLimit}
     />
   )
 }

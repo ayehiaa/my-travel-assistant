@@ -2,9 +2,10 @@ import { AuditLogEntryWithUser } from '@/types/database'
 import ChangesDetail from './ChangesDetail'
 
 const ACTION_PILLS = {
-  created: { bg: 'var(--mint-soft)',    color: '#1a6b4a' },
-  updated: { bg: 'var(--sky-soft)',     color: '#1a8fc2' },
-  deleted: { bg: 'var(--coral-soft)',   color: '#b8493d' },
+  created:           { bg: 'var(--mint-soft)',     color: '#1a6b4a' },
+  updated:           { bg: 'var(--sky-soft)',      color: '#1a8fc2' },
+  deleted:           { bg: 'var(--coral-soft)',    color: '#b8493d' },
+  assistant_invited: { bg: 'var(--lavender-soft)', color: 'var(--lavender)' },
 } as const
 
 function initials(name: string) {
