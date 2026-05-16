@@ -5,13 +5,6 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const STAMPS = [
-  { label: 'LHR → CDG', sub: '4 days abroad', rotate: '-3deg' },
-  { label: 'LHR → DXB', sub: '13 days abroad', rotate: '2deg' },
-  { label: 'LHR → DUS', sub: '7 days abroad', rotate: '-1deg' },
-  { label: '73 / 90 days', sub: 'annual limit', rotate: '4deg' },
-]
-
 export default function LoginPage() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -30,7 +23,7 @@ export default function LoginPage() {
       ? 'Password updated successfully. Sign in with your new password.'
       : ''
 
-  async function handleEmailLogin(e: React.FormEvent) {
+  async function handleEmailLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -51,124 +44,78 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1.05fr 1fr' }}>
+    <div className="min-h-screen bg-paper-2 flex flex-col items-center justify-center px-4 py-12">
 
-      {/* ── Left panel ── */}
-      <div style={{
-        background: 'linear-gradient(160deg, var(--blue-700) 0%, var(--blue-900) 60%, #050d24 100%)',
-        color: 'white',
-        padding: 56,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        {/* Radial blobs */}
-        <div style={{ position: 'absolute', width: 380, height: 380, right: -100, top: -120, background: 'radial-gradient(circle,var(--yellow),transparent 65%)', opacity: 0.3, borderRadius: '50%', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', width: 320, height: 320, left: -80, bottom: -100, background: 'radial-gradient(circle,var(--coral),transparent 65%)', opacity: 0.25, borderRadius: '50%', pointerEvents: 'none' }} />
-
-        {/* Brand mark */}
-        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 12, fontFamily: 'var(--display)', fontWeight: 700, fontSize: 24, color: 'white', textDecoration: 'none', position: 'relative', zIndex: 2 }}>
-          <div style={{ width: 38, height: 38, background: 'var(--yellow)', color: 'var(--blue-900)', borderRadius: 12, display: 'grid', placeItems: 'center', fontWeight: 800, transform: 'rotate(-6deg)', fontSize: 22 }}>S</div>
-          Sojourn
-        </Link>
-
-        {/* Headline */}
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(42px,5vw,64px)', lineHeight: 1.02, letterSpacing: '-0.02em', maxWidth: '13ch', margin: '0 0 40px' }}>
-            Track every{' '}
-            <span style={{ color: 'var(--yellow)' }}>day</span>{' '}
-            you spent{' '}
-            <span style={{ color: 'var(--yellow)' }}>abroad.</span>
-          </h1>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            {STAMPS.map(s => (
-              <div key={s.label} style={{
-                border: '2px dashed rgba(255,255,255,.35)',
-                borderRadius: 14,
-                padding: '10px 14px',
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-                color: 'rgba(255,255,255,.85)',
-                transform: `rotate(${s.rotate})`,
-              }}>
-                <div>{s.label}</div>
-                <div style={{ opacity: 0.6, fontSize: 10, marginTop: 2 }}>{s.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Logo lockup */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 bg-yellow rounded-[12px] grid place-items-center font-extrabold text-[22px] text-[var(--blue-900)] -rotate-6 select-none">S</div>
+        <span className="font-display font-bold text-2xl tracking-tight text-ink">Sojourn</span>
       </div>
 
-      {/* ── Right panel ── */}
-      <div style={{ background: 'var(--paper)', padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 38, letterSpacing: '-0.02em', margin: '0 0 6px' }}>Welcome back</h2>
-        <p style={{ color: 'var(--ink-3)', margin: '0 0 28px', fontSize: 15 }}>Sign in to your Sojourn account</p>
+      {/* Card */}
+      <div className="w-full max-w-md bg-paper rounded-2xl shadow-[var(--shadow-lg)] p-8 sm:p-10">
+
+        <h2 className="font-display font-bold text-[2rem] leading-tight tracking-tight text-ink mb-1.5">Welcome back</h2>
+        <p className="text-sm text-ink-3 mb-7">Sign in to your Sojourn account</p>
 
         {successMessage && (
-          <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--mint)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#1a6b4a' }}>
+          <div className="bg-mint-soft border border-mint rounded-[10px] px-3.5 py-3 mb-4 text-[14px] text-[#1a6b4a]">
             {successMessage}
           </div>
         )}
 
-        <form onSubmit={handleEmailLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="email" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>Email</label>
+        <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
+
+          {/* Email */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="email" className="text-[12px] font-bold text-ink-2 tracking-wide">Email</label>
             <input
               id="email" type="email" required autoComplete="email"
               value={email} onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              style={{ border: '1.5px solid var(--rule)', borderRadius: 10, padding: '12px 14px', fontSize: 15, background: 'white', outline: 'none', fontFamily: 'var(--sans)', transition: 'border-color .15s, box-shadow .15s' }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue-700)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--blue-100)' }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
+              className="w-full border-[1.5px] border-rule rounded-[10px] px-3.5 py-3 text-[15px] bg-paper font-sans outline-none transition-colors focus:border-brand focus:ring-3 focus:ring-brand-light"
             />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="password" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>Password</label>
-              <Link href="/forgot-password" style={{ fontSize: 12, color: 'var(--blue-700)', fontWeight: 600 }}>Forgot password?</Link>
+          {/* Password */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center">
+              <label htmlFor="password" className="text-[12px] font-bold text-ink-2 tracking-wide">Password</label>
+              <Link href="/forgot-password" className="text-[12px] font-semibold text-brand hover:text-brand-dark transition-colors">Forgot password?</Link>
             </div>
             <input
               id="password" type="password" required autoComplete="current-password"
               value={password} onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
-              style={{ border: '1.5px solid var(--rule)', borderRadius: 10, padding: '12px 14px', fontSize: 15, background: 'white', outline: 'none', fontFamily: 'var(--sans)', transition: 'border-color .15s, box-shadow .15s' }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue-700)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--blue-100)' }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'var(--rule)'; e.currentTarget.style.boxShadow = 'none' }}
+              className="w-full border-[1.5px] border-rule rounded-[10px] px-3.5 py-3 text-[15px] bg-paper font-sans outline-none transition-colors focus:border-brand focus:ring-3 focus:ring-brand-light"
             />
           </div>
 
           {error && (
-            <div style={{ background: 'var(--coral-soft)', border: '1px solid var(--coral)', borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#b8493d' }}>{error}</div>
+            <div className="bg-coral-soft border border-coral rounded-[10px] px-3.5 py-3 text-[14px] text-[#b8493d]">{error}</div>
           )}
 
           <button
             type="submit" disabled={loading}
-            style={{ background: 'var(--blue-700)', color: 'white', border: 'none', borderRadius: 10, padding: '13px 18px', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, transition: 'background .15s, transform .12s', fontFamily: 'var(--sans)' }}
-            onMouseOver={e => { if (!loading) e.currentTarget.style.background = 'var(--blue-900)' }}
-            onMouseOut={e => { e.currentTarget.style.background = 'var(--blue-700)' }}
+            className="w-full bg-brand text-white rounded-[10px] px-4 py-3.5 text-[15px] font-bold font-sans transition-colors hover:bg-brand-dark disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+
         </form>
 
         {/* Divider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-4)' }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+        <div className="flex items-center gap-3 my-5 text-[11px] font-bold tracking-[0.12em] uppercase text-ink-4">
+          <div className="flex-1 h-px bg-rule" />
           or
-          <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+          <div className="flex-1 h-px bg-rule" />
         </div>
 
         {/* Google */}
         <button
+          type="button"
           onClick={handleGoogleLogin}
-          style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 18px', borderRadius: 10, border: '1.5px solid var(--rule)', background: 'white', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'var(--sans)', transition: 'background .15s' }}
-          onMouseOver={e => { e.currentTarget.style.background = 'var(--paper-2)' }}
-          onMouseOut={e => { e.currentTarget.style.background = 'white' }}
+          className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-3 rounded-[10px] border-[1.5px] border-rule bg-paper font-semibold text-[14px] font-sans transition-colors hover:bg-paper-2"
         >
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -178,6 +125,7 @@ export default function LoginPage() {
           </svg>
           Sign in with Google
         </button>
+
       </div>
     </div>
   )
