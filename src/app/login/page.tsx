@@ -16,6 +16,8 @@ export default function LoginPage() {
       ? 'This invitation link has expired or already been used. Ask your account owner to resend the invite.'
       : ''
   )
+
+  const isInviteOnly = searchParams.get('error') === 'invite_only'
   const [loading, setLoading] = useState(false)
 
   const successMessage =
@@ -57,6 +59,12 @@ export default function LoginPage() {
 
         <h2 className="font-display font-bold text-[2rem] leading-tight tracking-tight text-ink mb-1.5">Welcome back</h2>
         <p className="text-sm text-ink-3 mb-7">Sign in to your Sojourn account</p>
+
+        {isInviteOnly && (
+          <div className="bg-[#fef9c3] border border-[#fde047] rounded-[10px] px-3.5 py-3 mb-4 text-[14px] text-[#713f12]">
+            Sign up is by invitation only. If you&apos;d like access, ask your account manager for an invitation.
+          </div>
+        )}
 
         {successMessage && (
           <div className="bg-mint-soft border border-mint rounded-[10px] px-3.5 py-3 mb-4 text-[14px] text-[#1a6b4a]">
@@ -126,12 +134,6 @@ export default function LoginPage() {
           Sign in with Google
         </button>
 
-        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20, marginBottom: 0 }}>
-          New to Sojourn?{' '}
-          <Link href="/signup" style={{ fontWeight: 600, color: 'var(--blue-700)' }}>
-            Create account →
-          </Link>
-        </p>
 
       </div>
     </div>

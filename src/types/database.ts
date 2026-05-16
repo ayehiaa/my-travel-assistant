@@ -1,4 +1,4 @@
-export type UserRole = 'main' | 'assistant'
+export type UserRole = 'main' | 'assistant' | 'premium'
 
 export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited'
 
@@ -20,6 +20,19 @@ export interface AccountLink {
   status: InvitationStatus
   invited_at: string | null
   expires_at: string | null
+}
+
+export type CustomerInvitationStatus = 'pending' | 'accepted' | 'expired'
+
+export interface CustomerInvitation {
+  id: string
+  invited_by: string
+  email: string
+  invited_name: string
+  token: string
+  status: CustomerInvitationStatus
+  invited_at: string
+  expires_at: string
 }
 
 export interface Trip {
