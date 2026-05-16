@@ -2,7 +2,10 @@ export type UserRole = 'main' | 'assistant' | 'premium'
 
 export type UserRoleStatus = 'active' | 'deactivated'
 
-export type AuditAction = 'created' | 'updated' | 'deleted' | 'assistant_invited' | 'assistant_deactivated' | 'assistant_unlinked'
+export type AuditAction =
+  | 'created' | 'updated' | 'deleted'
+  | 'assistant_invited' | 'assistant_deactivated' | 'assistant_unlinked'
+  | 'expense_created' | 'expense_updated' | 'expense_deleted' | 'expense_reclaimed'
 
 export interface UserRoleRecord {
   user_id: string
@@ -89,3 +92,32 @@ export interface TripWithUsers extends Trip {
   modifier: Pick<UserRoleRecord, 'display_name'>
   legs: TripLeg[]
 }
+
+export interface ExpenseCategory {
+  id: string
+  name: string
+  display_order: number
+}
+
+export interface Expense {
+  id: string
+  owner_id: string
+  trip_id: string | null
+  category_id: string
+  title: string
+  amount: number
+  currency: string
+  expense_date: string
+  notes: string | null
+  receipt_url: string | null
+  receipt_name: string | null
+  reclaimed: boolean
+  reclaimed_at: string | null
+  reclaimed_by: string | null
+  created_by: string
+  last_modified_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type ExpenseInsert = Omit<Expense, 'id' | 'created_at' | 'updated_at'>

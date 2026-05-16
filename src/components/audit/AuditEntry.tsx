@@ -8,6 +8,10 @@ const ACTION_PILLS = {
   assistant_invited:      { bg: 'var(--lavender-soft)', color: 'var(--lavender)' },
   assistant_deactivated:  { bg: 'var(--coral-soft)',    color: '#b8493d' },
   assistant_unlinked:     { bg: 'var(--coral-soft)',    color: '#b8493d' },
+  expense_created:        { bg: 'var(--mint-soft)',     color: '#1a6b4a' },
+  expense_updated:        { bg: 'var(--sky-soft)',      color: '#1a8fc2' },
+  expense_deleted:        { bg: 'var(--coral-soft)',    color: '#b8493d' },
+  expense_reclaimed:      { bg: 'var(--lavender-soft)', color: 'var(--lavender)' },
 } as const
 
 function initials(name: string) {
