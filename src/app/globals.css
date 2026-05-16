@@ -240,16 +240,15 @@ textarea:focus-visible,
 
 /* ── Mobile-only overrides (max 640px) ────────────────────────── */
 @media (max-width: 640px) {
-  /* Past-trips dense rows → 2-col: route | dates */
+  /* Past-trips dense rows → 3-col: route | dates | action */
   .sj-past-row {
-    grid-template-columns: 1fr auto !important;
+    grid-template-columns: 1fr auto auto !important;
     gap: 8px !important;
     padding: 12px 14px !important;
   }
   .sj-pr-swatch,
   .sj-pr-flights,
-  .sj-pr-days,
-  .sj-pr-action {
+  .sj-pr-days {
     display: none !important;
   }
 
