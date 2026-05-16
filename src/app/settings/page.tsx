@@ -6,6 +6,7 @@ import { UserRoleRecord } from '@/types/database'
 import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 import AssistantsManager from '@/components/settings/AssistantsManager'
 import ReferenceDateSettings from '@/components/settings/ReferenceDateSettings'
+import CustomerInviteManager from '@/components/settings/CustomerInviteManager'
 
 export const metadata = {
   title: 'Settings — Sojourn',
@@ -18,47 +19,54 @@ function initials(name: string) {
 export default async function SettingsPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role !== 'main') redirect('/')
+  if (user.role !== 'main' && user.role !== 'premium') redirect('/')
 
   const supabase = await createClient()
   const admin = createAdminClient()
+  const isPremium = user.role === 'premium'
 
-  // Expire any pending links past their expires_at before rendering
+  // Expire any pending links past their expires_at before rendering (main only)
   const now = new Date().toISOString()
-  await admin
-    .from('account_links')
-    .update({ status: 'expired' })
-    .eq('main_user_id', user.id)
-    .eq('status', 'pending')
-    .lt('expires_at', now)
 
-  const { data: links } = await supabase
-    .from('account_links')
-    .select('id, assistant_user_id, created_at, status, expires_at')
-    .eq('main_user_id', user.id)
-    .order('created_at', { ascending: true })
+  let initial: { id: string; assistantUserId: string; displayName: string; createdAt: string; status: 'pending' | 'active' | 'expired'; expiresAt: string | null }[] = []
+  let atAssistantLimit = false
 
-  const assistantIds = (links ?? []).map(l => l.assistant_user_id)
-  let nameMap = new Map<string, Pick<UserRoleRecord, 'display_name'>>()
-  if (assistantIds.length > 0) {
-    const { data: roles } = await supabase
-      .from('user_roles')
-      .select('user_id, display_name')
-      .in('user_id', assistantIds)
-    nameMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name }]))
+  if (!isPremium) {
+    await admin
+      .from('account_links')
+      .update({ status: 'expired' })
+      .eq('main_user_id', user.id)
+      .eq('status', 'pending')
+      .lt('expires_at', now)
+
+    const { data: links } = await supabase
+      .from('account_links')
+      .select('id, assistant_user_id, created_at, status, expires_at')
+      .eq('main_user_id', user.id)
+      .order('created_at', { ascending: true })
+
+    const assistantIds = (links ?? []).map(l => l.assistant_user_id)
+    let nameMap = new Map<string, Pick<UserRoleRecord, 'display_name'>>()
+    if (assistantIds.length > 0) {
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('user_id, display_name')
+        .in('user_id', assistantIds)
+      nameMap = new Map((roles ?? []).map(r => [r.user_id, { display_name: r.display_name }]))
+    }
+
+    initial = (links ?? []).map(l => ({
+      id: l.id,
+      assistantUserId: l.assistant_user_id,
+      displayName: nameMap.get(l.assistant_user_id)?.display_name ?? 'Unknown',
+      createdAt: l.created_at,
+      status: l.status as 'pending' | 'active' | 'expired',
+      expiresAt: l.expires_at,
+    }))
+
+    atAssistantLimit =
+      (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
   }
-
-  const initial = (links ?? []).map(l => ({
-    id: l.id,
-    assistantUserId: l.assistant_user_id,
-    displayName: nameMap.get(l.assistant_user_id)?.display_name ?? 'Unknown',
-    createdAt: l.created_at,
-    status: l.status as 'pending' | 'active' | 'expired',
-    expiresAt: l.expires_at,
-  }))
-
-  const atAssistantLimit =
-    (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
 
   const { data: roleRow } = await supabase
     .from('user_roles')
@@ -123,11 +131,12 @@ export default async function SettingsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Your account</h3>
             <span style={{
-              background: 'var(--blue-100)', color: 'var(--blue-700)',
+              background: isPremium ? '#fef9c3' : 'var(--blue-100)',
+              color: isPremium ? '#713f12' : 'var(--blue-700)',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '4px 10px', borderRadius: 999,
             }}>
-              Main account
+              {isPremium ? 'Premium account' : 'Main account'}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -167,16 +176,31 @@ export default async function SettingsPage() {
           />
         </section>
 
-        {/* Linked assistants — full width */}
-        <section style={{ gridColumn: 'span 2', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Linked assistants</h3>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 18px' }}>
-            Assistants can plan, edit, and view all your trips on your behalf. Every change they make is logged in the audit trail.
-          </p>
-          <AssistantsManager initial={initial} atAssistantLimit={atAssistantLimit} />
-        </section>
+        {/* Linked assistants — main accounts only */}
+        {!isPremium && (
+          <section style={{ gridColumn: 'span 2', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Linked assistants</h3>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 18px' }}>
+              Assistants can plan, edit, and view all your trips on your behalf. Every change they make is logged in the audit trail.
+            </p>
+            <AssistantsManager initial={initial} atAssistantLimit={atAssistantLimit} />
+          </section>
+        )}
+
+        {/* Customer invitations — premium accounts only */}
+        {isPremium && (
+          <section style={{ gridColumn: 'span 2', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Customer invitations</h3>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 18px' }}>
+              Invite customers to create their Sojourn account. Each invitation link is valid for 3 days.
+            </p>
+            <CustomerInviteManager />
+          </section>
+        )}
 
         {/* Danger zone — full width */}
         <section style={{

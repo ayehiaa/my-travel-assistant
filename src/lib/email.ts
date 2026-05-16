@@ -5,6 +5,10 @@ import { Resend } from 'resend'
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'Sojourn <noreply@sojourn.app>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function getResend() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not set')
   return new Resend(process.env.RESEND_API_KEY)
@@ -72,6 +76,56 @@ export async function sendInvitationEmail({
     from: FROM,
     to: assistantEmail,
     subject: `${mainName} has invited you to Sojourn`,
+    html: baseTemplate(body),
+  })
+}
+
+export async function sendCustomerInvitationEmail({
+  toEmail,
+  toName,
+  invitedBy,
+  signupLink,
+  expiresAt,
+}: {
+  toEmail: string
+  toName: string
+  invitedBy: string
+  signupLink: string
+  expiresAt: Date
+}) {
+  const expiryStr = expiresAt.toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+
+  const safeName = escapeHtml(toName)
+  const safeInvitedBy = escapeHtml(invitedBy)
+
+  const body = `
+    <h1 style="font-size:22px;font-weight:700;color:#111827;margin:0 0 8px;">Hi ${safeName},</h1>
+    <p style="font-size:15px;color:#374151;margin:0 0 20px;line-height:1.6;">
+      <strong>${safeInvitedBy}</strong> has invited you to join Sojourn — the travel planning app
+      for tracking days abroad.
+    </p>
+    <p style="font-size:15px;color:#374151;margin:0 0 28px;line-height:1.6;">
+      Click the button below to create your account. Your email address has already been
+      verified — just choose a password and you're in.
+    </p>
+    <a href="${signupLink}"
+       style="display:inline-block;background:#1d4ed8;color:white;font-size:15px;font-weight:600;padding:14px 28px;border-radius:999px;text-decoration:none;margin-bottom:28px;">
+      Create my account
+    </a>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:14px 16px;margin-bottom:8px;">
+      <p style="font-size:13px;color:#713f12;margin:0;">
+        <strong>This invitation expires on ${expiryStr}.</strong><br>
+        If the link above has expired, ask ${safeInvitedBy} to resend it.
+      </p>
+    </div>
+  `
+
+  await getResend().emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `${invitedBy} has invited you to Sojourn`,
     html: baseTemplate(body),
   })
 }

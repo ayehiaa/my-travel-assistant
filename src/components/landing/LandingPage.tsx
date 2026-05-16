@@ -28,9 +28,6 @@ export default function LandingPage() {
           <Link href="/login" style={{ background: 'rgba(255,255,255,.1)', color: 'white', border: '1px solid rgba(255,255,255,.25)', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }} className="hover:bg-white/20 transition-colors">
             Sign in
           </Link>
-          <Link href="/signup" style={{ background: 'var(--yellow)', color: 'var(--blue-900)', boxShadow: '0 2px 0 #d99500', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }} className="hover:brightness-110 transition-all">
-            Start free
-          </Link>
         </div>
       </header>
 
@@ -51,9 +48,6 @@ export default function LandingPage() {
             you&apos;ve spent outside the UK — built for people whose calendar matters legally.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            <Link href="/signup" style={{ background: 'var(--yellow)', color: 'var(--blue-900)', boxShadow: '0 2px 0 #d99500', borderRadius: 14, padding: '16px 24px', fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }} className="hover:brightness-110 transition-all">
-              Get started free →
-            </Link>
             <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--yellow)' }} className="hover:text-white transition-colors">
               Sign in to existing account →
             </Link>
@@ -256,9 +250,6 @@ export default function LandingPage() {
             Free to start. Add assistants when you need them.
           </p>
           <div style={{ display: 'inline-flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
-            <Link href="/signup" style={{ background: 'var(--blue-900)', color: 'var(--yellow)', boxShadow: '0 2px 0 #050d24', borderRadius: 14, padding: '16px 24px', fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }} className="hover:bg-[--ink] transition-colors">
-              Get started free →
-            </Link>
             <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue-900)' }} className="hover:opacity-70 transition-opacity">
               I already have an account
             </Link>
