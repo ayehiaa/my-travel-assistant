@@ -42,6 +42,17 @@ export default function TripCard(props: Props) {
   const router = useRouter()
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
+
+  const sortedExpenses = [...expenses].sort((a, b) => Number(a.reclaimed) - Number(b.reclaimed))
+  const reclaimedCount = expenses.filter(e => e.reclaimed).length
+  const allReclaimed = expenses.length > 0 && reclaimedCount === expenses.length
+  const chipVisible = expenses.length > 0
+  const chipBg = allReclaimed ? '#d1fae5' : 'var(--yellow)'
+  const chipColor = allReclaimed ? '#065f46' : 'var(--blue-900)'
+  const chipLabel = `${expenses.length} expense${expenses.length !== 1 ? 's' : ''} · ${reclaimedCount} reclaimed`
+  const visibleExpenses = sortedExpenses.slice(0, 3)
+  const overflowCount = Math.max(0, sortedExpenses.length - 3)
 
   const legs = trip.legs ?? []
   const firstLeg = legs[0]
@@ -172,6 +183,27 @@ export default function TripCard(props: Props) {
             {wasEdited && <> · Edited by {modifierName}</>}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {chipVisible ? (
+              <button
+                onClick={e => { e.stopPropagation(); setPanelOpen(v => !v) }}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                  background: chipBg, color: chipColor,
+                  border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)',
+                  letterSpacing: '0.02em', whiteSpace: 'nowrap',
+                }}
+              >
+                {chipLabel}
+              </button>
+            ) : (
+              <a
+                href={`/expenses?trip_id=${trip.id}`}
+                onClick={e => e.stopPropagation()}
+                style={{ fontSize: 11, color: 'var(--blue-700)', fontWeight: 700, textDecoration: 'none', fontFamily: 'var(--sans)' }}
+              >
+                Add expense →
+              </a>
+            )}
             <span style={{ color: 'var(--blue-700)', fontWeight: 700, cursor: 'pointer' }}>Manage →</span>
             {canDelete && (
               <button
@@ -186,59 +218,44 @@ export default function TripCard(props: Props) {
         </div>
       </div>
 
-      {/* Expense panel */}
-      <div style={{ borderTop: '1px solid var(--rule-soft)', padding: '14px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
-            Expenses
-          </span>
+      {panelOpen && expenses.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--rule-soft)', padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {visibleExpenses.map(exp => (
+            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>
+                {exp.title}
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-2)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {exp.amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {exp.currency}
+              </span>
+              <span style={{
+                display: 'inline-block', padding: '2px 7px', borderRadius: 999,
+                background: exp.reclaimed ? '#d1fae5' : 'var(--paper-2)',
+                color: exp.reclaimed ? '#065f46' : 'var(--ink-4)',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', flexShrink: 0,
+              }}>
+                {exp.reclaimed ? 'Reclaimed' : 'Pending'}
+              </span>
+            </div>
+          ))}
+          {overflowCount > 0 && (
+            <a
+              href={`/expenses?trip_id=${trip.id}`}
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 12, color: 'var(--ink-3)', textDecoration: 'none' }}
+            >
+              + {overflowCount} more
+            </a>
+          )}
           <a
             href={`/expenses?trip_id=${trip.id}`}
-            style={{ fontSize: 12, color: 'var(--blue-700)', fontWeight: 600, textDecoration: 'none', fontFamily: 'var(--sans)' }}
             onClick={e => e.stopPropagation()}
+            style={{ fontSize: 12, color: 'var(--blue-700)', fontWeight: 600, textDecoration: 'none', marginTop: 4 }}
           >
             Add expense →
           </a>
         </div>
-        {expenses.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-4)', fontStyle: 'italic' }}>No expenses for this trip</p>
-        ) : (
-          <>
-            {expenses.slice(0, 3).map(exp => (
-              <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6, fontSize: 12 }}>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>
-                  {exp.title}
-                </span>
-                <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-2)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {exp.amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {exp.currency}
-                </span>
-                <span style={{
-                  display: 'inline-block',
-                  padding: '2px 7px',
-                  borderRadius: 999,
-                  background: exp.reclaimed ? '#d1fae5' : 'var(--paper-2)',
-                  color: exp.reclaimed ? '#065f46' : 'var(--ink-4)',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  flexShrink: 0,
-                }}>
-                  {exp.reclaimed ? 'Reclaimed' : 'Pending'}
-                </span>
-              </div>
-            ))}
-            {expenses.length > 3 && (
-              <a
-                href={`/expenses?trip_id=${trip.id}`}
-                style={{ fontSize: 12, color: 'var(--ink-3)', textDecoration: 'none' }}
-                onClick={e => e.stopPropagation()}
-              >
-                + {expenses.length - 3} more
-              </a>
-            )}
-          </>
-        )}
-      </div>
+      )}
     </article>
   )
 }
