@@ -22,6 +22,7 @@ export default function LandingPage() {
         <nav className="sj-landing-nav" style={{ display: 'inline-flex', gap: 28, fontSize: 14, opacity: 0.85 }}>
           <a href="#how" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">How it works</a>
           <a href="#assist" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">Assistants</a>
+          <a href="#expenses" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">Expenses</a>
           <a href="#srt" style={{ cursor: 'pointer' }} className="hover:text-[--yellow] transition-colors">90-day rule</a>
         </nav>
         <div style={{ display: 'inline-flex', gap: 8 }}>
@@ -40,12 +41,12 @@ export default function LandingPage() {
           </span>
           <h1 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(48px,6vw,84px)', lineHeight: 1.0, letterSpacing: '-0.03em', margin: '0 0 22px' }}>
             Every trip.<br />
-            Every day abroad.<br />
+            Every penny spent.<br />
             <span style={{ color: 'var(--yellow)' }}>One quiet planner.</span>
           </h1>
           <p style={{ fontSize: 18, lineHeight: 1.55, opacity: 0.85, maxWidth: '50ch', margin: '0 0 28px' }}>
-            Sojourn is the calmer way to plan flights, log past trips, and track how many days
-            you&apos;ve spent outside the UK — built for people whose calendar matters legally.
+            Sojourn is the calmer way to plan flights, log past trips, track travel expenses,
+            and monitor how many days you&apos;ve spent outside the UK — built for people whose calendar matters legally.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
             <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--yellow)' }} className="hover:text-white transition-colors">
@@ -55,6 +56,7 @@ export default function LandingPage() {
           <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 36, fontSize: 12, opacity: 0.65 }}>
             <span>· Built around the Statutory Residence Test</span>
             <span>· British Airways flights surfaced first</span>
+            <span>· Expense tracking across all trips</span>
             <span>· Read-only audit trail for every change</span>
           </div>
         </div>
@@ -124,7 +126,7 @@ export default function LandingPage() {
             { value: '2,400+', label: 'days logged abroad' },
             { value: '47',     label: 'countries on the platform' },
             { value: '90',     label: 'day SRT cap, baked in' },
-            { value: '0',      label: 'spreadsheets required' },
+            { value: '£0',     label: 'extra cost to track expenses' },
           ].map(s => (
             <div key={s.label}>
               <strong style={{ display: 'block', fontFamily: 'var(--display)', fontWeight: 700, fontSize: 36, letterSpacing: '-0.02em', color: 'var(--yellow)' }}>{s.value}</strong>
@@ -138,9 +140,9 @@ export default function LandingPage() {
       <section id="how" style={{ maxWidth: 1280, margin: '0 auto', padding: '90px clamp(16px, 4vw, 48px)' }}>
         <div style={{ textAlign: 'center', marginBottom: 50 }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ How Sojourn works</span>
-          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 0' }}>Three things, done properly.</h2>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 0' }}>Four things, done properly.</h2>
         </div>
-        <div className="sj-landing-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
+        <div className="sj-landing-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }}>
           {[
             {
               num: '01', title: 'Plan a trip',
@@ -153,7 +155,12 @@ export default function LandingPage() {
               pills: [{ label: 'Manual entry', on: false, manual: true }, { label: 'Auto day-count', on: false }],
             },
             {
-              num: '03', title: 'Stay under 90',
+              num: '03', title: 'Track expenses',
+              body: 'Log costs per trip in any currency — flights, hotels, transfers, meals. Totals roll up per trip and across the year, with one-click export whenever you need them.',
+              pills: [{ label: 'Multi-currency', on: false }, { label: 'Per-trip totals', on: true }],
+            },
+            {
+              num: '04', title: 'Stay under 90',
               body: 'Set your reference date once. We compute the rolling 12-month total and warn before you cross it — green, amber, or stop.',
               pills: [{ label: '73 / 90 days', on: true }],
             },
@@ -197,7 +204,7 @@ export default function LandingPage() {
         </div>
         <div className="sj-landing-assist-card" style={{ background: 'rgba(255,255,255,.96)', color: 'var(--ink)', borderRadius: 28, padding: 24, boxShadow: '0 30px 80px -10px rgba(0,0,0,.5)' }}>
           {[
-            { initial: 'Z', bg: '#1a73d6', name: 'Ziad Elsayed', email: 'ziad@example.com', role: 'Main', isMain: true },
+            { initial: 'O', bg: '#1a73d6', name: 'Oliver Bennett', email: 'oliver@example.com', role: 'Main', isMain: true },
             { initial: 'S', bg: '#ec4ea0', name: 'Sara Hassan',  email: 'sara@example.com',  role: 'Assistant', isMain: false },
             { initial: 'M', bg: '#2bc28a', name: 'Maya Chen',   email: 'maya@example.com',  role: 'Assistant', isMain: false },
           ].map((row, i) => (
@@ -216,6 +223,29 @@ export default function LandingPage() {
                 </div>
                 <span style={{ background: row.isMain ? 'var(--blue-100)' : 'var(--paper-3)', color: row.isMain ? 'var(--blue-700)' : 'var(--ink-2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 10px', borderRadius: 999, textTransform: 'uppercase' }}>{row.role}</span>
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Expenses ── */}
+      <section id="expenses" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 clamp(16px, 4vw, 48px) 90px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 50 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>⬢ Expense management</span>
+          <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4vw,56px)', letterSpacing: '-0.025em', margin: '16px 0 16px' }}>Know what every trip really costs.</h2>
+          <p style={{ color: 'rgba(255,255,255,.72)', fontSize: 16, lineHeight: 1.55, maxWidth: '60ch', margin: '0 auto' }}>
+            Log flight costs, hotels, transfers, and meals against each trip. See totals in your home currency and export everything at tax time — no spreadsheet required.
+          </p>
+        </div>
+        <div className="sj-landing-srt-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
+          {[
+            { title: 'Any currency', body: 'Log expenses in the local currency. Sojourn stores the original amount and conversion so your records stay accurate even when rates change.' },
+            { title: 'Attached to trips', body: 'Every expense sits inside its trip. Filter by destination, date range, or category to see exactly where your budget went.' },
+            { title: 'Export-ready', body: 'Download a clean CSV of all expenses per trip or across the year. Hand it straight to your accountant or paste into your own tools.' },
+          ].map(card => (
+            <div key={card.title} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 20, padding: 24 }}>
+              <div style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', marginBottom: 10, color: 'var(--yellow)' }}>{card.title}</div>
+              <p style={{ color: 'rgba(255,255,255,.75)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>{card.body}</p>
             </div>
           ))}
         </div>
@@ -244,10 +274,10 @@ export default function LandingPage() {
         <div style={{ background: 'linear-gradient(135deg,var(--yellow),var(--coral))', color: 'var(--blue-900)', borderRadius: 28, padding: '60px clamp(16px, 4vw, 48px)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', width: 400, height: 400, right: -100, bottom: -200, background: 'radial-gradient(circle,rgba(10,31,77,.15),transparent 60%)', borderRadius: '50%' }} />
           <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(36px,4.5vw,60px)', letterSpacing: '-0.025em', margin: '0 0 12px', position: 'relative', zIndex: 2 }}>
-            Plan your next trip without the maths.
+            Plan trips, track expenses, stay compliant.
           </h2>
           <p style={{ fontSize: 16, opacity: 0.8, margin: '0 0 28px', position: 'relative', zIndex: 2 }}>
-            Free to start. Add assistants when you need them.
+            Free to start. Add assistants and expense tracking when you need them.
           </p>
           <div style={{ display: 'inline-flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
             <Link href="/login" style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue-900)' }} className="hover:opacity-70 transition-opacity">
