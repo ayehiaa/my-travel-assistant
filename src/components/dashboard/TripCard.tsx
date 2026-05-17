@@ -204,7 +204,6 @@ export default function TripCard(props: Props) {
                 Add expense →
               </a>
             )}
-            <span style={{ color: 'var(--blue-700)', fontWeight: 700, cursor: 'pointer' }}>Manage →</span>
             {canDelete && (
               <button
                 onClick={e => { e.stopPropagation(); handleDelete() }}
