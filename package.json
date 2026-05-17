@@ -12,6 +12,7 @@
     "feature": "node scripts/feature-agent.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "amadeus": "^11.0.0",
@@ -25,7 +26,6 @@
     "postcss": "^8.4.49"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.92.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

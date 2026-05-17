@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { TripWithUsers, UserRole, ExpenseWithCategory } from '@/types/database'
+import { useToast } from '@/context/ToastContext'
 import DashboardHero from './DashboardHero'
 import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
@@ -25,6 +26,17 @@ export default function DashboardClient({
   upcoming, past, canDelete, atTripLimit, expensesByTripId,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const toast = useToast()
+
+  async function handleImportFromGmail() {
+    const res = await fetch('/api/gmail/auth-url')
+    if (!res.ok) {
+      toast('Failed to connect to Gmail', 'error')
+      return
+    }
+    const { url } = await res.json()
+    window.location.href = url
+  }
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px clamp(16px, 4vw, 28px) 80px' }}>
@@ -37,6 +49,7 @@ export default function DashboardClient({
         daysMax={annualMax}
         referenceDate={referenceDate}
         onLogPastTrip={() => setShowModal(true)}
+        onImportFromGmail={role !== 'assistant' ? handleImportFromGmail : undefined}
       />
 
       {atTripLimit && (
