@@ -5,19 +5,21 @@ export interface GmailMessage {
   bodyText: string
 }
 
-const KNOWN_SENDER_DOMAINS = [
-  '@britishairways.com', '@ryanair.com', '@easyjet.com', '@lufthansa.com',
-  '@emirates.com', '@singaporeair.com', '@qatarairways.com', '@united.com',
-  '@delta.com', '@aa.com', '@klm.com', '@airfrance.fr',
-  '@flightconfirmations.com', '@etihad.com', '@virginatlantic.com',
-  '@expedia.com', '@booking.com', '@kayak.com', '@skyscanner.com', '@opodo.com',
+const TRUSTED_DOMAINS = [
+  'britishairways.com', 'ba.com', 'ryanair.com', 'easyjet.com', 'lufthansa.com',
+  'emirates.com', 'singaporeair.com', 'qatarairways.com', 'united.com',
+  'delta.com', 'aa.com', 'klm.com', 'airfrance.fr',
+  'flightconfirmations.com', 'etihad.com', 'virginatlantic.com',
+  'expedia.com', 'booking.com', 'kayak.com', 'skyscanner.com', 'opodo.com',
+  'tui.com', 'jet2.com', 'wizz.com', 'wizzair.com', 'norwegian.com',
 ]
 
 export function isTrustedSender(from: string): boolean {
-  // Extract email from "Name <email@domain.com>" or plain "email@domain.com"
   const match = from.match(/<([^>]+)>/)
   const email = match ? match[1].toLowerCase() : from.toLowerCase().trim()
-  return KNOWN_SENDER_DOMAINS.some(domain => email.endsWith(domain))
+  const emailDomain = email.split('@')[1] ?? ''
+  // Allow exact match and subdomains (e.g. email.britishairways.com)
+  return TRUSTED_DOMAINS.some(d => emailDomain === d || emailDomain.endsWith(`.${d}`))
 }
 
 function decodeBase64Url(data: string): string {
@@ -57,7 +59,7 @@ function getHeader(headers: { name: string; value: string }[], name: string): st
 }
 
 export async function fetchFlightEmails(accessToken: string): Promise<GmailMessage[]> {
-  const query = encodeURIComponent('subject:(confirmation OR itinerary OR e-ticket) (flight OR airline)')
+  const query = encodeURIComponent('(confirmation OR itinerary OR "e-ticket" OR "booking confirmed" OR "your booking") (flight OR airline OR airport)')
   const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=50`
 
   const listRes = await fetch(listUrl, {
