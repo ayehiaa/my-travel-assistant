@@ -53,7 +53,7 @@ export interface Trip {
   id: string
   owner_id: string
   source: 'search' | 'manual'
-  trip_type: 'round_trip' | 'multi_city'
+  trip_type: 'round_trip' | 'multi_city' | 'one_way'
   days_outside_uk: number
   created_by: string
   last_modified_by: string
@@ -132,3 +132,22 @@ export interface Expense {
 export type ExpenseInsert = Omit<Expense, 'id' | 'created_at' | 'updated_at'>
 
 export type ExpenseWithCategory = Expense & { category: Pick<ExpenseCategory, 'name'> }
+
+export interface GoogleToken {
+  id: string
+  user_id: string
+  encrypted_access_token: string
+  encrypted_refresh_token: string
+  token_iv: string
+  expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface GmailImportedMessage {
+  id: string
+  user_id: string
+  gmail_message_id: string
+  trip_id: string | null
+  imported_at: string
+}

@@ -1,0 +1,95 @@
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getAuthUser } from '@/lib/auth'
+import { getActiveMainAccountId } from '@/lib/activeAccount'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { decryptToken, encryptToken } from '@/lib/gmailCrypto'
+import { fetchFlightEmails, refreshAccessToken } from '@/lib/gmail'
+import { parseEmailForFlight } from '@/lib/gmailParser'
+
+export const GmailCandidateSchema = z.object({
+  gmail_message_id: z.string(),
+  from: z.string(),
+  subject: z.string(),
+  parsed: z.object({
+    from_airport:  z.string(),
+    to_airport:    z.string(),
+    flight_number: z.string(),
+    airline:       z.string(),
+    departure_at:  z.string(),
+    return_at:     z.string().nullable(),
+  }).nullable(),
+})
+export type GmailCandidate = z.infer<typeof GmailCandidateSchema>
+
+export async function GET() {
+  const user = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role === 'assistant') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const activeMainAccountId = await getActiveMainAccountId(user)
+  const supabase = await createClient()
+
+  // Fetch token row
+  const { data: tokenRow } = await supabase
+    .from('google_tokens')
+    .select('*')
+    .eq('user_id', activeMainAccountId)
+    .single()
+
+  if (!tokenRow) return NextResponse.json({ error: 'NOT_CONNECTED' }, { status: 400 })
+
+  let accessToken: string
+
+  // Refresh if expiring within 5 minutes
+  const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at) : null
+  const needsRefresh = !expiresAt || expiresAt.getTime() - Date.now() < 5 * 60 * 1000
+
+  // token_iv is stored as "accessIv:refreshIv"
+  const [accessIv, refreshIv] = tokenRow.token_iv.split(':')
+
+  if (needsRefresh) {
+    const refreshToken = decryptToken(tokenRow.encrypted_refresh_token, refreshIv)
+    const refreshed = await refreshAccessToken(refreshToken)
+    const { ciphertext: encryptedAccess, iv: newAccessIv } = encryptToken(refreshed.accessToken)
+    const admin = createAdminClient()
+    await admin.from('google_tokens').update({
+      encrypted_access_token: encryptedAccess,
+      token_iv: `${newAccessIv}:${refreshIv}`,
+      expires_at: refreshed.expiresAt.toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', activeMainAccountId)
+    accessToken = refreshed.accessToken
+  } else {
+    accessToken = decryptToken(tokenRow.encrypted_access_token, accessIv)
+  }
+
+  // Fetch already-imported message IDs
+  const { data: imported } = await supabase
+    .from('gmail_imported_messages')
+    .select('gmail_message_id')
+    .eq('user_id', activeMainAccountId)
+  const importedIds = new Set((imported ?? []).map(r => r.gmail_message_id))
+
+  // Fetch and filter emails
+  const messages = await fetchFlightEmails(accessToken)
+  const newMessages = messages.filter(m => !importedIds.has(m.id))
+
+  // Parse in parallel
+  const results = await Promise.allSettled(
+    newMessages.map(async m => ({
+      gmail_message_id: m.id,
+      from: m.from,
+      subject: m.subject,
+      parsed: await parseEmailForFlight(m.id, m.bodyText),
+    }))
+  )
+
+  const candidates: GmailCandidate[] = results
+    .filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
+    .map(r => r.value)
+    .filter(c => c.parsed !== null)
+
+  return NextResponse.json({ candidates })
+}

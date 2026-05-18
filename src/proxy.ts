@@ -33,6 +33,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/signup' ||
     pathname === '/deactivated' ||
     pathname.startsWith('/auth/') ||
+    pathname === '/gmail/callback' ||
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname === '/api/customer-invitations/validate' ||
