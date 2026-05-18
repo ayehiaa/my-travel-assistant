@@ -58,7 +58,13 @@ function getHeader(headers: { name: string; value: string }[], name: string): st
   return headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
 }
 
-export async function fetchFlightEmails(accessToken: string): Promise<GmailMessage[]> {
+export interface FetchFlightEmailsResult {
+  messages: GmailMessage[]
+  rawCount: number
+  filteredSenders: string[]
+}
+
+export async function fetchFlightEmails(accessToken: string): Promise<FetchFlightEmailsResult> {
   const query = encodeURIComponent('(confirmation OR itinerary OR "e-ticket" OR "booking confirmed" OR "your booking") (flight OR airline OR airport)')
   const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=50`
 
@@ -71,7 +77,7 @@ export async function fetchFlightEmails(accessToken: string): Promise<GmailMessa
   const listData = await listRes.json() as { messages?: { id: string }[] }
   const messageIds = listData.messages ?? []
 
-  const messages = await Promise.allSettled(
+  const settled = await Promise.allSettled(
     messageIds.map(async ({ id }) => {
       const msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
@@ -90,10 +96,14 @@ export async function fetchFlightEmails(accessToken: string): Promise<GmailMessa
     })
   )
 
-  return messages
+  const fetched = settled
     .filter((r): r is PromiseFulfilledResult<GmailMessage> => r.status === 'fulfilled')
     .map(r => r.value)
-    .filter(m => isTrustedSender(m.from))
+
+  const trusted = fetched.filter(m => isTrustedSender(m.from))
+  const filteredSenders = fetched.filter(m => !isTrustedSender(m.from)).map(m => m.from)
+
+  return { messages: trusted, rawCount: fetched.length, filteredSenders }
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: Date }> {
