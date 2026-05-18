@@ -34,6 +34,11 @@ describe('isTrustedSender', () => {
     expect(isTrustedSender('confirm@booking.com')).toBe(true)
   })
 
+  it('returns true for transactional subdomains of trusted airlines', () => {
+    expect(isTrustedSender('confirm@email.britishairways.com')).toBe(true)
+    expect(isTrustedSender('no-reply@info.ryanair.com')).toBe(true)
+  })
+
   it('returns false for an empty string', () => {
     expect(isTrustedSender('')).toBe(false)
   })
