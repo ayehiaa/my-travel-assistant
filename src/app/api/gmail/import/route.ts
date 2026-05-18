@@ -73,7 +73,7 @@ export async function GET() {
   const importedIds = new Set((imported ?? []).map(r => r.gmail_message_id))
 
   // Fetch and filter emails
-  const messages = await fetchFlightEmails(accessToken)
+  const { messages, rawCount, filteredSenders } = await fetchFlightEmails(accessToken)
   const newMessages = messages.filter(m => !importedIds.has(m.id))
 
   // Parse in parallel
@@ -86,10 +86,21 @@ export async function GET() {
     }))
   )
 
-  const candidates: GmailCandidate[] = results
-    .filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
-    .map(r => r.value)
-    .filter(c => c.parsed !== null)
+  const fulfilled = results.filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
+  const candidates: GmailCandidate[] = fulfilled.map(r => r.value).filter(c => c.parsed !== null)
 
-  return NextResponse.json({ candidates })
+  const debug = process.env.NODE_ENV !== 'production' ? {
+    raw_from_gmail: rawCount,
+    passed_sender_filter: messages.length,
+    filtered_out_senders: filteredSenders,
+    after_dedup: newMessages.length,
+    already_imported: messages.length - newMessages.length,
+    parse_attempted: newMessages.length,
+    parse_fulfilled: fulfilled.length,
+    parse_failed: results.length - fulfilled.length,
+    parsed_non_null: candidates.length,
+    trusted_senders: messages.map(m => m.from),
+  } : undefined
+
+  return NextResponse.json({ candidates, ...(debug ? { debug } : {}) })
 }
