@@ -7,7 +7,7 @@ export const metadata = { title: 'Sojourn — Gmail Import' }
 export default async function GmailReviewPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role === 'assistant') redirect('/')
+  if (user.role !== 'premium') redirect('/?error=gmail_premium_only')
 
   return (
     <main style={{ maxWidth: 800, margin: '0 auto', padding: '40px 20px' }}>

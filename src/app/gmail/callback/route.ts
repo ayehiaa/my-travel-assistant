@@ -8,7 +8,7 @@ import { encryptToken } from '@/lib/gmailCrypto'
 export async function GET(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role === 'assistant') redirect('/?error=gmail_forbidden')
+  if (user.role !== 'premium') redirect('/?error=gmail_forbidden')
 
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')

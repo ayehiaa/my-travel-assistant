@@ -26,7 +26,7 @@ export type GmailCandidate = z.infer<typeof GmailCandidateSchema>
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'assistant') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (user.role !== 'premium') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()

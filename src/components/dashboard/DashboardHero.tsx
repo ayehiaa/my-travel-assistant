@@ -76,7 +76,7 @@ export default function DashboardHero({ firstName, ownerFirstName, role, daysUse
           >
             + Log a past trip
           </button>
-          {!isAssistant && onImportFromGmail && (
+          {onImportFromGmail && (
             <button
               onClick={onImportFromGmail}
               style={{ background: 'rgba(255,255,255,.10)', color: 'white', border: '1px solid rgba(255,255,255,.25)', borderRadius: 'var(--r)', padding: '12px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)' }}
