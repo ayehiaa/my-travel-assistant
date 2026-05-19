@@ -94,7 +94,7 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
       const from = getHeader(headers, 'From')
       const subject = getHeader(headers, 'Subject')
       const bodyText = extractBody(msg.payload as Record<string, unknown>)
-      console.log(`[Gmail] Fetched message ${id}: from="${from}" subject="${subject}" bodyLen=${bodyText.length}`)
+      console.log(`[Gmail] Fetched message ${id}: bodyLen=${bodyText.length}`)
       return { id, from, subject, bodyText } satisfies GmailMessage
     })
   )
@@ -109,10 +109,6 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
   const filteredSenders = fetched.filter(m => !isTrustedSender(m.from)).map(m => m.from)
 
   console.log(`[Gmail] Sender filter: ${trusted.length} trusted, ${filteredSenders.length} filtered out`)
-  if (filteredSenders.length > 0) {
-    console.log('[Gmail] Filtered-out senders:', filteredSenders)
-  }
-  trusted.forEach(m => console.log(`[Gmail] Trusted: from="${m.from}"`))
 
   return { messages: trusted, rawCount: fetched.length, filteredSenders }
 }

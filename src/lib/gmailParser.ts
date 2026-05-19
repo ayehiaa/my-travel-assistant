@@ -44,8 +44,6 @@ ${truncated}`,
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-  console.log(`[GmailParser] Claude response for ${_gmailMessageId}: "${text.slice(0, 200)}"`)
-
   if (text === 'null') {
     console.log(`[GmailParser] Skipping ${_gmailMessageId}: Claude returned null`)
     return null
@@ -57,13 +55,13 @@ ${truncated}`,
   try {
     const parsed = JSON.parse(cleaned) as ParsedFlight
     if (!parsed.from_airport || !parsed.to_airport || !parsed.departure_at) {
-      console.log(`[GmailParser] Skipping ${_gmailMessageId}: missing required fields`, parsed)
+      console.log(`[GmailParser] Skipping ${_gmailMessageId}: missing required fields`)
       return null
     }
-    console.log(`[GmailParser] Parsed ${_gmailMessageId}:`, parsed)
+    console.log(`[GmailParser] Parsed ${_gmailMessageId}: ok`)
     return parsed
   } catch (err) {
-    console.log(`[GmailParser] JSON parse failed for ${_gmailMessageId}:`, err, 'Cleaned text:', cleaned)
+    console.log(`[GmailParser] JSON parse failed for ${_gmailMessageId}:`, err)
     return null
   }
 }
