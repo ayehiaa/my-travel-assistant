@@ -78,15 +78,14 @@ export async function GET() {
 
   console.log(`[Import] Pipeline: rawCount=${rawCount} trustedSenders=${messages.length} newAfterDedup=${newMessages.length} alreadyImported=${messages.length - newMessages.length}`)
 
-  // Parse in parallel
-  const results = await Promise.allSettled(
-    newMessages.map(async m => ({
-      gmail_message_id: m.id,
-      from: m.from,
-      subject: m.subject,
-      parsed: await parseEmailForFlight(m.id, m.bodyText),
-    }))
-  )
+  // Parse sequentially to avoid Claude concurrent connection rate limit
+  const results: PromiseSettledResult<GmailCandidate>[] = []
+  for (const m of newMessages) {
+    const result = await parseEmailForFlight(m.id, m.bodyText)
+      .then(parsed => ({ status: 'fulfilled' as const, value: { gmail_message_id: m.id, from: m.from, subject: m.subject, parsed } }))
+      .catch(reason => ({ status: 'rejected' as const, reason }))
+    results.push(result)
+  }
 
   const fulfilled = results.filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
   const candidates: GmailCandidate[] = fulfilled.map(r => r.value).filter(c => c.parsed !== null)
