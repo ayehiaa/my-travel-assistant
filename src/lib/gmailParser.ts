@@ -25,7 +25,7 @@ export async function parseEmailForFlight(
     messages: [
       {
         role: 'user',
-        content: `Extract flight booking details from this email. Return ONLY a JSON object with these exact fields:
+        content: `Extract flight booking details from this email. Return ONLY a raw JSON object (no markdown, no code fences) with these exact fields:
 {
   "from_airport": "<IATA code, 3 chars, e.g. LHR>",
   "to_airport": "<IATA code, 3 chars>",
@@ -51,8 +51,11 @@ ${truncated}`,
     return null
   }
 
+  // Strip markdown code fences if Claude wrapped the JSON
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
   try {
-    const parsed = JSON.parse(text) as ParsedFlight
+    const parsed = JSON.parse(cleaned) as ParsedFlight
     if (!parsed.from_airport || !parsed.to_airport || !parsed.departure_at) {
       console.log(`[GmailParser] Skipping ${_gmailMessageId}: missing required fields`, parsed)
       return null
@@ -60,7 +63,7 @@ ${truncated}`,
     console.log(`[GmailParser] Parsed ${_gmailMessageId}:`, parsed)
     return parsed
   } catch (err) {
-    console.log(`[GmailParser] JSON parse failed for ${_gmailMessageId}:`, err, 'Raw text:', text)
+    console.log(`[GmailParser] JSON parse failed for ${_gmailMessageId}:`, err, 'Cleaned text:', cleaned)
     return null
   }
 }
