@@ -17,6 +17,8 @@ export async function parseEmailForFlight(
 ): Promise<ParsedFlight | null> {
   const truncated = emailBody.slice(0, 8000)
 
+  console.log(`[GmailParser] Sending email to Claude (messageId=${_gmailMessageId}, bodyLen=${emailBody.length}, truncatedLen=${truncated.length})`)
+
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
@@ -42,14 +44,23 @@ ${truncated}`,
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-  if (text === 'null') return null
+  console.log(`[GmailParser] Claude response for ${_gmailMessageId}: "${text.slice(0, 200)}"`)
+
+  if (text === 'null') {
+    console.log(`[GmailParser] Skipping ${_gmailMessageId}: Claude returned null`)
+    return null
+  }
 
   try {
     const parsed = JSON.parse(text) as ParsedFlight
-    // Basic validation
-    if (!parsed.from_airport || !parsed.to_airport || !parsed.departure_at) return null
+    if (!parsed.from_airport || !parsed.to_airport || !parsed.departure_at) {
+      console.log(`[GmailParser] Skipping ${_gmailMessageId}: missing required fields`, parsed)
+      return null
+    }
+    console.log(`[GmailParser] Parsed ${_gmailMessageId}:`, parsed)
     return parsed
-  } catch {
+  } catch (err) {
+    console.log(`[GmailParser] JSON parse failed for ${_gmailMessageId}:`, err, 'Raw text:', text)
     return null
   }
 }

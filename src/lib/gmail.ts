@@ -68,6 +68,7 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
   const query = encodeURIComponent('(confirmation OR itinerary OR "e-ticket" OR "booking confirmed" OR "your booking") (flight OR airline OR airport)')
   const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=50`
 
+  console.log('[Gmail] Fetching message list with query:', decodeURIComponent(query))
   const listRes = await fetch(listUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
@@ -76,6 +77,7 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
 
   const listData = await listRes.json() as { messages?: { id: string }[] }
   const messageIds = listData.messages ?? []
+  console.log(`[Gmail] Message list returned ${messageIds.length} IDs`)
 
   const settled = await Promise.allSettled(
     messageIds.map(async ({ id }) => {
@@ -92,6 +94,7 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
       const from = getHeader(headers, 'From')
       const subject = getHeader(headers, 'Subject')
       const bodyText = extractBody(msg.payload as Record<string, unknown>)
+      console.log(`[Gmail] Fetched message ${id}: from="${from}" subject="${subject}" bodyLen=${bodyText.length}`)
       return { id, from, subject, bodyText } satisfies GmailMessage
     })
   )
@@ -100,8 +103,16 @@ export async function fetchFlightEmails(accessToken: string): Promise<FetchFligh
     .filter((r): r is PromiseFulfilledResult<GmailMessage> => r.status === 'fulfilled')
     .map(r => r.value)
 
+  console.log(`[Gmail] Successfully fetched ${fetched.length}/${messageIds.length} messages`)
+
   const trusted = fetched.filter(m => isTrustedSender(m.from))
   const filteredSenders = fetched.filter(m => !isTrustedSender(m.from)).map(m => m.from)
+
+  console.log(`[Gmail] Sender filter: ${trusted.length} trusted, ${filteredSenders.length} filtered out`)
+  if (filteredSenders.length > 0) {
+    console.log('[Gmail] Filtered-out senders:', filteredSenders)
+  }
+  trusted.forEach(m => console.log(`[Gmail] Trusted: from="${m.from}"`))
 
   return { messages: trusted, rawCount: fetched.length, filteredSenders }
 }

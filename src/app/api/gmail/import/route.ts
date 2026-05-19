@@ -76,6 +76,8 @@ export async function GET() {
   const { messages, rawCount, filteredSenders } = await fetchFlightEmails(accessToken)
   const newMessages = messages.filter(m => !importedIds.has(m.id))
 
+  console.log(`[Import] Pipeline: rawCount=${rawCount} trustedSenders=${messages.length} newAfterDedup=${newMessages.length} alreadyImported=${messages.length - newMessages.length}`)
+
   // Parse in parallel
   const results = await Promise.allSettled(
     newMessages.map(async m => ({
@@ -88,6 +90,11 @@ export async function GET() {
 
   const fulfilled = results.filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
   const candidates: GmailCandidate[] = fulfilled.map(r => r.value).filter(c => c.parsed !== null)
+
+  console.log(`[Import] Parse results: attempted=${results.length} fulfilled=${fulfilled.length} failed=${results.length - fulfilled.length} parsedNonNull=${candidates.length}`)
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') console.log(`[Import] Parse rejected [${i}]:`, r.reason)
+  })
 
   const debug = process.env.NODE_ENV !== 'production' ? {
     raw_from_gmail: rawCount,
