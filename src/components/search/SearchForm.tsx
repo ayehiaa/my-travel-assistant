@@ -119,30 +119,34 @@ function RoundTripBar({
           />
         </SearchField>
 
-        <SearchField label="Depart" separator>
-          <input
-            type="date"
-            min={today}
-            value={outbound.date}
-            onChange={e => {
-              const d = e.target.value
-              onUpdateLeg(0, { date: d })
-              if (ret.date && ret.date <= d) onUpdateLeg(1, { date: '' })
-            }}
-            required
-            style={dateInputStyle}
-          />
+        <SearchField label="Departure date" separator>
+          <div style={dateBoxStyle}>
+            <input
+              type="date"
+              min={today}
+              value={outbound.date}
+              onChange={e => {
+                const d = e.target.value
+                onUpdateLeg(0, { date: d })
+                if (ret.date && ret.date <= d) onUpdateLeg(1, { date: '' })
+              }}
+              required
+              style={dateInputStyle}
+            />
+          </div>
         </SearchField>
 
-        <SearchField label={`Return${days ? ` · ${days}d` : ''}`}>
-          <input
-            type="date"
-            min={minReturn}
-            value={ret.date}
-            onChange={e => onUpdateLeg(1, { date: e.target.value })}
-            required
-            style={dateInputStyle}
-          />
+        <SearchField label={`Return date${days ? ` · ${days}d` : ''}`}>
+          <div style={dateBoxStyle}>
+            <input
+              type="date"
+              min={minReturn}
+              value={ret.date}
+              onChange={e => onUpdateLeg(1, { date: e.target.value })}
+              required
+              style={dateInputStyle}
+            />
+          </div>
         </SearchField>
 
         <button
@@ -346,9 +350,14 @@ const fieldLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-3)',
 }
 
+const dateBoxStyle: React.CSSProperties = {
+  border: '1.5px solid #d1d5db', borderRadius: 8,
+  padding: '7px 10px', background: 'white', marginTop: 2,
+}
+
 const dateInputStyle: React.CSSProperties = {
   width: '100%', border: 'none', outline: 'none', background: 'transparent',
-  fontSize: 15, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--sans)',
+  fontSize: 14, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--sans)',
   padding: 0,
 }
 

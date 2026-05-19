@@ -102,13 +102,6 @@ export default async function TimelinePage() {
           </h1>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button style={{
-            background: 'none', border: '1.5px solid var(--rule)', borderRadius: 999,
-            padding: '8px 18px', fontSize: 14, fontWeight: 600, color: 'var(--ink-2)',
-            cursor: 'pointer', fontFamily: 'var(--sans)',
-          }}>
-            Export ical
-          </button>
           <a href="/search" style={{
             background: 'var(--yellow)', color: 'var(--blue-900)',
             border: 'none', borderRadius: 999, padding: '8px 18px',

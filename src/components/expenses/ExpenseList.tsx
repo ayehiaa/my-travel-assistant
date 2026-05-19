@@ -256,27 +256,6 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
           <p style={{ margin: 0, fontSize: 15, color: 'var(--ink-3)', fontWeight: 500 }}>
             {expenses.length === 0 ? 'No expenses logged yet' : 'No expenses match the current filters'}
           </p>
-          {expenses.length === 0 && (
-            <button
-              onClick={() => { setEditingExpense(null); setShowAddModal(true) }}
-              disabled={isAtLimit}
-              title={isAtLimit ? 'Upgrade to Premium to add more expenses' : undefined}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 'var(--r)',
-                fontSize: 14,
-                fontWeight: 700,
-                border: 'none',
-                background: 'var(--blue-700)',
-                color: 'white',
-                cursor: isAtLimit ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--sans)',
-                opacity: isAtLimit ? 0.5 : 1,
-              }}
-            >
-              + Add expense
-            </button>
-          )}
         </div>
       ) : (
         <div style={{
