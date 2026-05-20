@@ -1,21 +1,22 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [NEW] → 1.0.0
-Added sections:
-  - Core Principles (I–V)
-  - Tech Stack & Quality Gates
-  - Development Workflow
-  - Governance
-Modified principles: N/A (initial ratification)
-Removed sections: N/A
+Version change: 1.0.0 → 1.0.1
+Modified principles:
+  - IV. Role-Based Access Control: corrected assistant role from "read + create only"
+    to "full write access; on_behalf_of is the accountability mechanism."
+    Also clarified that routes using createAdminClient() rely solely on API-layer
+    enforcement (admin client bypasses RLS by design — intentional pattern).
+Added sections: None
+Removed sections: None
 
 Templates reviewed:
-  ✅ .specify/templates/plan-template.md — Constitution Check gate aligns with principles below
-  ✅ .specify/templates/spec-template.md — FR format and mandatory sections compatible
-  ✅ .specify/templates/tasks-template.md — Task categories align with principle-driven concerns
+  ✅ .specify/templates/plan-template.md — Constitution Check gate adapts to
+     updated principles automatically; no literal role text referenced
+  ✅ .specify/templates/spec-template.md — No role definitions embedded; no change
+  ✅ .specify/templates/tasks-template.md — No role definitions embedded; no change
 
-Follow-up TODOs: None — all placeholders resolved from CLAUDE.md and STORIES.md
+Follow-up TODOs: None
 -->
 
 # Sojourn Constitution
@@ -54,13 +55,18 @@ audit record.
 
 ### IV. Role-Based Access Control
 
-Two roles exist: `'main'` (full access, can delete) and `'assistant'` (read + create
-only). Role checks MUST be enforced at two layers:
+Two roles exist: `'main'` (full access) and `'assistant'` (full write access —
+read, create, edit, and delete). Both roles may perform all trip write operations.
+The accountability mechanism for assistants is audit attribution via `on_behalf_of`,
+not access restriction.
 
-1. **API layer** — routes check `role` before performing restricted operations
-2. **Database layer** — Supabase RLS policies enforce the same rules independently
+Role checks MUST be enforced at the API layer for every route. For routes that use
+`createAdminClient()` (which bypasses Supabase RLS by design), the API layer is the
+sole enforcement layer — this is the intentional pattern for write routes. Routes
+that use the standard server client rely on both the API layer and RLS independently.
 
-Neither layer alone is sufficient. Both MUST be present for any role-gated operation.
+Neither enforcement path may be skipped; the chosen client determines which layers
+apply and both MUST be present where applicable.
 
 ### V. Pure-Function Tests for Business Logic
 
@@ -94,7 +100,7 @@ No feature may be merged unless all five gates pass.
 
 - Browser components: `import { createClient } from '@/lib/supabase/client'`
 - Server components / API routes: `import { createClient } from '@/lib/supabase/server'`
-- Admin (audit writes, service role): `import { createAdminClient } from '@/lib/supabase/admin'`
+- Admin (audit writes, service role, write routes): `import { createAdminClient } from '@/lib/supabase/admin'`
 
 **Component patterns:**
 
@@ -130,4 +136,4 @@ arises between this document and a README, ADR, or inline comment, this document
 **Compliance review:** Every PR that touches API routes, database queries, or
 auth logic MUST be checked against Principles I, II, III, and IV before merge.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-20 | **Last Amended**: 2026-05-20
+**Version**: 1.0.1 | **Ratified**: 2026-05-20 | **Last Amended**: 2026-05-20
