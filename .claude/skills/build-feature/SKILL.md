@@ -58,6 +58,8 @@ Do not proceed until `spec.md` exists.
 
 ## Step 2 — Clarify (`/speckit-clarify`)
 
+> **AUTONOMOUS MODE**: Skip this step entirely. Do not run `/speckit-clarify`. Proceed directly to Step 3.
+
 Run `/speckit-clarify` on the spec just created. This asks up to 5 targeted questions
 about underspecified areas and encodes the answers back into `spec.md`.
 
