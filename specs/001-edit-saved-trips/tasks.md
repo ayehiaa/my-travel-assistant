@@ -98,13 +98,12 @@
 ### Execution Order within Phase 3
 
 ```
-T003 [P] ─┐
-T005 [P] ──┼──► T007 ──► T008
-T006 [P] ─┘
-T004 [P] ──────────────► T008
+T003 ──► T004 ──────────────────────┐
+T005 ──► T007 ──────────────────────┼──► T008
+T006 ───────────────────────────────┘
 ```
 
-T004 (TripCard pencil button) and T008 are independent — T004 can land any time before T008.
+T005 and T006 are parallel with T003/T004. T008 waits for all of T003, T004, T005, T006, T007.
 
 ---
 
@@ -149,7 +148,7 @@ Task T008: Modify DashboardClient.tsx (lift state, wire everything)
 ## Notes
 
 - No DB migrations required — `trips`, `trip_legs`, `audit_log` tables are unchanged
-- `AddPastTripModal` receives most changes — T003 and T004 both modify the same file, so they are listed as sequential within Phase 3 despite the [P] marker on T003
+- `AddPastTripModal` receives most changes — T003 and T004 are sequential (same file)
 - The `buildChanges` diff helper is an inline function in the PATCH route (not exported, not tested — it's glue code)
-- `TripWithUsers` must carry a `legs` array so `AddPastTripModal` can initialise from it — verify in T011
+- `TripWithUsers` already has `legs: TripLeg[]` in `src/types/database.ts` — no type change needed
 - The existing "Add past trip" modal render path in `DashboardClient` and `PastTrips` is untouched
