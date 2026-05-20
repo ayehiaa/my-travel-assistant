@@ -132,3 +132,8 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 3. `npm test` passes
 4. `npm run lint` passes
 5. No `console.log` left in production code
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
