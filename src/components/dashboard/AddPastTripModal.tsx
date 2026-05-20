@@ -4,9 +4,14 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { Airport } from '@/types/flights'
+import { TripWithUsers } from '@/types/database'
 import AirportAutocomplete from '@/components/search/AirportAutocomplete'
 
-type Props = { onClose: () => void }
+type Props = {
+  onClose: () => void
+  tripToEdit?: TripWithUsers
+  isUpcoming?: boolean
+}
 type TripType = 'round_trip' | 'multi_city'
 type LegState = { from: Airport | null; to: Airport | null; date: string }
 
@@ -19,28 +24,53 @@ function calcDays(first: string, last: string) {
 
 const emptyLeg = (): LegState => ({ from: null, to: null, date: '' })
 
-export default function AddPastTripModal({ onClose }: Props) {
+function makeAirport(code: string): Airport {
+  return { iataCode: code, name: code, cityName: code }
+}
+
+export default function AddPastTripModal({ onClose, tripToEdit, isUpcoming }: Props) {
   const router = useRouter()
   const toast  = useToast()
 
-  const [tripType, setTripType] = useState<TripType>('round_trip')
+  const legs = tripToEdit?.legs ?? []
+
+  const [tripType, setTripType] = useState<TripType>(
+    tripToEdit?.trip_type === 'multi_city' ? 'multi_city' : 'round_trip'
+  )
   const [saving,   setSaving]   = useState(false)
 
   // ── Round-trip state ──────────────────────────────────────────────────────
-  const [rtOrigin, setRtOrigin] = useState<Airport | null>(null)
-  const [rtDest,   setRtDest]   = useState<Airport | null>(null)
-  const [rtDep,    setRtDep]    = useState('')
-  const [rtRet,    setRtRet]    = useState('')
+  const [rtOrigin, setRtOrigin] = useState<Airport | null>(
+    legs[0] ? makeAirport(legs[0].from_airport) : null
+  )
+  const [rtDest,   setRtDest]   = useState<Airport | null>(
+    legs[0] ? makeAirport(legs[0].to_airport) : null
+  )
+  const [rtDep,    setRtDep]    = useState(
+    legs[0] ? legs[0].departure_at.split('T')[0] : ''
+  )
+  const [rtRet,    setRtRet]    = useState(
+    legs[1] ? legs[1].departure_at.split('T')[0] : ''
+  )
 
   const rtValid = rtOrigin !== null && rtDest !== null && rtDep !== '' && rtRet !== '' && rtRet > rtDep
   const rtDays  = rtValid ? calcDays(rtDep, rtRet) : 0
 
   // ── Multi-city state ──────────────────────────────────────────────────────
-  const [mcLegs, setMcLegs] = useState<LegState[]>([emptyLeg(), emptyLeg()])
+  const [mcLegs, setMcLegs] = useState<LegState[]>(() => {
+    if (tripToEdit?.trip_type === 'multi_city' && legs.length >= 2) {
+      return legs.map(l => ({
+        from: makeAirport(l.from_airport),
+        to:   makeAirport(l.to_airport),
+        date: l.departure_at.split('T')[0],
+      }))
+    }
+    return [emptyLeg(), emptyLeg()]
+  })
 
   const mcValid =
     mcLegs.every(l => l.from !== null && l.to !== null && l.date !== '') &&
-    mcLegs[0].date <= yesterday &&
+    (isUpcoming ? true : mcLegs[0].date <= yesterday) &&
     mcLegs.every((l, i) => i === 0 || l.date >= mcLegs[i - 1].date)
 
   const mcDays = mcValid ? calcDays(mcLegs[0].date, mcLegs[mcLegs.length - 1].date) : 0
@@ -106,20 +136,30 @@ export default function AddPastTripModal({ onClose }: Props) {
             })),
           }
 
-      const res = await fetch('/api/trips', {
-        method: 'POST',
+      const url    = tripToEdit ? `/api/trips/${tripToEdit.id}` : '/api/trips'
+      const method = tripToEdit ? 'PATCH' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
+
       if (!res.ok) {
+        if (res.status === 404) {
+          toast('Trip not found — it may have been deleted.', 'error')
+          setSaving(false)
+          return
+        }
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to save trip')
+        throw new Error(data.error ?? (tripToEdit ? 'Failed to update trip' : 'Failed to save trip'))
       }
-      toast('Past trip added', 'success')
+
+      toast(tripToEdit ? 'Trip updated' : 'Past trip added', 'success')
       onClose()
       router.refresh()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save trip', 'error')
+      toast(err instanceof Error ? err.message : (tripToEdit ? 'Failed to update trip' : 'Failed to save trip'), 'error')
       setSaving(false)
     }
   }
@@ -197,11 +237,25 @@ export default function AddPastTripModal({ onClose }: Props) {
           flexShrink: 0,
         }}>
           <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 24, margin: '0 0 4px', letterSpacing: '-0.01em' }}>
-            Add a past trip
+            {tripToEdit ? 'Edit trip' : 'Add a past trip'}
           </h3>
           <p style={{ margin: '0 0 16px', color: 'var(--ink-3)', fontSize: 13 }}>
-            For trips taken before Sojourn, or booked elsewhere. Flight details optional.
+            {tripToEdit ? 'Update airports or dates.' : 'For trips taken before Sojourn, or booked elsewhere. Flight details optional.'}
           </p>
+
+          {tripToEdit?.source === 'search' && (
+            <div style={{
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: 13,
+              padding: '8px 14px',
+              borderRadius: 8,
+              marginTop: 12,
+            }}>
+              Saving will remove stored flight details.
+            </div>
+          )}
 
           {/* Tab switcher */}
           <div style={{ display: 'inline-flex', gap: 4, background: 'rgba(0,0,0,.06)', borderRadius: 999, padding: 4 }}>
@@ -262,7 +316,7 @@ export default function AddPastTripModal({ onClose }: Props) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={labelStyle}>Departure date</label>
                   <input
-                    type="date" value={rtDep} max={yesterday} style={inputStyle}
+                    type="date" value={rtDep} max={isUpcoming ? undefined : yesterday} style={inputStyle}
                     onChange={e => { setRtDep(e.target.value); if (rtRet && rtRet <= e.target.value) setRtRet('') }}
                     {...focusHandlers}
                   />
@@ -271,7 +325,7 @@ export default function AddPastTripModal({ onClose }: Props) {
                   <label style={labelStyle}>Return date</label>
                   <input
                     type="date" value={rtRet}
-                    min={rtDep || undefined} max={today}
+                    min={rtDep || undefined} max={isUpcoming ? undefined : today}
                     disabled={!rtDep}
                     style={{ ...inputStyle, background: !rtDep ? 'var(--paper-2)' : 'white', color: !rtDep ? 'var(--ink-4)' : 'var(--ink)' }}
                     onChange={e => setRtRet(e.target.value)}
@@ -347,7 +401,7 @@ export default function AddPastTripModal({ onClose }: Props) {
                   <input
                     type="date"
                     value={leg.date}
-                    max={i === 0 ? yesterday : undefined}
+                    max={i === 0 ? (isUpcoming ? undefined : yesterday) : undefined}
                     min={i > 0 ? (mcLegs[i - 1].date || undefined) : undefined}
                     disabled={i > 0 && !mcLegs[i - 1].date}
                     style={{
@@ -427,7 +481,7 @@ export default function AddPastTripModal({ onClose }: Props) {
               transition: 'background .12s',
             }}
           >
-            {saving ? 'Saving…' : 'Save trip ✓'}
+            {saving ? 'Saving…' : (tripToEdit ? 'Save changes' : 'Save trip')}
           </button>
         </div>
       </div>
