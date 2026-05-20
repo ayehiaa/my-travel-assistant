@@ -273,6 +273,17 @@ All 10 security categories passed. ✅
 
 ---
 
+## Step 11.5 — Deploy preview (AUTONOMOUS MODE only)
+
+> **AUTONOMOUS MODE only** — skip this step in standard mode.
+
+After the branch is pushed and the PR is created, run `/vercel:deploy` to trigger a
+Vercel preview deployment for this branch. Capture the preview URL; it will be included
+in the Step 12 report. If the deploy fails, report the failure in Step 12 but do not
+block the final report.
+
+---
+
 ## Step 12 — Report to user
 
 Show the user:
