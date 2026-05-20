@@ -34,6 +34,7 @@ type Props = {
   onShowModal?: (v: boolean) => void
   atTripLimit?: boolean
   expensesByTripId: Record<string, ExpenseWithCategory[]>
+  onEditTrip?: (trip: TripWithUsers) => void
 }
 
 function TrashIcon() {
@@ -44,7 +45,16 @@ function TrashIcon() {
   )
 }
 
-function PastRow({ trip, canDelete, expenses }: { trip: TripWithUsers; canDelete: boolean; expenses: ExpenseWithCategory[] }) {
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M9.5 2.5l2 2M2 10l.5-2.5 6-6 2 2-6 6L2 10z"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PastRow({ trip, canDelete, onEdit, expenses }: { trip: TripWithUsers; canDelete: boolean; onEdit?: () => void; expenses: ExpenseWithCategory[] }) {
   const router = useRouter()
   const toast = useToast()
   const [deleting, setDeleting] = useState(false)
@@ -173,6 +183,23 @@ function PastRow({ trip, canDelete, expenses }: { trip: TripWithUsers; canDelete
               Add expense →
             </a>
           )}
+          {onEdit && (
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              title="Edit trip"
+              aria-label="Edit trip"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--blue-700)',
+                padding: '6px', borderRadius: 6, display: 'grid', placeItems: 'center',
+                transition: 'background .1s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--blue-50)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+            >
+              <PencilIcon />
+            </button>
+          )}
           {canDelete && (
             <button
               onClick={e => { e.stopPropagation(); handleDelete() }}
@@ -235,7 +262,7 @@ function PastRow({ trip, canDelete, expenses }: { trip: TripWithUsers; canDelete
   )
 }
 
-export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit, expensesByTripId }: Props) {
+export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit, expensesByTripId, onEditTrip }: Props) {
   const [internalShow, setInternalShow] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow
@@ -268,7 +295,7 @@ export default function PastTrips({ trips, canDelete = false, showModal: control
         <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
           {trips.map((trip, i) => (
             <div key={trip.id} style={{ borderBottom: i === trips.length - 1 ? 'none' : undefined }}>
-              <PastRow trip={trip} canDelete={canDelete} expenses={expensesByTripId[trip.id] ?? []} />
+              <PastRow trip={trip} canDelete={canDelete} onEdit={onEditTrip ? () => onEditTrip(trip) : undefined} expenses={expensesByTripId[trip.id] ?? []} />
             </div>
           ))}
         </div>

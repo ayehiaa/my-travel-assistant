@@ -13,6 +13,20 @@ User says `/build-feature <input>` where `<input>` is one of:
 
 ---
 
+## Autonomous Mode
+
+If the user's invocation contains the word **"autonomous"** or **"autonomously"**, activate **AUTONOMOUS MODE** for the entire run. In this mode:
+
+- **Never call `AskUserQuestion`** — resolve every decision independently using best-practice defaults and the project context in `CLAUDE.md`.
+- **Skip Step 2** (`/speckit-clarify`) entirely — proceed with the spec as written and assume no blocking ambiguities remain.
+- **Suppress mid-workflow confirmations** — produce no interim status messages; speak only once at Step 12.
+- **Self-heal all gate failures** — in Steps 9 and 10, fix every issue inline without pausing or showing reports to the user; re-run the gate after each fix; never proceed until the gate is green.
+- **Deploy automatically** — after the PR is created (Step 11), run `/vercel:deploy` to trigger a Vercel preview deployment and capture the preview URL for Step 12.
+
+When this mode is active, treat every step that says "confirm to the user" or "show the report to the user" as a no-op until Step 12.
+
+---
+
 ## Step 0 — Resolve the starting description
 
 **If input is an issue number or URL**, fetch it with:
@@ -43,6 +57,8 @@ Do not proceed until `spec.md` exists.
 ---
 
 ## Step 2 — Clarify (`/speckit-clarify`)
+
+> **AUTONOMOUS MODE**: Skip this step entirely. Do not run `/speckit-clarify`. Proceed directly to Step 3.
 
 Run `/speckit-clarify` on the spec just created. This asks up to 5 targeted questions
 about underspecified areas and encodes the answers back into `spec.md`.
@@ -171,6 +187,9 @@ Spawn the `security-reviewer` subagent with:
 - Instruction to run `npm audit` and report any new dependencies
 
 **If the security report contains any FAIL:**
+
+> **AUTONOMOUS MODE**: Do not show the report or pause. Fix every flagged issue inline, re-run the security agent on the fixed files, and repeat until the report is all PASS. Never proceed until the report is green.
+
 1. Show the full report to the user
 2. Fix every flagged issue inline (do not skip or defer)
 3. Re-run the security agent on the fixed files
@@ -254,6 +273,17 @@ All 10 security categories passed. ✅
 
 ---
 
+## Step 11.5 — Deploy preview (AUTONOMOUS MODE only)
+
+> **AUTONOMOUS MODE only** — skip this step in standard mode.
+
+After the branch is pushed and the PR is created, run `/vercel:deploy` to trigger a
+Vercel preview deployment for this branch. Capture the preview URL; it will be included
+in the Step 12 report. If the deploy fails, report the failure in Step 12 but do not
+block the final report.
+
+---
+
 ## Step 12 — Report to user
 
 Show the user:
@@ -261,6 +291,7 @@ Show the user:
 - Any DB migration they need to run in Supabase before testing
 - Location of the spec artifacts: `specs/<FEATURE_NUM>-<slug>/`
 - A one-paragraph summary of what was built
+- **AUTONOMOUS MODE only**: Vercel preview URL (from Step 11.5)
 
 **The feature is complete when the PR is open and awaiting the user's review. Never merge automatically.**
 
@@ -270,6 +301,7 @@ Show the user:
 
 - Never commit directly to `main`
 - Never merge the PR — only create it
+- In AUTONOMOUS MODE: never call `AskUserQuestion` at any point; resolve every decision inline
 - Never mark a feature complete with failing security checks, tests, or type errors
 - The Constitution Check in `/speckit-plan` (Step 4) is a hard gate — do not skip it
 - `/speckit-analyze` (Step 5) is a hard gate — do not skip it
