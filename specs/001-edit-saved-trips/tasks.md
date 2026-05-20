@@ -44,7 +44,7 @@
 
 ### Implementation for User Story 1 + US3
 
-- [ ] T003 [P] [US1] Modify `src/components/dashboard/AddPastTripModal.tsx`: add `tripToEdit?: TripWithUsers` to props. Initialise `tripType` from `tripToEdit?.trip_type ?? 'round_trip'` (coerce `'one_way'` to `'round_trip'`). For round-trip/one-way: pre-fill departure airport from `legs[0].from_airport`, destination from `legs[1]?.to_airport`, departure date from `legs[0].departure_at`, return date from `legs[1]?.departure_at`. For multi-city: initialise `mcLegs` array from all legs. Use minimal `{ iataCode, name: iataCode }` airport objects to satisfy `AirportAutocomplete`'s value type. Add `isUpcoming` flag: `tripToEdit && new Date(tripToEdit.legs[0].departure_at) >= startOfToday()`. When `isUpcoming` is true, remove the `max={yesterday}` constraint from the departure date input(s).
+- [ ] T003 [US1] Modify `src/components/dashboard/AddPastTripModal.tsx`: add `tripToEdit?: TripWithUsers` to props. Initialise `tripType` from `tripToEdit?.trip_type ?? 'round_trip'` (coerce `'one_way'` to `'round_trip'`). For round-trip/one-way: pre-fill departure airport from `legs[0].from_airport`, destination from `legs[1]?.to_airport`, departure date from `legs[0].departure_at`, return date from `legs[1]?.departure_at`. For multi-city: initialise `mcLegs` array from all legs. Use minimal `{ iataCode, name: iataCode }` airport objects to satisfy `AirportAutocomplete`'s value type. Add `isUpcoming` flag: `tripToEdit && new Date(tripToEdit.legs[0].departure_at) >= startOfToday()`. When `isUpcoming` is true, remove the `max={yesterday}` constraint from the departure date input(s).
 - [ ] T004 [US1] Modify `src/components/dashboard/AddPastTripModal.tsx`: update edit-mode UI — title: `"Edit trip"`, subtitle: `"Update airports or dates."`. Update `handleSave`: when `tripToEdit` is defined, call `PATCH /api/trips/${tripToEdit.id}` instead of `POST /api/trips`. Show `"Saving…"` on the Save button while in-flight. On success: show `"Trip updated"` toast and close modal. On API failure: show error toast and keep modal open with edited values intact. On 404 response: show `"Trip no longer exists"` error inline.
 - [ ] T005 [P] [US1] Modify `src/components/dashboard/TripCard.tsx`: add `onEdit?: () => void` prop. Add `PencilIcon` SVG (14×14, path: `"M9.5 2.5l2 2M2 10l.5-2.5 6-6 2 2-6 6L2 10z"`, stroke `currentColor`, strokeWidth 1.5, round caps/joins). Add pencil button in the card footer next to the existing delete button, using the same ghost-button style but with `text-blue-700` colour. Button is visible to all authenticated users (not gated on `canDelete`). onClick calls `onEdit?.()`.
 - [ ] T006 [P] [US1] Modify `src/components/dashboard/PastTrips.tsx`: add `onEdit: (trip: TripWithUsers) => void` prop to both `PastRow` and `PastTrips`. In `PastRow`, add a pencil button in the `sj-pr-action` column (before the delete button) using the same `PencilIcon` SVG and ghost-button style. Visible to all authenticated users.
@@ -74,8 +74,7 @@
 **Purpose**: Final review across all modified files.
 
 - [ ] T010 [P] Verify no `console.log` statements remain in any modified production file
-- [ ] T011 [P] Confirm `TripWithUsers` type in `src/types/database.ts` includes a `legs: TripLeg[]` array field — if not, add it so `AddPastTripModal` can read leg data for pre-filling
-- [ ] T012 Run quickstart.md end-to-end validation scenarios
+- [ ] T011 Run quickstart.md end-to-end validation scenarios
 
 ---
 
@@ -91,7 +90,8 @@
 
 ### Within Phase 3
 
-- **T003 and T004 and T005 and T006 are all parallel** — different files, no shared state
+- **T003 and T004 are sequential** — both modify `AddPastTripModal.tsx`; T004 depends on T003
+- **T005 and T006 are parallel** with T003/T004 — different files, no shared state
 - **T007** depends on T005 (TripCard must have `onEdit` prop before UpcomingTrips threads it)
 - **T008** depends on T003, T004, T005, T006, T007 (DashboardClient wires everything together)
 
@@ -111,9 +111,11 @@ T004 (TripCard pencil button) and T008 are independent — T004 can land any tim
 ## Parallel Execution Example: Phase 3
 
 ```
-# These four tasks can all start simultaneously (different files):
+# T003 and T004 are sequential (same file):
 Task T003: Modify AddPastTripModal.tsx (tripToEdit prop + state init)
-Task T004: Modify AddPastTripModal.tsx (edit-mode UI + handleSave)
+Task T004: Modify AddPastTripModal.tsx (edit-mode UI + handleSave)  ← depends on T003
+
+# T005 and T006 can run in parallel with T003/T004 (different files):
 Task T005: Modify TripCard.tsx (pencil button)
 Task T006: Modify PastTrips.tsx (PastRow pencil button)
 
