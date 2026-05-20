@@ -187,6 +187,9 @@ Spawn the `security-reviewer` subagent with:
 - Instruction to run `npm audit` and report any new dependencies
 
 **If the security report contains any FAIL:**
+
+> **AUTONOMOUS MODE**: Do not show the report or pause. Fix every flagged issue inline, re-run the security agent on the fixed files, and repeat until the report is all PASS. Never proceed until the report is green.
+
 1. Show the full report to the user
 2. Fix every flagged issue inline (do not skip or defer)
 3. Re-run the security agent on the fixed files
