@@ -34,10 +34,19 @@ function legBadge(i: number, total: number, type: string) {
   return `L${i + 1}`
 }
 
-type Props = { trip: TripWithUsers; canDelete: boolean; expenses?: ExpenseWithCategory[] }
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M9.5 2.5l2 2M2 10l.5-2.5 6-6 2 2-6 6L2 10z"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+type Props = { trip: TripWithUsers; canDelete: boolean; onEdit?: () => void; expenses?: ExpenseWithCategory[] }
 
 export default function TripCard(props: Props) {
-  const { trip, canDelete } = props
+  const { trip, canDelete, onEdit } = props
   const expenses = props.expenses ?? []
   const router = useRouter()
   const toast = useToast()
@@ -203,6 +212,22 @@ export default function TripCard(props: Props) {
               >
                 Add expense →
               </a>
+            )}
+            {onEdit && (
+              <button
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                title="Edit trip"
+                aria-label="Edit trip"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--blue-700)', padding: '6px', borderRadius: 6,
+                  display: 'grid', placeItems: 'center', transition: 'background .1s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--blue-50)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+              >
+                <PencilIcon />
+              </button>
             )}
             {canDelete && (
               <button

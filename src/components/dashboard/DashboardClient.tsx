@@ -6,6 +6,7 @@ import { useToast } from '@/context/ToastContext'
 import DashboardHero from './DashboardHero'
 import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
+import AddPastTripModal from './AddPastTripModal'
 
 interface Props {
   firstName: string
@@ -26,6 +27,7 @@ export default function DashboardClient({
   upcoming, past, canDelete, atTripLimit, expensesByTripId,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const [tripToEdit, setTripToEdit] = useState<TripWithUsers | null>(null)
   const toast = useToast()
 
   async function handleImportFromGmail() {
@@ -76,7 +78,7 @@ export default function DashboardClient({
           {upcoming.length} on the board
         </span>
       </div>
-      <UpcomingTrips trips={upcoming} canDelete={canDelete} atTripLimit={atTripLimit} expensesByTripId={expensesByTripId} />
+      <UpcomingTrips trips={upcoming} canDelete={canDelete} atTripLimit={atTripLimit} expensesByTripId={expensesByTripId} onEditTrip={setTripToEdit} />
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, margin: '36px 0 18px' }}>
         <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,3vw,36px)', letterSpacing: '-0.02em', margin: 0 }}>Past trips</h2>
@@ -91,7 +93,16 @@ export default function DashboardClient({
         onShowModal={setShowModal}
         atTripLimit={atTripLimit}
         expensesByTripId={expensesByTripId}
+        onEditTrip={setTripToEdit}
       />
+
+      {tripToEdit && (
+        <AddPastTripModal
+          tripToEdit={tripToEdit}
+          isUpcoming={upcoming.some(t => t.id === tripToEdit.id)}
+          onClose={() => setTripToEdit(null)}
+        />
+      )}
 
     </div>
   )

@@ -1,47 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 import { daysOutsideUK } from '@/lib/daysCalculator'
 import { Trip, TripLeg } from '@/types/database'
-
-const isoDatetime = z.string().datetime({ local: true })
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD')
-
-// ── Search trip schemas ───────────────────────────────────────────────────────
-
-const SearchLegSchema = z.object({
-  from_airport:  z.string().length(3),
-  to_airport:    z.string().length(3),
-  airline:       z.string().min(1).max(100),
-  flight_number: z.string().min(1).max(20),
-  departure_at:  isoDatetime,
-  arrival_at:    isoDatetime,
-})
-
-const SearchTripSchema = z.object({
-  source:    z.literal('search'),
-  trip_type: z.enum(['round_trip', 'multi_city']),
-  legs:      z.array(SearchLegSchema).min(2).max(3),
-})
-
-// ── Manual trip schemas ───────────────────────────────────────────────────────
-
-const ManualLegSchema = z.object({
-  from_airport: z.string().length(3),
-  to_airport:   z.string().length(3),
-  departure_at: isoDate,
-})
-
-const ManualTripSchema = z.object({
-  source:    z.literal('manual'),
-  trip_type: z.enum(['round_trip', 'multi_city']),
-  legs:      z.array(ManualLegSchema).min(2).max(3),
-})
-
-const TripInsertSchema = z.discriminatedUnion('source', [SearchTripSchema, ManualTripSchema])
+import { TripInsertSchema } from '@/lib/tripSchemas'
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
