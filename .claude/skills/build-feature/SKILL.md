@@ -301,6 +301,7 @@ Show the user:
 
 - Never commit directly to `main`
 - Never merge the PR — only create it
+- In AUTONOMOUS MODE: never call `AskUserQuestion` at any point; resolve every decision inline
 - Never mark a feature complete with failing security checks, tests, or type errors
 - The Constitution Check in `/speckit-plan` (Step 4) is a hard gate — do not skip it
 - `/speckit-analyze` (Step 5) is a hard gate — do not skip it
