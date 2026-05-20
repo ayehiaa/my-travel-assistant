@@ -13,6 +13,20 @@ User says `/build-feature <input>` where `<input>` is one of:
 
 ---
 
+## Autonomous Mode
+
+If the user's invocation contains the word **"autonomous"** or **"autonomously"**, activate **AUTONOMOUS MODE** for the entire run. In this mode:
+
+- **Never call `AskUserQuestion`** — resolve every decision independently using best-practice defaults and the project context in `CLAUDE.md`.
+- **Skip Step 2** (`/speckit-clarify`) entirely — proceed with the spec as written and assume no blocking ambiguities remain.
+- **Suppress mid-workflow confirmations** — produce no interim status messages; speak only once at Step 12.
+- **Self-heal all gate failures** — in Steps 9 and 10, fix every issue inline without pausing or showing reports to the user; re-run the gate after each fix; never proceed until the gate is green.
+- **Deploy automatically** — after the PR is created (Step 11), run `/vercel:deploy` to trigger a Vercel preview deployment and capture the preview URL for Step 12.
+
+When this mode is active, treat every step that says "confirm to the user" or "show the report to the user" as a no-op until Step 12.
+
+---
+
 ## Step 0 — Resolve the starting description
 
 **If input is an issue number or URL**, fetch it with:
