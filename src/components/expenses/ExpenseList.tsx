@@ -7,6 +7,7 @@ import { computeExpenseSummary } from '@/lib/expenseSummary'
 import { buildExpenseCsv } from '@/lib/expenseCsv'
 import ExpenseCard from './ExpenseCard'
 import AddExpenseModal from './AddExpenseModal'
+import ExpenseCategoryChart from './ExpenseCategoryChart'
 
 interface Props {
   initialExpenses: ExpenseWithCategory[]
@@ -85,6 +86,8 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
 
   return (
     <>
+      <ExpenseCategoryChart expenses={expenses} categories={categories} />
+
       {/* Near-limit warning banner */}
       {isNearLimit && (
         <div style={{
