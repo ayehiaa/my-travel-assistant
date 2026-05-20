@@ -291,6 +291,7 @@ Show the user:
 - Any DB migration they need to run in Supabase before testing
 - Location of the spec artifacts: `specs/<FEATURE_NUM>-<slug>/`
 - A one-paragraph summary of what was built
+- **AUTONOMOUS MODE only**: Vercel preview URL (from Step 11.5)
 
 **The feature is complete when the PR is open and awaiting the user's review. Never merge automatically.**
 
