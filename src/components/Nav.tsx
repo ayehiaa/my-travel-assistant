@@ -5,9 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/context/UserContext'
+import { useToast } from '@/context/ToastContext'
 
 export default function Nav() {
   const user = useUser()
+  const toast = useToast()
   const pathname = usePathname()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -38,6 +40,7 @@ export default function Nav() {
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
     ...(user.role === 'main' || user.role === 'premium' ? [{ href: '/settings', label: 'Settings' }] : []),
+    ...(user.role === 'premium' ? [{ href: '/agents', label: '⚡ Agents' }] : []),
   ]
 
   const initials = user.displayName
@@ -129,6 +132,14 @@ export default function Nav() {
             </span>
           )}
 
+          <button
+            onClick={() => toast('Hello, World!', 'info')}
+            style={{ fontSize: 13, color: 'rgba(255,255,255,.70)' }}
+            className="hover:text-white transition-colors"
+          >
+            Hello World
+          </button>
+
           {/* Avatar */}
           <div style={{
             width: 34, height: 34,
@@ -210,6 +221,13 @@ export default function Nav() {
             <p className="text-[11px] px-3 mb-1" style={{ opacity: 0.5 }}>
               {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · ${user.role === 'premium' ? 'Premium' : 'Main'}`}
             </p>
+            <button
+              onClick={() => { toast('Hello, World!', 'info'); setMenuOpen(false) }}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
+              style={{ color: 'rgba(255,255,255,.65)' }}
+            >
+              Hello World
+            </button>
             <button
               onClick={handleSignOut}
               className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
