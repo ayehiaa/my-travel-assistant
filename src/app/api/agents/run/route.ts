@@ -7,13 +7,24 @@ type PhaseId =
   | 'backend' | 'frontend'
   | 'security' | 'tester' | 'pr'
 
-function runClaude(phase: string, prompt: string, env: NodeJS.ProcessEnv): Promise<{ success: boolean; error?: string }> {
+const HAIKU = 'claude-haiku-4-5-20251001'
+
+function runClaude(
+  phase: string,
+  prompt: string,
+  env: NodeJS.ProcessEnv,
+  model?: string,
+): Promise<{ success: boolean; error?: string }> {
+  const args = [
+    '--dangerously-skip-permissions', '-p',
+    '--max-turns', '15',
+    '--output-format', 'stream-json',
+  ]
+  if (model) args.push('--model', model)
+  args.push(prompt)
+
   return new Promise((resolve) => {
-    const proc = spawn(
-      'claude',
-      ['--dangerously-skip-permissions', '-p', '--verbose', '--max-turns', '50', '--output-format', 'stream-json', prompt],
-      { stdio: ['ignore', 'pipe', 'pipe'], env },
-    )
+    const proc = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'], env })
     let stderr = ''
     let stdout = ''
     proc.stderr?.on('data', (c: Buffer) => { stderr += c.toString() })
@@ -42,10 +53,19 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (requirement.length < 5 || requirement.length > 500) {
     return new Response('Requirement must be 5–500 characters', { status: 400 })
   }
+  const full = Boolean(body.full)
 
   const enc = new TextEncoder()
   let closed = false
-  const { ANTHROPIC_API_KEY: _omit, ...childEnv } = process.env
+  const SECRET_ENV_KEYS = new Set([
+    'ANTHROPIC_API_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SERPAPI_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  ])
+  const childEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !SECRET_ENV_KEYS.has(k))
+  ) as NodeJS.ProcessEnv
 
   const stream = new ReadableStream({
     start(controller) {
@@ -62,24 +82,56 @@ export async function POST(req: NextRequest): Promise<Response> {
       }, 15_000)
 
       async function runPipeline() {
-        // Sequential phases: specify → plan → tasks (with architect split)
-        const sequential: { id: PhaseId; prompt: string }[] = [
-          { id: 'specify', prompt: `/speckit-specify ${requirement}` },
-          { id: 'plan',    prompt: '/speckit-plan' },
-          {
-            id: 'tasks',
-            prompt:
-              'First run /speckit-tasks to generate tasks.md. ' +
-              'Then, acting as architect, read .specify/feature.json to find the feature directory, ' +
-              'read spec.md and the generated tasks.md, and review the relevant source code in src/. ' +
-              'Produce a file-by-file implementation plan separating backend tasks and frontend tasks. ' +
-              'Write it to the feature directory as architect-notes.md. Follow CLAUDE.md conventions.',
-          },
-        ]
+        // Phases 1–2: specify + plan merged into one Haiku call — saves a cold-start
+        send({ type: 'phase_start', phase: 'specify' })
+        send({ type: 'phase_start', phase: 'plan' })
+        const specResult = await runClaude(
+          'specify+plan',
+          `/speckit-specify ${requirement} then run /speckit-plan`,
+          childEnv,
+          HAIKU,
+        )
+        send({ type: 'phase_done', phase: 'specify' })
+        send({ type: 'phase_done', phase: 'plan' })
+        if (!specResult.success) {
+          send({ type: 'error', message: specResult.error ?? 'specify/plan phase failed' })
+          send({ type: 'pipeline_done', success: false })
+          return
+        }
 
-        for (const { id, prompt } of sequential) {
+        // Phase 3: tasks + architect notes — Haiku
+        send({ type: 'phase_start', phase: 'tasks' })
+        const tasksResult = await runClaude(
+          'tasks',
+          'Run /speckit-tasks to generate tasks.md. Then read .specify/feature.json for the feature ' +
+          'directory, read spec.md and tasks.md, scan relevant src/ files, and write architect-notes.md ' +
+          'with a backend/frontend split implementation plan. Follow CLAUDE.md conventions.',
+          childEnv,
+          HAIKU,
+        )
+        send({ type: 'phase_done', phase: 'tasks' })
+        if (!tasksResult.success) {
+          send({ type: 'error', message: tasksResult.error ?? 'tasks phase failed' })
+          send({ type: 'pipeline_done', success: false })
+          return
+        }
+
+        // Phases 4–5: backend then frontend — serial to avoid simultaneous quota burn
+        for (const id of ['backend', 'frontend'] as const) {
           send({ type: 'phase_start', phase: id })
-          const result = await runClaude(id, prompt, childEnv)
+          const result = await runClaude(
+            id,
+            id === 'backend'
+              ? 'You are the backend-dev agent. Read .specify/feature.json for the feature directory, ' +
+                'then read architect-notes.md and tasks.md for your backend tasks. ' +
+                'Implement all backend work: API routes, Zod validation, Supabase queries, audit logging. ' +
+                'Follow CLAUDE.md conventions.'
+              : 'You are the frontend-dev agent. Read .specify/feature.json for the feature directory, ' +
+                'then read architect-notes.md and tasks.md for your frontend tasks. ' +
+                'Implement all frontend work: React components, Next.js pages, Tailwind CSS styling. ' +
+                'Follow CLAUDE.md conventions.',
+            childEnv,
+          )
           send({ type: 'phase_done', phase: id })
           if (!result.success) {
             send({ type: 'error', message: result.error ?? `${id} phase failed` })
@@ -88,40 +140,18 @@ export async function POST(req: NextRequest): Promise<Response> {
           }
         }
 
-        // Parallel: backend + frontend
-        send({ type: 'phase_start', phase: 'backend' })
-        send({ type: 'phase_start', phase: 'frontend' })
-        const [backendResult, frontendResult] = await Promise.all([
-          runClaude('backend',
-            'You are the backend-dev agent. Read .specify/feature.json to find the feature directory, ' +
-            'then read architect-notes.md and tasks.md for your backend tasks. ' +
-            'Implement all backend work: API routes, Zod validation, Supabase queries, audit logging. ' +
-            'Follow CLAUDE.md conventions.',
-            childEnv,
-          ),
-          runClaude('frontend',
-            'You are the frontend-dev agent. Read .specify/feature.json to find the feature directory, ' +
-            'then read architect-notes.md and tasks.md for your frontend tasks. ' +
-            'Implement all frontend work: React components, Next.js pages, Tailwind CSS styling. ' +
-            'Follow CLAUDE.md conventions.',
-            childEnv,
-          ),
-        ])
-        send({ type: 'phase_done', phase: 'backend' })
-        send({ type: 'phase_done', phase: 'frontend' })
-        if (!backendResult.success || !frontendResult.success) {
-          const err = (!backendResult.success ? backendResult.error : frontendResult.error) ?? 'implementation failed'
-          send({ type: 'error', message: err })
-          send({ type: 'pipeline_done', success: false })
+        if (!full) {
+          send({ type: 'pipeline_done', success: true })
           return
         }
 
-        // Security review
+        // Phases 6–8: security, tester, pr — only in full mode
         send({ type: 'phase_start', phase: 'security' })
-        const securityResult = await runClaude('security',
-          'You are the security-reviewer agent. Run `git diff main` to see all changed files on this branch. ' +
-          'Audit each changed file for: auth vulnerabilities, XSS, SQL injection, secret leakage, PII exposure, ' +
-          'and vulnerable dependencies. Produce a PASS/FAIL report per category. Fix any FAIL items before reporting done.',
+        const securityResult = await runClaude(
+          'security',
+          'You are the security-reviewer agent. Run `git diff main` to see all changed files. ' +
+          'Audit each for: auth vulnerabilities, XSS, SQL injection, secret leakage, PII exposure, ' +
+          'vulnerable dependencies. Produce a PASS/FAIL report per category. Fix any FAIL items.',
           childEnv,
         )
         send({ type: 'phase_done', phase: 'security' })
@@ -131,12 +161,11 @@ export async function POST(req: NextRequest): Promise<Response> {
           return
         }
 
-        // Tester
         send({ type: 'phase_start', phase: 'tester' })
-        const testerResult = await runClaude('tester',
+        const testerResult = await runClaude(
+          'tester',
           'You are the tester agent. Write Vitest unit tests for any new pure functions added on this branch. ' +
-          'Then run: npm run build, npm run lint, npm test. ' +
-          'Report pass/fail for each. Fix any failures before reporting done.',
+          'Run npm run build, npm run lint, npm test. Fix any failures before reporting done.',
           childEnv,
         )
         send({ type: 'phase_done', phase: 'tester' })
@@ -146,13 +175,14 @@ export async function POST(req: NextRequest): Promise<Response> {
           return
         }
 
-        // PR
         send({ type: 'phase_start', phase: 'pr' })
-        const prResult = await runClaude('pr',
+        const prResult = await runClaude(
+          'pr',
           'Create a GitHub pull request for the current feature branch targeting main. ' +
           'Use `gh pr create` with a concise title and a summary of what was built and why. ' +
           'Return the PR URL when done.',
           childEnv,
+          HAIKU,
         )
         send({ type: 'phase_done', phase: 'pr' })
         if (!prResult.success) {

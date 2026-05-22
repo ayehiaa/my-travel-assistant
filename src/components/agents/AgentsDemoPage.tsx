@@ -110,56 +110,10 @@ function Connector() {
   )
 }
 
-function ForkConnector() {
-  return (
-    <div className="relative" style={{ height: 40 }}>
-      {/* vertical line from top center */}
-      <div className="absolute left-1/2 top-0" style={{ width: 1, height: '50%', background: 'var(--rule)', transform: 'translateX(-50%)' }} />
-      {/* horizontal bar */}
-      <div className="absolute top-1/2" style={{ left: '25%', right: '25%', height: 1, background: 'var(--rule)' }} />
-      {/* left drop */}
-      <div className="absolute top-1/2 bottom-0" style={{ left: '25%', width: 1, background: 'var(--rule)', transform: 'translateX(-50%)' }} />
-      {/* right drop */}
-      <div className="absolute top-1/2 bottom-0" style={{ right: '25%', width: 1, background: 'var(--rule)', transform: 'translateX(50%)' }} />
-      {/* arrow left */}
-      <div className="absolute bottom-0" style={{ left: '25%', transform: 'translateX(-50%) translateY(0)' }}>
-        <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-          <path d="M4 5L0 0h8L4 5z" fill="var(--rule)" />
-        </svg>
-      </div>
-      {/* arrow right */}
-      <div className="absolute bottom-0" style={{ right: '25%', transform: 'translateX(50%) translateY(0)' }}>
-        <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-          <path d="M4 5L0 0h8L4 5z" fill="var(--rule)" />
-        </svg>
-      </div>
-    </div>
-  )
-}
-
-function MergeConnector() {
-  return (
-    <div className="relative" style={{ height: 40 }}>
-      {/* left rise */}
-      <div className="absolute top-0" style={{ left: '25%', width: 1, height: '50%', background: 'var(--rule)', transform: 'translateX(-50%)' }} />
-      {/* right rise */}
-      <div className="absolute top-0" style={{ right: '25%', width: 1, height: '50%', background: 'var(--rule)', transform: 'translateX(50%)' }} />
-      {/* horizontal bar */}
-      <div className="absolute top-1/2" style={{ left: '25%', right: '25%', height: 1, background: 'var(--rule)' }} />
-      {/* vertical line to bottom center */}
-      <div className="absolute left-1/2 top-1/2 bottom-0" style={{ width: 1, background: 'var(--rule)', transform: 'translateX(-50%)' }} />
-      {/* arrow */}
-      <div className="absolute bottom-0 left-1/2" style={{ transform: 'translateX(-50%) translateY(0)' }}>
-        <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-          <path d="M4 5L0 0h8L4 5z" fill="var(--rule)" />
-        </svg>
-      </div>
-    </div>
-  )
-}
 
 export default function AgentsDemoPage() {
   const [requirement, setRequirement] = useState('')
+  const [full, setFull] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [phaseStatus, setPhaseStatus] = useState<Record<PhaseId, PhaseStatus>>(INITIAL_STATUS)
   const [pipelineResult, setPipelineResult] = useState<'success' | 'error' | null>(null)
@@ -199,7 +153,7 @@ export default function AgentsDemoPage() {
       response = await fetch('/api/agents/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requirement }),
+        body: JSON.stringify({ requirement, full }),
       })
     } catch (e) {
       setErrorMsg(`Network error: ${String(e)}`)
@@ -292,6 +246,19 @@ export default function AgentsDemoPage() {
               fontFamily: 'var(--font-jakarta)',
             }}
           />
+          <div className="flex items-center gap-2 mt-3">
+            <input
+              id="full-toggle"
+              type="checkbox"
+              checked={full}
+              onChange={e => setFull(e.target.checked)}
+              disabled={isRunning}
+              className="rounded"
+            />
+            <label htmlFor="full-toggle" className="text-xs select-none" style={{ color: 'var(--ink-4)' }}>
+              Full pipeline — security review, tests &amp; PR
+            </label>
+          </div>
           <div className="flex items-center justify-between mt-3">
             <span className="text-xs" style={{ color: 'var(--ink-4)' }}>
               {requirement.length}/500
@@ -336,7 +303,9 @@ export default function AgentsDemoPage() {
         {/* Pipeline result banners */}
         {pipelineResult === 'success' && (
           <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ background: 'var(--mint-soft)', color: 'var(--mint)', border: '1px solid var(--mint)' }}>
-            ✅ Pipeline complete — code committed to branch, PR ready.
+            {full
+              ? '✅ Pipeline complete — code committed to branch, PR ready.'
+              : '✅ Pipeline complete — code ready to review.'}
           </div>
         )}
         {pipelineResult === 'error' && !errorMsg && (
@@ -351,34 +320,25 @@ export default function AgentsDemoPage() {
             Pipeline
           </div>
 
-          {/* Sequential phases: Specify → Plan → Tasks */}
-          {(['specify', 'plan', 'tasks'] as PhaseId[]).map((id, i, arr) => (
+          {/* All phases — serial */}
+          {(['specify', 'plan', 'tasks', 'backend', 'frontend'] as PhaseId[]).map((id, i, arr) => (
             <div key={id}>
               <PipelineNode id={id} status={phaseStatus[id]} />
               {i < arr.length - 1 && <Connector />}
             </div>
           ))}
 
-          {/* Fork to parallel */}
-          <ForkConnector />
-
-          {/* Parallel: Backend + Frontend */}
-          <div className="grid grid-cols-2 gap-3">
-            <PipelineNode id="backend"  status={phaseStatus.backend}  />
-            <PipelineNode id="frontend" status={phaseStatus.frontend} />
-          </div>
-
-          {/* Merge from parallel */}
-          <MergeConnector />
-
-          {/* Security → Tester */}
-          <PipelineNode id="security" status={phaseStatus.security} />
-          <Connector />
-          <PipelineNode id="tester" status={phaseStatus.tester} />
-          <Connector />
-
-          {/* PR / Done */}
-          <PipelineNode id="pr" status={phaseStatus.pr} />
+          {/* Security → Tester → PR: only shown in full mode */}
+          {full && (
+            <>
+              <Connector />
+              <PipelineNode id="security" status={phaseStatus.security} />
+              <Connector />
+              <PipelineNode id="tester" status={phaseStatus.tester} />
+              <Connector />
+              <PipelineNode id="pr" status={phaseStatus.pr} />
+            </>
+          )}
         </div>
 
         {/* Legend */}
