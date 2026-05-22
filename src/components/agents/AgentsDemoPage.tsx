@@ -258,7 +258,7 @@ export default function AgentsDemoPage() {
             value={requirement}
             onChange={e => setRequirement(e.target.value)}
             disabled={isRunning}
-            placeholder="e.g. Add an export to CSV button for all past trips"
+            placeholder="e.g. Add a timeline view showing all trips on a calendar"
             className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none disabled:opacity-60"
             style={{
               background: 'var(--paper-2)',

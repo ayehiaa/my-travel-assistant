@@ -8,6 +8,7 @@ import UpcomingTrips from './UpcomingTrips'
 import PastTrips from './PastTrips'
 import AddPastTripModal from './AddPastTripModal'
 
+
 interface Props {
   firstName: string
   ownerFirstName: string
@@ -72,7 +73,7 @@ export default function DashboardClient({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, margin: '36px 0 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, margin: '36px 0 18px' }}>
         <h2 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 'clamp(28px,3vw,36px)', letterSpacing: '-0.02em', margin: 0 }}>Upcoming trips</h2>
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
           {upcoming.length} on the board
