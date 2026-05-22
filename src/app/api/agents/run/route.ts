@@ -121,12 +121,14 @@ export async function POST(req: NextRequest): Promise<Response> {
           const result = await runClaude(
             id,
             id === 'backend'
-              ? 'You are the backend-dev agent. Read .specify/feature.json for the feature directory, ' +
-                'then read architect-notes.md for your backend tasks. ' +
+              ? 'You are the backend-dev agent. First, scan src/lib/, src/app/api/, and src/hooks/ to ' +
+                'understand existing utilities, helpers, and patterns — only use what already exists, never invent imports. ' +
+                'Then read .specify/feature.json for the feature directory and read architect-notes.md for your tasks. ' +
                 'Implement all backend work: API routes, Zod validation, Supabase queries, audit logging. ' +
                 'Follow CLAUDE.md conventions.'
-              : 'You are the frontend-dev agent. Read .specify/feature.json for the feature directory, ' +
-                'then read architect-notes.md for your frontend tasks. ' +
+              : 'You are the frontend-dev agent. First, scan src/components/, src/hooks/, and src/lib/ to ' +
+                'understand existing components, hooks, and patterns — only use what already exists, never invent imports. ' +
+                'Then read .specify/feature.json for the feature directory and read architect-notes.md for your tasks. ' +
                 'Implement all frontend work: React components, Next.js pages, Tailwind CSS styling. ' +
                 'Follow CLAUDE.md conventions.',
             childEnv,
