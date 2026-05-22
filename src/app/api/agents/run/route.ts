@@ -18,7 +18,6 @@ function runClaude(
   const args = [
     '--dangerously-skip-permissions', '-p',
     '--max-turns', '15',
-    '--output-format', 'stream-json',
   ]
   if (model) args.push('--model', model)
   args.push(prompt)
