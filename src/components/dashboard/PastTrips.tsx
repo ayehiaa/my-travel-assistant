@@ -270,18 +270,20 @@ export default function PastTrips({ trips, canDelete = false, showModal: control
   return (
     <section>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: 12 }}>
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={!!atTripLimit}
-          title={atTripLimit ? "You've reached your beta limit of 10 trips" : undefined}
-          style={{
-            fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none',
-            cursor: atTripLimit ? 'not-allowed' : 'pointer', fontFamily: 'var(--sans)',
-            opacity: atTripLimit ? 0.4 : 1,
-          }}
-        >
-          + Add past trip
-        </button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowModal(true)}
+            disabled={!!atTripLimit}
+            title={atTripLimit ? "You've reached your beta limit of 10 trips" : undefined}
+            style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none',
+              cursor: atTripLimit ? 'not-allowed' : 'pointer', fontFamily: 'var(--sans)',
+              opacity: atTripLimit ? 0.4 : 1,
+            }}
+          >
+            + Add past trip
+          </button>
+        </div>
         {atTripLimit && (
           <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>
             Beta limit reached — more trips coming with our commercial plan.
