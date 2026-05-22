@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
 import { computeExpenseSummary } from '@/lib/expenseSummary'
-import { buildExpenseCsv } from '@/lib/expenseCsv'
 import ExpenseCard from './ExpenseCard'
 import AddExpenseModal from './AddExpenseModal'
 import ExpenseCategoryChart from './ExpenseCategoryChart'
@@ -71,17 +70,6 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
 
   function handleReclaimed(updated: ExpenseWithCategory) {
     setExpenses(prev => prev.map(e => e.id === updated.id ? updated : e))
-  }
-
-  function handleExportCsv() {
-    const csv = buildExpenseCsv(filteredExpenses)
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'expenses.csv'
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -193,24 +181,6 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
                 </div>
               </div>
             ))}
-            <button
-              onClick={handleExportCsv}
-              style={{
-                marginLeft: 'auto',
-                padding: '6px 14px',
-                borderRadius: 'var(--r)',
-                fontSize: 12,
-                fontWeight: 700,
-                border: '1.5px solid var(--rule)',
-                background: 'white',
-                color: 'var(--ink-2)',
-                cursor: 'pointer',
-                fontFamily: 'var(--sans)',
-                alignSelf: 'center',
-              }}
-            >
-              Export CSV
-            </button>
           </div>
         )}
       </div>
