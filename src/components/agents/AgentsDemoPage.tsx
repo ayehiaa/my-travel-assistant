@@ -5,30 +5,28 @@ import { useState, useRef, useCallback } from 'react'
 type PhaseId =
   | 'specify' | 'plan' | 'tasks'
   | 'backend' | 'frontend'
-  | 'security' | 'tester' | 'pr'
+  | 'quality'
 type PhaseStatus = 'idle' | 'active' | 'done'
 
 const PHASE_ORDER: PhaseId[] = [
   'specify', 'plan', 'tasks',
   'backend', 'frontend',
-  'security', 'tester', 'pr',
+  'quality',
 ]
 
 const PHASE_META: Record<PhaseId, { label: string; statusLabel: string; icon: string }> = {
-  specify:  { label: 'Specify',  statusLabel: 'Defining spec',     icon: '📄' },
-  plan:     { label: 'Plan',     statusLabel: 'Drafting plan',      icon: '💡' },
-  tasks:    { label: 'Architect', statusLabel: 'Planning & tasking', icon: '🏗️' },
-  backend:  { label: 'Backend',  statusLabel: 'Writing API routes', icon: '🗄️' },
-  frontend: { label: 'Frontend', statusLabel: 'Building UI',        icon: '🖼️' },
-  security: { label: 'Security', statusLabel: 'Auditing security',  icon: '🛡️' },
-  tester:   { label: 'Tester',   statusLabel: 'Running tests',      icon: '⚗️' },
-  pr:       { label: 'Done',     statusLabel: 'Raising PR',         icon: '✅' },
+  specify:  { label: 'Specify',           statusLabel: 'Defining spec',          icon: '📄' },
+  plan:     { label: 'Plan',              statusLabel: 'Drafting plan',           icon: '💡' },
+  tasks:    { label: 'Architect',         statusLabel: 'Planning & tasking',      icon: '🏗️' },
+  backend:  { label: 'Backend',          statusLabel: 'Writing API routes',      icon: '🗄️' },
+  frontend: { label: 'Frontend',         statusLabel: 'Building UI',             icon: '🖼️' },
+  quality:  { label: 'Security + Quality', statusLabel: 'Auditing & testing',    icon: '🛡️' },
 }
 
 const INITIAL_STATUS: Record<PhaseId, PhaseStatus> = {
   specify: 'idle', plan: 'idle', tasks: 'idle',
   backend: 'idle', frontend: 'idle',
-  security: 'idle', tester: 'idle', pr: 'idle',
+  quality: 'idle',
 }
 
 interface SSEEvent {
@@ -328,15 +326,11 @@ export default function AgentsDemoPage() {
             </div>
           ))}
 
-          {/* Security → Tester → PR: only shown in full mode */}
+          {/* Security + Quality: only shown in full mode */}
           {full && (
             <>
               <Connector />
-              <PipelineNode id="security" status={phaseStatus.security} />
-              <Connector />
-              <PipelineNode id="tester" status={phaseStatus.tester} />
-              <Connector />
-              <PipelineNode id="pr" status={phaseStatus.pr} />
+              <PipelineNode id="quality" status={phaseStatus.quality} />
             </>
           )}
         </div>

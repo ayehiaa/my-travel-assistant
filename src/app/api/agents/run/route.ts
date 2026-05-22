@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 type PhaseId =
   | 'specify' | 'plan' | 'tasks'
   | 'backend' | 'frontend'
-  | 'security' | 'tester' | 'pr'
+  | 'quality'
 
 const HAIKU = 'claude-haiku-4-5-20251001'
 
@@ -14,10 +14,11 @@ function runClaude(
   prompt: string,
   env: NodeJS.ProcessEnv,
   model?: string,
+  maxTurns = 20,
 ): Promise<{ success: boolean; error?: string }> {
   const args = [
     '--dangerously-skip-permissions', '-p',
-    '--max-turns', '15',
+    '--max-turns', String(maxTurns),
   ]
   if (model) args.push('--model', model)
   args.push(prompt)
@@ -81,21 +82,19 @@ export async function POST(req: NextRequest): Promise<Response> {
       }, 15_000)
 
       async function runPipeline() {
-        // Phases 1–2: specify + plan merged into one Haiku call — saves a cold-start
-        send({ type: 'phase_start', phase: 'specify' })
-        send({ type: 'phase_start', phase: 'plan' })
-        const specResult = await runClaude(
-          'specify+plan',
-          `/speckit-specify ${requirement} then run /speckit-plan`,
-          childEnv,
-          HAIKU,
-        )
-        send({ type: 'phase_done', phase: 'specify' })
-        send({ type: 'phase_done', phase: 'plan' })
-        if (!specResult.success) {
-          send({ type: 'error', message: specResult.error ?? 'specify/plan phase failed' })
-          send({ type: 'pipeline_done', success: false })
-          return
+        // Phases 1–2: specify then plan — separate Haiku calls, 10 turns each
+        for (const { id, prompt } of [
+          { id: 'specify' as PhaseId, prompt: `/speckit-specify ${requirement}` },
+          { id: 'plan'    as PhaseId, prompt: '/speckit-plan' },
+        ]) {
+          send({ type: 'phase_start', phase: id })
+          const result = await runClaude(id, prompt, childEnv, HAIKU, 10)
+          send({ type: 'phase_done', phase: id })
+          if (!result.success) {
+            send({ type: 'error', message: result.error ?? `${id} phase failed` })
+            send({ type: 'pipeline_done', success: false })
+            return
+          }
         }
 
         // Phase 3: tasks + architect notes — Haiku
@@ -144,48 +143,22 @@ export async function POST(req: NextRequest): Promise<Response> {
           return
         }
 
-        // Phases 6–8: security, tester, pr — only in full mode
-        send({ type: 'phase_start', phase: 'security' })
-        const securityResult = await runClaude(
-          'security',
-          'You are the security-reviewer agent. Run `git diff main` to see all changed files. ' +
-          'Audit each for: auth vulnerabilities, XSS, SQL injection, secret leakage, PII exposure, ' +
-          'vulnerable dependencies. Produce a PASS/FAIL report per category. Fix any FAIL items.',
+        // Phase 6: security + tests + PR merged into one call
+        send({ type: 'phase_start', phase: 'quality' })
+        const qualityResult = await runClaude(
+          'quality',
+          'Do the following in order:\n' +
+          '1. Security review: run `git diff main` to see changed files. Audit each for auth vulnerabilities, ' +
+          'XSS, SQL injection, secret leakage, PII exposure, and vulnerable dependencies. Fix any issues found.\n' +
+          '2. Tests: write Vitest unit tests for any new pure functions added on this branch. ' +
+          'Run npm run build, npm run lint, npm test. Fix any failures.\n' +
+          '3. PR: create a GitHub pull request targeting main using `gh pr create` with a concise title ' +
+          'and summary of what was built. Return the PR URL.',
           childEnv,
         )
-        send({ type: 'phase_done', phase: 'security' })
-        if (!securityResult.success) {
-          send({ type: 'error', message: securityResult.error ?? 'security review failed' })
-          send({ type: 'pipeline_done', success: false })
-          return
-        }
-
-        send({ type: 'phase_start', phase: 'tester' })
-        const testerResult = await runClaude(
-          'tester',
-          'You are the tester agent. Write Vitest unit tests for any new pure functions added on this branch. ' +
-          'Run npm run build, npm run lint, npm test. Fix any failures before reporting done.',
-          childEnv,
-        )
-        send({ type: 'phase_done', phase: 'tester' })
-        if (!testerResult.success) {
-          send({ type: 'error', message: testerResult.error ?? 'tests failed' })
-          send({ type: 'pipeline_done', success: false })
-          return
-        }
-
-        send({ type: 'phase_start', phase: 'pr' })
-        const prResult = await runClaude(
-          'pr',
-          'Create a GitHub pull request for the current feature branch targeting main. ' +
-          'Use `gh pr create` with a concise title and a summary of what was built and why. ' +
-          'Return the PR URL when done.',
-          childEnv,
-          HAIKU,
-        )
-        send({ type: 'phase_done', phase: 'pr' })
-        if (!prResult.success) {
-          send({ type: 'error', message: prResult.error ?? 'PR creation failed' })
+        send({ type: 'phase_done', phase: 'quality' })
+        if (!qualityResult.success) {
+          send({ type: 'error', message: qualityResult.error ?? 'quality phase failed' })
           send({ type: 'pipeline_done', success: false })
           return
         }
