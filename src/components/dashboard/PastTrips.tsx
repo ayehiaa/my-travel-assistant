@@ -264,13 +264,49 @@ function PastRow({ trip, canDelete, onEdit, expenses }: { trip: TripWithUsers; c
 
 export default function PastTrips({ trips, canDelete = false, showModal: controlledShow, onShowModal, atTripLimit, expensesByTripId, onEditTrip }: Props) {
   const [internalShow, setInternalShow] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const showModal = controlledShow ?? internalShow
   const setShowModal = onShowModal ?? setInternalShow
+  const toast = useToast()
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const response = await fetch('/api/trips/export', { method: 'POST' })
+      if (!response.ok) throw new Error('Export failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `trips_export_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      URL.revokeObjectURL(url)
+      a.remove()
+      toast('Trips exported successfully', 'success')
+    } catch {
+      toast('Failed to export trips', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <section>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={handleExport}
+            disabled={trips.length === 0 || exporting}
+            title={trips.length === 0 ? 'No trips to export' : undefined}
+            style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--blue-500)', background: 'none', border: 'none',
+              cursor: trips.length === 0 || exporting ? 'not-allowed' : 'pointer', fontFamily: 'var(--sans)',
+              opacity: trips.length === 0 ? 0.4 : 1,
+            }}
+          >
+            {exporting ? '…' : 'Export to CSV'}
+          </button>
           <button
             onClick={() => setShowModal(true)}
             disabled={!!atTripLimit}

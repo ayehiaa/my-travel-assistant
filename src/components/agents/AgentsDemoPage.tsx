@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 type PhaseId =
   | 'specify' | 'plan' | 'tasks'
@@ -118,6 +118,15 @@ export default function AgentsDemoPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
 
+  // Warn before page refresh while the pipeline is running
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isRunning) { e.preventDefault() }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isRunning])
+
   const handlePhaseStart = useCallback((phase: PhaseId) => {
     setPhaseStatus(prev => ({ ...prev, [phase]: 'active' }))
   }, [])
@@ -170,6 +179,7 @@ export default function AgentsDemoPage() {
     const decoder = new TextDecoder()
     let buf = ''
 
+    let receivedDone = false
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -183,7 +193,7 @@ export default function AgentsDemoPage() {
             const ev = JSON.parse(line.slice(6)) as SSEEvent
             if (ev.type === 'phase_start' && ev.phase) handlePhaseStart(ev.phase)
             else if (ev.type === 'phase_done' && ev.phase) handlePhaseDone(ev.phase)
-            else if (ev.type === 'pipeline_done') handlePipelineDone(ev.success ?? false)
+            else if (ev.type === 'pipeline_done') { receivedDone = true; handlePipelineDone(ev.success ?? false) }
             else if (ev.type === 'error') {
               setErrorMsg(ev.message ?? 'Unknown error')
               setIsRunning(false)
@@ -193,6 +203,9 @@ export default function AgentsDemoPage() {
       }
     } catch { /* stream closed by server or user navigated away */ }
     finally {
+      if (!receivedDone) {
+        setErrorMsg('Connection lost — the pipeline is still running on the server. Avoid refreshing during a run.')
+      }
       setIsRunning(false)
     }
   }
