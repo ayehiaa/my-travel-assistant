@@ -116,6 +116,8 @@ export default function AgentsDemoPage() {
   const [phaseStatus, setPhaseStatus] = useState<Record<PhaseId, PhaseStatus>>(INITIAL_STATUS)
   const [pipelineResult, setPipelineResult] = useState<'success' | 'error' | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [elapsedMins, setElapsedMins] = useState<number | null>(null)
+  const startTimeRef = useRef<number | null>(null)
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
 
   // Warn before page refresh while the pipeline is running
@@ -153,7 +155,9 @@ export default function AgentsDemoPage() {
     setIsRunning(true)
     setPipelineResult(null)
     setErrorMsg(null)
+    setElapsedMins(null)
     setPhaseStatus(INITIAL_STATUS)
+    startTimeRef.current = Date.now()
 
     let response: Response
     try {
@@ -193,7 +197,13 @@ export default function AgentsDemoPage() {
             const ev = JSON.parse(line.slice(6)) as SSEEvent
             if (ev.type === 'phase_start' && ev.phase) handlePhaseStart(ev.phase)
             else if (ev.type === 'phase_done' && ev.phase) handlePhaseDone(ev.phase)
-            else if (ev.type === 'pipeline_done') { receivedDone = true; handlePipelineDone(ev.success ?? false) }
+            else if (ev.type === 'pipeline_done') {
+              receivedDone = true
+              if (startTimeRef.current) {
+                setElapsedMins(Math.round((Date.now() - startTimeRef.current) / 60000 * 10) / 10)
+              }
+              handlePipelineDone(ev.success ?? false)
+            }
             else if (ev.type === 'error') {
               setErrorMsg(ev.message ?? 'Unknown error')
               setIsRunning(false)
@@ -315,8 +325,8 @@ export default function AgentsDemoPage() {
         {pipelineResult === 'success' && (
           <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ background: 'var(--mint-soft)', color: 'var(--mint)', border: '1px solid var(--mint)' }}>
             {full
-              ? '✅ Pipeline complete — code committed to branch, PR ready.'
-              : '✅ Pipeline complete — code ready to review.'}
+              ? `✅ Pipeline complete — code committed to branch, PR ready.${elapsedMins !== null ? ` (${elapsedMins} min)` : ''}`
+              : `✅ Pipeline complete — code ready to review.${elapsedMins !== null ? ` (${elapsedMins} min)` : ''}`}
           </div>
         )}
         {pipelineResult === 'error' && !errorMsg && (
