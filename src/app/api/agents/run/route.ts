@@ -84,8 +84,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       async function runPipeline() {
         // Phases 1–2: specify then plan — separate Haiku calls, 10 turns each
         for (const { id, prompt, turns } of [
-          { id: 'specify' as PhaseId, prompt: `/speckit-specify ${requirement}`, turns: 15 },
-          { id: 'plan'    as PhaseId, prompt: '/speckit-plan',                   turns: 10 },
+          { id: 'specify' as PhaseId, prompt: `/speckit-specify ${requirement}`, turns: 20 },
+          { id: 'plan'    as PhaseId, prompt: '/speckit-plan',                   turns: 20 },
         ]) {
           send({ type: 'phase_start', phase: id })
           const result = await runClaude(id, prompt, childEnv, HAIKU, turns)
