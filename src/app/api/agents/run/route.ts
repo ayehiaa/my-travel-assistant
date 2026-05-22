@@ -82,34 +82,35 @@ export async function POST(req: NextRequest): Promise<Response> {
       }, 15_000)
 
       async function runPipeline() {
-        // Phases 1–2: specify then plan — separate Haiku calls, 10 turns each
-        for (const { id, prompt, turns } of [
-          { id: 'specify' as PhaseId, prompt: `/speckit-specify ${requirement}`, turns: 20 },
-          { id: 'plan'    as PhaseId, prompt: '/speckit-plan',                   turns: 20 },
-        ]) {
-          send({ type: 'phase_start', phase: id })
-          const result = await runClaude(id, prompt, childEnv, HAIKU, turns)
-          send({ type: 'phase_done', phase: id })
-          if (!result.success) {
-            send({ type: 'error', message: result.error ?? `${id} phase failed` })
-            send({ type: 'pipeline_done', success: false })
-            return
-          }
-        }
-
-        // Phase 3: tasks + architect notes — Haiku
+        // Phases 1–3: single Haiku call replaces speckit-specify + speckit-plan + speckit-tasks.
+        // Writes files directly without validation loops, checklists, or hook checks.
+        send({ type: 'phase_start', phase: 'specify' })
+        send({ type: 'phase_start', phase: 'plan' })
         send({ type: 'phase_start', phase: 'tasks' })
-        const tasksResult = await runClaude(
-          'tasks',
-          'Run /speckit-tasks to generate tasks.md. Then read .specify/feature.json for the feature ' +
-          'directory, read spec.md and tasks.md, scan relevant src/ files, and write architect-notes.md ' +
-          'with a backend/frontend split implementation plan. Follow CLAUDE.md conventions.',
+        const prepResult = await runClaude(
+          'prep',
+          'You are a rapid spec + architect agent for an automated demo pipeline. ' +
+          `The requirement is: "${requirement}"\n\n` +
+          'Do the following in one pass — no validation loops, no checklists, no clarifying questions:\n\n' +
+          '1. Scan the specs/ directory to find the next sequential 3-digit number (e.g. if 013 exists, use 014). ' +
+          'Create a short 2-4 word kebab-case name from the requirement. ' +
+          'Set FEATURE_DIR to specs/NNN-short-name and create the directory.\n\n' +
+          '2. Write .specify/feature.json: {"feature_directory": "specs/NNN-short-name"}\n\n' +
+          '3. Write FEATURE_DIR/architect-notes.md containing:\n' +
+          '   - One-paragraph feature summary\n' +
+          '   - ## Backend tasks: bullet list of specific files to create/modify in src/ with what each does\n' +
+          '   - ## Frontend tasks: bullet list of specific files to create/modify in src/ with what each does\n' +
+          '   Base file paths on CLAUDE.md conventions and existing src/ structure.\n\n' +
+          'Stop after writing those two files. Follow CLAUDE.md conventions.',
           childEnv,
           HAIKU,
+          15,
         )
+        send({ type: 'phase_done', phase: 'specify' })
+        send({ type: 'phase_done', phase: 'plan' })
         send({ type: 'phase_done', phase: 'tasks' })
-        if (!tasksResult.success) {
-          send({ type: 'error', message: tasksResult.error ?? 'tasks phase failed' })
+        if (!prepResult.success) {
+          send({ type: 'error', message: prepResult.error ?? 'prep phase failed' })
           send({ type: 'pipeline_done', success: false })
           return
         }
@@ -121,11 +122,11 @@ export async function POST(req: NextRequest): Promise<Response> {
             id,
             id === 'backend'
               ? 'You are the backend-dev agent. Read .specify/feature.json for the feature directory, ' +
-                'then read architect-notes.md and tasks.md for your backend tasks. ' +
+                'then read architect-notes.md for your backend tasks. ' +
                 'Implement all backend work: API routes, Zod validation, Supabase queries, audit logging. ' +
                 'Follow CLAUDE.md conventions.'
               : 'You are the frontend-dev agent. Read .specify/feature.json for the feature directory, ' +
-                'then read architect-notes.md and tasks.md for your frontend tasks. ' +
+                'then read architect-notes.md for your frontend tasks. ' +
                 'Implement all frontend work: React components, Next.js pages, Tailwind CSS styling. ' +
                 'Follow CLAUDE.md conventions.',
             childEnv,
