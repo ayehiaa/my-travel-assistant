@@ -134,7 +134,4 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 5. No `console.log` left in production code
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan at
-`specs/002-expense-category-chart/plan.md`.
 <!-- SPECKIT END -->
