@@ -134,4 +134,6 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 5. No `console.log` left in production code
 
 <!-- SPECKIT START -->
+## Current Feature Plan
+Active implementation plan: `specs/010-hide-gmail-import/plan.md`
 <!-- SPECKIT END -->
