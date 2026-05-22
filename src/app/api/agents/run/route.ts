@@ -130,6 +130,8 @@ export async function POST(req: NextRequest): Promise<Response> {
                 'Implement all frontend work: React components, Next.js pages, Tailwind CSS styling. ' +
                 'Follow CLAUDE.md conventions.',
             childEnv,
+            undefined,
+            40,
           )
           send({ type: 'phase_done', phase: id })
           if (!result.success) {
