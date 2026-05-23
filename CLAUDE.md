@@ -59,7 +59,7 @@ src/
   types/
     database.ts          # TypeScript interfaces for all DB tables
     flights.ts           # FlightOffer type
-  proxy.ts               # protect all routes except /login, /auth/callback (renamed from middleware.ts)
+  middleware.ts          # protect all routes except /login, /auth/callback
 ```
 
 ## Code Conventions
@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active implementation plan: `specs/010-hide-gmail-import/plan.md`
+Active implementation plan: `specs/013-drag-file-expense-autofill/plan.md`
 <!-- SPECKIT END -->
