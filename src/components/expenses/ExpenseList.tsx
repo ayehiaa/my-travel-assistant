@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
+import { GbpRates } from '@/lib/currencyConverter'
 import { computeExpenseSummary } from '@/lib/expenseSummary'
 import ExpenseCard from './ExpenseCard'
 import AddExpenseModal from './AddExpenseModal'
@@ -16,9 +17,10 @@ interface Props {
   ownerRole: UserRole
   expenseCount: number
   initialTripId?: string
+  rateMap: GbpRates
 }
 
-export default function ExpenseList({ initialExpenses, categories, trips, canDelete, ownerRole, expenseCount, initialTripId }: Props) {
+export default function ExpenseList({ initialExpenses, categories, trips, canDelete, ownerRole, expenseCount, initialTripId, rateMap }: Props) {
   const router = useRouter()
   const [expenses, setExpenses] = useState<ExpenseWithCategory[]>(initialExpenses)
   const [showAddModal, setShowAddModal] = useState(!!initialTripId)
@@ -74,7 +76,7 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
 
   return (
     <>
-      <ExpenseCategoryChart expenses={expenses} categories={categories} />
+      <ExpenseCategoryChart expenses={expenses} categories={categories} rateMap={rateMap} />
 
       {/* Near-limit warning banner */}
       {isNearLimit && (

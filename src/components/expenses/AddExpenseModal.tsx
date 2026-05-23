@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useToast } from '@/context/ToastContext'
 import { ExpenseCategory, ExpenseWithCategory, TripWithUsers } from '@/types/database'
+import type { ParsedReceiptData } from '@/lib/receiptParser'
 
 interface Props {
   categories: ExpenseCategory[]
@@ -72,6 +73,11 @@ function AddExpenseForm(props: Props) {
   const [receiptFile,      setReceiptFile]      = useState<File | null>(null)
   const [removeReceipt,    setRemoveReceipt]    = useState(false)
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [dragOver,   setDragOver]   = useState(false)
+  const [parsing,    setParsing]    = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const dragCounterRef     = useRef(0)
 
   const parsedAmount = parseFloat(amount)
   const isValid =
@@ -81,6 +87,75 @@ function AddExpenseForm(props: Props) {
     currency.trim() !== '' &&
     categoryId !== '' &&
     expenseDate !== ''
+
+  function handleFileDrop(file: File) {
+    if (!['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {
+      toast('Invalid file type. JPG, PNG or PDF only.', 'error')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast('File too large. Max 10 MB.', 'error')
+      return
+    }
+    setReceiptFile(file)
+    setRemoveReceipt(false)
+    abortControllerRef.current?.abort()
+    triggerParse(file)
+  }
+
+  async function triggerParse(file: File) {
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 30_000)
+
+    setParsing(true)
+    setParseError(null)
+
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/expenses/parse-receipt', {
+        method: 'POST',
+        body: fd,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timer)
+
+      if (!res.ok) {
+        setParseError("Couldn't read receipt details — please fill in manually")
+        return
+      }
+
+      const data: ParsedReceiptData = await res.json()
+
+      if (data.title)           setTitle(data.title)
+      if (data.amount !== null) setAmount(String(data.amount))
+      if (data.currency)        setCurrency(data.currency)
+      if (data.date)            setExpenseDate(data.date)
+
+      const allNull = data.title === null && data.amount === null && data.currency === null && data.date === null
+      if (allNull) {
+        setParseError("Couldn't read receipt details — please fill in manually")
+      }
+    } catch (err) {
+      clearTimeout(timer)
+      if (err instanceof Error && err.name === 'AbortError') {
+        if (timedOut) {
+          setParseError("Couldn't read receipt details — please fill in manually")
+        }
+        // else: intentional cancel — silent
+      } else {
+        setParseError("Couldn't read receipt details — please fill in manually")
+      }
+    } finally {
+      setParsing(false)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -155,18 +230,57 @@ function AddExpenseForm(props: Props) {
       }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{
-        background: 'white',
-        borderRadius: 'var(--r-xl)',
-        width: '100%',
-        maxWidth: 560,
-        maxHeight: '90vh',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: 'var(--shadow-lg)',
-        animation: 'modalRise .22s ease',
-      }}>
+      <div
+        style={{
+          background: 'white',
+          borderRadius: 'var(--r-xl)',
+          width: '100%',
+          maxWidth: 560,
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: 'var(--shadow-lg)',
+          animation: 'modalRise .22s ease',
+          position: 'relative',
+        }}
+        onDragEnter={e => {
+          e.preventDefault()
+          dragCounterRef.current += 1
+          setDragOver(true)
+        }}
+        onDragOver={e => {
+          e.preventDefault()
+        }}
+        onDragLeave={() => {
+          dragCounterRef.current -= 1
+          if (dragCounterRef.current === 0) setDragOver(false)
+        }}
+        onDrop={e => {
+          e.preventDefault()
+          dragCounterRef.current = 0
+          setDragOver(false)
+          const file = e.dataTransfer.files[0]
+          if (file) handleFileDrop(file)
+        }}
+      >
+        {dragOver && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 10,
+            pointerEvents: 'none',
+            borderRadius: 'var(--r-xl)',
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '2.5px dashed var(--blue-700)',
+            display: 'grid',
+            placeItems: 'center',
+          }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--blue-700)' }}>
+              Drop receipt here
+            </span>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{
@@ -380,10 +494,41 @@ function AddExpenseForm(props: Props) {
                       e.target.value = ''
                       return
                     }
+                    abortControllerRef.current?.abort()
                     setReceiptFile(f)
+                    triggerParse(f)
                   }}
                 />
                 <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>JPG, PNG or PDF · max 10 MB</p>
+              </div>
+            )}
+            {parsing && (
+              <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '4px 0 0' }}>
+                Reading receipt…
+              </p>
+            )}
+            {parseError && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)', flex: 1 }}>
+                  {parseError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setParseError(null)}
+                  aria-label="Dismiss"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 14,
+                    color: 'var(--ink-3)',
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>
@@ -417,21 +562,21 @@ function AddExpenseForm(props: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={!isValid || saving || uploadingReceipt}
+            disabled={!isValid || saving || uploadingReceipt || parsing}
             style={{
               padding: '10px 20px',
               borderRadius: 'var(--r)',
               fontSize: 14,
               fontWeight: 700,
               border: 'none',
-              background: isValid && !saving && !uploadingReceipt ? 'var(--blue-700)' : 'var(--rule)',
-              color: isValid && !saving && !uploadingReceipt ? 'white' : 'var(--ink-4)',
-              cursor: isValid && !saving && !uploadingReceipt ? 'pointer' : 'not-allowed',
+              background: isValid && !saving && !uploadingReceipt && !parsing ? 'var(--blue-700)' : 'var(--rule)',
+              color: isValid && !saving && !uploadingReceipt && !parsing ? 'white' : 'var(--ink-4)',
+              cursor: isValid && !saving && !uploadingReceipt && !parsing ? 'pointer' : 'not-allowed',
               fontFamily: 'var(--sans)',
               transition: 'background .12s',
             }}
           >
-            {uploadingReceipt ? 'Uploading receipt…' : saving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add expense'}
+            {parsing ? 'Reading receipt…' : uploadingReceipt ? 'Uploading receipt…' : saving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add expense'}
           </button>
         </div>
       </div>

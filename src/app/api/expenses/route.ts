@@ -8,7 +8,7 @@ import { logAudit } from '@/lib/auditLogger'
 const ExpenseInsertSchema = z.object({
   title:        z.string().min(1).max(200),
   amount:       z.number().nonnegative(),
-  currency:     z.string().min(1).max(10),
+  currency:     z.string().regex(/^[A-Z]{3}$/, 'Currency must be a 3-letter ISO 4217 code'),
   category_id:  z.string().uuid(),
   expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   trip_id:      z.string().uuid().nullable().optional(),

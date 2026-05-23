@@ -3,14 +3,16 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { buildExpenseCategoryChartData } from '@/lib/expenseChartData'
 import { ExpenseWithCategory, ExpenseCategory } from '@/types/database'
+import { GbpRates } from '@/lib/currencyConverter'
 
 interface Props {
   expenses: ExpenseWithCategory[]
   categories: ExpenseCategory[]
+  rateMap: GbpRates
 }
 
-export default function ExpenseCategoryChart({ expenses, categories }: Props) {
-  const { rows, categoryColors, hasMultiCurrency } = buildExpenseCategoryChartData(expenses, categories)
+export default function ExpenseCategoryChart({ expenses, categories, rateMap }: Props) {
+  const { rows, categoryColors, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, categories, rateMap)
 
   if (rows.length === 0) {
     return (
@@ -43,9 +45,14 @@ export default function ExpenseCategoryChart({ expenses, categories }: Props) {
             ))}
         </BarChart>
       </ResponsiveContainer>
-      {hasMultiCurrency && (
+      {hasConvertedCurrencies && unconvertibleCount === 0 && (
         <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, marginBottom: 0 }}>
-          Some expenses in other currencies are not shown in this chart.
+          All amounts converted to GBP.
+        </p>
+      )}
+      {unconvertibleCount > 0 && (
+        <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, marginBottom: 0 }}>
+          Amounts converted to GBP where possible. {unconvertibleCount} expense{unconvertibleCount === 1 ? '' : 's'} in unsupported currencies not shown.
         </p>
       )}
     </div>
