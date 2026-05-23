@@ -38,6 +38,7 @@ export default function Nav() {
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
     ...(user.role === 'main' || user.role === 'premium' ? [{ href: '/settings', label: 'Settings' }] : []),
+    ...(user.role === 'premium' ? [{ href: '/agents', label: 'Agents' }] : []),
   ]
 
   const initials = user.displayName
