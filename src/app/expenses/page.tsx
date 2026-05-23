@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ExpenseList from '@/components/expenses/ExpenseList'
 import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
+import { buildGbpRates, GbpRates } from '@/lib/currencyConverter'
 
 export const metadata = { title: 'Expenses — Sojourn' }
 
@@ -42,6 +43,8 @@ export default async function ExpensesPage({
       .single(),
   ])
 
+  const rateMap: GbpRates = await buildGbpRates((expenses ?? []) as ExpenseWithCategory[])
+
   const ownerRole: UserRole = (ownerRoleRow?.role as UserRole) ?? 'main'
   const expenseCount = (expenses ?? []).length
   const canDelete = user.role !== 'assistant'
@@ -66,6 +69,7 @@ export default async function ExpensesPage({
         ownerRole={ownerRole}
         expenseCount={expenseCount}
         initialTripId={initialTripId}
+        rateMap={rateMap}
       />
     </main>
   )

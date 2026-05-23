@@ -111,7 +111,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ParsedRec
     // Step 11: Return parsed data (always 200)
     return NextResponse.json(parsed)
   } catch {
-    // Step 12: Catch and return 500
     return NextResponse.json({ error: 'Failed to parse receipt' }, { status: 500 })
   }
 }

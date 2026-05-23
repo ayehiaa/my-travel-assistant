@@ -3,6 +3,7 @@ import {
   buildExpenseCategoryChartData,
   CATEGORY_COLORS,
 } from './expenseChartData'
+import { GbpRates } from './currencyConverter'
 import { ExpenseWithCategory, ExpenseCategory } from '@/types/database'
 
 function makeExpense(overrides: Partial<ExpenseWithCategory> = {}): ExpenseWithCategory {
@@ -41,16 +42,18 @@ function makeCategory(overrides: Partial<ExpenseCategory> = {}): ExpenseCategory
 }
 
 describe('buildExpenseCategoryChartData', () => {
-  it('returns empty rows and hasMultiCurrency=false for empty expenses', () => {
+  it('returns empty rows and hasConvertedCurrencies=false for empty expenses', () => {
     const result = buildExpenseCategoryChartData([], [makeCategory()])
     expect(result.rows).toEqual([])
-    expect(result.hasMultiCurrency).toBe(false)
+    expect(result.hasConvertedCurrencies).toBe(false)
+    expect(result.unconvertibleCount).toBe(0)
   })
 
   it('returns empty rows when no categories are provided', () => {
     const result = buildExpenseCategoryChartData([], [])
     expect(result.rows).toEqual([])
-    expect(result.hasMultiCurrency).toBe(false)
+    expect(result.hasConvertedCurrencies).toBe(false)
+    expect(result.unconvertibleCount).toBe(0)
   })
 
   it('single month, single category → one row with correct amount', () => {
@@ -127,43 +130,110 @@ describe('buildExpenseCategoryChartData', () => {
     expect(rows[0]['cat-2']).toBe(0)
   })
 
-  it('multi-currency input → hasMultiCurrency=true; USD amounts do NOT appear in rows', () => {
+  it('non-GBP expenses without rateMap → excluded, unconvertibleCount incremented', () => {
     const cat = makeCategory({ id: 'cat-1', display_order: 1 })
     const expenses = [
       makeExpense({ id: 'e1', category_id: 'cat-1', amount: 100, currency: 'GBP', expense_date: '2026-01-10' }),
       makeExpense({ id: 'e2', category_id: 'cat-1', amount: 999, currency: 'USD', expense_date: '2026-01-10' }),
     ]
 
-    const { rows, hasMultiCurrency } = buildExpenseCategoryChartData(expenses, [cat])
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat])
 
-    expect(hasMultiCurrency).toBe(true)
+    expect(hasConvertedCurrencies).toBe(false)
+    expect(unconvertibleCount).toBe(1)
     expect(rows).toHaveLength(1)
     // Only the GBP amount should appear
     expect(rows[0]['cat-1']).toBe(100)
   })
 
-  it('all-USD expenses with default GBP currency → empty rows but hasMultiCurrency=true', () => {
+  it('all-USD expenses without rateMap → empty rows, unconvertibleCount matches expense count', () => {
     const cat = makeCategory({ id: 'cat-1', display_order: 1 })
     const expenses = [
       makeExpense({ id: 'e1', category_id: 'cat-1', amount: 500, currency: 'USD', expense_date: '2026-01-10' }),
     ]
 
-    const { rows, hasMultiCurrency } = buildExpenseCategoryChartData(expenses, [cat])
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat])
 
-    expect(hasMultiCurrency).toBe(true)
+    expect(hasConvertedCurrencies).toBe(false)
+    expect(unconvertibleCount).toBe(1)
     expect(rows).toEqual([])
   })
 
-  it('hasMultiCurrency=false when all expenses match the requested currency', () => {
+  it('all GBP expenses with empty rateMap → hasConvertedCurrencies=false, unconvertibleCount=0', () => {
     const cat = makeCategory({ id: 'cat-1', display_order: 1 })
     const expenses = [
       makeExpense({ id: 'e1', category_id: 'cat-1', amount: 100, currency: 'GBP', expense_date: '2026-01-10' }),
       makeExpense({ id: 'e2', category_id: 'cat-1', amount: 200, currency: 'GBP', expense_date: '2026-02-05' }),
     ]
+    const rateMap: GbpRates = {}
 
-    const { hasMultiCurrency } = buildExpenseCategoryChartData(expenses, [cat])
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat], rateMap)
 
-    expect(hasMultiCurrency).toBe(false)
+    expect(hasConvertedCurrencies).toBe(false)
+    expect(unconvertibleCount).toBe(0)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]['cat-1']).toBe(100)
+    expect(rows[1]['cat-1']).toBe(200)
+  })
+
+  it('mixed currencies with rates → correct converted totals, hasConvertedCurrencies=true, unconvertibleCount=0', () => {
+    const cat = makeCategory({ id: 'cat-1', display_order: 1 })
+    const expenses = [
+      makeExpense({ id: 'e1', category_id: 'cat-1', amount: 100, currency: 'GBP', expense_date: '2026-01-10' }),
+      makeExpense({ id: 'e2', category_id: 'cat-1', amount: 200, currency: 'USD', expense_date: '2026-01-10' }),
+    ]
+    // 1 USD = 0.79 GBP, so 200 USD → 158 GBP
+    const rateMap: GbpRates = { '2026-01-10': { USD: 0.79 } }
+
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat], rateMap)
+
+    expect(hasConvertedCurrencies).toBe(true)
+    expect(unconvertibleCount).toBe(0)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]['cat-1']).toBeCloseTo(100 + 200 * 0.79, 5)
+  })
+
+  it('mixed currencies with one missing rate → unconvertibleCount=1, hasConvertedCurrencies=false', () => {
+    const cat = makeCategory({ id: 'cat-1', display_order: 1 })
+    const expenses = [
+      makeExpense({ id: 'e1', category_id: 'cat-1', amount: 100, currency: 'GBP', expense_date: '2026-01-10' }),
+      makeExpense({ id: 'e2', category_id: 'cat-1', amount: 200, currency: 'EUR', expense_date: '2026-01-10' }),
+    ]
+    // rateMap has no entry for EUR on this date
+    const rateMap: GbpRates = { '2026-01-10': { USD: 0.79 } }
+
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat], rateMap)
+
+    expect(unconvertibleCount).toBe(1)
+    expect(hasConvertedCurrencies).toBe(false)
+    expect(rows).toHaveLength(1)
+    // Only GBP expense included
+    expect(rows[0]['cat-1']).toBe(100)
+  })
+
+  it('all non-GBP with all rates available → all converted, rows non-empty, hasConvertedCurrencies=true', () => {
+    const cat = makeCategory({ id: 'cat-1', display_order: 1 })
+    const expenses = [
+      makeExpense({ id: 'e1', category_id: 'cat-1', amount: 100, currency: 'USD', expense_date: '2026-01-10' }),
+      makeExpense({ id: 'e2', category_id: 'cat-1', amount: 200, currency: 'EUR', expense_date: '2026-01-10' }),
+    ]
+    const rateMap: GbpRates = { '2026-01-10': { USD: 0.79, EUR: 0.86 } }
+
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData(expenses, [cat], rateMap)
+
+    expect(hasConvertedCurrencies).toBe(true)
+    expect(unconvertibleCount).toBe(0)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]['cat-1']).toBeCloseTo(100 * 0.79 + 200 * 0.86, 5)
+  })
+
+  it('empty expenses array → rows=[], hasConvertedCurrencies=false, unconvertibleCount=0', () => {
+    const rateMap: GbpRates = { '2026-01-10': { USD: 0.79 } }
+    const { rows, hasConvertedCurrencies, unconvertibleCount } = buildExpenseCategoryChartData([], [makeCategory()], rateMap)
+
+    expect(rows).toEqual([])
+    expect(hasConvertedCurrencies).toBe(false)
+    expect(unconvertibleCount).toBe(0)
   })
 
   it('color assignment → first category by display_order gets CATEGORY_COLORS[0], second gets CATEGORY_COLORS[1]', () => {
@@ -198,20 +268,6 @@ describe('buildExpenseCategoryChartData', () => {
     // Verify it contains '2026' and a 3-letter month abbreviation
     expect(rows[0].label).toMatch(/Jan/)
     expect(rows[0].label).toMatch(/2026/)
-  })
-
-  it('custom currency parameter filters correctly', () => {
-    const cat = makeCategory({ id: 'cat-1', display_order: 1 })
-    const expenses = [
-      makeExpense({ id: 'e1', category_id: 'cat-1', amount: 200, currency: 'EUR', expense_date: '2026-01-10' }),
-      makeExpense({ id: 'e2', category_id: 'cat-1', amount: 999, currency: 'GBP', expense_date: '2026-01-10' }),
-    ]
-
-    const { rows, hasMultiCurrency } = buildExpenseCategoryChartData(expenses, [cat], 'EUR')
-
-    expect(hasMultiCurrency).toBe(true)
-    expect(rows).toHaveLength(1)
-    expect(rows[0]['cat-1']).toBe(200)
   })
 
   it('color wraps around when more than 12 categories exist', () => {
