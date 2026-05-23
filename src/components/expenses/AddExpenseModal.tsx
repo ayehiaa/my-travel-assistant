@@ -110,7 +110,7 @@ function AddExpenseForm(props: Props) {
     const timer = setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, 10_000)
+    }, 30_000)
 
     setParsing(true)
     setParseError(null)
