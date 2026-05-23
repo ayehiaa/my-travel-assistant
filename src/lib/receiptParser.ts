@@ -3,9 +3,10 @@ export interface ParsedReceiptData {
   amount:   number | null
   currency: string | null
   date:     string | null
+  category: string | null
 }
 
-const ALL_NULL: ParsedReceiptData = { title: null, amount: null, currency: null, date: null }
+const ALL_NULL: ParsedReceiptData = { title: null, amount: null, currency: null, date: null, category: null }
 
 export function parseReceiptResponse(text: string): ParsedReceiptData {
   // Strip markdown fences
@@ -29,8 +30,8 @@ export function parseReceiptResponse(text: string): ParsedReceiptData {
 
   const obj = parsed as Record<string, unknown>
 
-  // If none of the four expected keys are present, return all-null
-  const expectedKeys = ['title', 'amount', 'currency', 'date']
+  // If none of the five expected keys are present, return all-null
+  const expectedKeys = ['title', 'amount', 'currency', 'date', 'category']
   if (!expectedKeys.some(k => k in obj)) {
     return { ...ALL_NULL }
   }
@@ -67,5 +68,14 @@ export function parseReceiptResponse(text: string): ParsedReceiptData {
     date = obj['date']
   }
 
-  return { title, amount, currency, date }
+  // Coerce category
+  let category: string | null = null
+  if (typeof obj['category'] === 'string') {
+    const trimmed = obj['category'].trim()
+    if (trimmed.length > 0 && trimmed.length <= 100) {
+      category = trimmed
+    }
+  }
+
+  return { title, amount, currency, date, category }
 }

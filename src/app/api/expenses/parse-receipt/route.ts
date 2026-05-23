@@ -3,6 +3,7 @@ import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 import { getAuthUser } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { parseReceiptResponse } from '@/lib/receiptParser'
 import type { ParsedReceiptData } from '@/lib/receiptParser'
 
@@ -21,20 +22,32 @@ function verifyMagicBytes(buf: ArrayBuffer, mimeType: string): boolean {
   return false
 }
 
-const RECEIPT_PROMPT =
-  'Extract expense details from this receipt. Return ONLY a raw JSON object (no markdown, no code fences) with these exact fields:\n' +
-  '{\n' +
-  '  "title": "<merchant or payee name>",\n' +
-  '  "amount": <numeric total paid, positive number>,\n' +
-  '  "currency": "<ISO 4217 code e.g. GBP>",\n' +
-  '  "date": "<YYYY-MM-DD>"\n' +
-  '}\n' +
-  'Any field you cannot confidently extract must be null. If you cannot extract any details, return the literal string: null'
+function buildReceiptPrompt(categoryNames: string[]): string {
+  return (
+    'Extract expense details from this receipt. Return ONLY a raw JSON object (no markdown, no code fences) with these exact fields:\n' +
+    '{\n' +
+    '  "title": "<merchant or payee name>",\n' +
+    '  "amount": <numeric total paid, positive number>,\n' +
+    '  "currency": "<ISO 4217 code e.g. GBP>",\n' +
+    '  "date": "<YYYY-MM-DD>",\n' +
+    `  "category": "<one of: ${categoryNames.join(', ')}>"\n` +
+    '}\n' +
+    'Any field you cannot confidently extract must be null. If you cannot extract any details, return the literal string: null'
+  )
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse<ParsedReceiptData | { error: string }>> {
   // Step 1: Auth check
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Step 1b: Fetch category names for the prompt
+  const supabase = await createClient()
+  const { data: categoryRows } = await supabase
+    .from('expense_categories')
+    .select('name')
+    .order('display_order', { ascending: true })
+  const categoryNames = (categoryRows ?? []).map((r: { name: string }) => r.name)
 
   // Step 2: Parse and validate form data with Zod
   const formData = await request.formData()
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ParsedRec
           role: 'user',
           content: [
             contentBlock,
-            { type: 'text', text: RECEIPT_PROMPT },
+            { type: 'text', text: buildReceiptPrompt(categoryNames) },
           ],
         },
       ],

@@ -65,7 +65,7 @@ function AddExpenseForm(props: Props) {
   const [title,       setTitle]       = useState(expenseToEdit?.title ?? '')
   const [amount,      setAmount]      = useState(expenseToEdit ? String(expenseToEdit.amount) : '')
   const [currency,    setCurrency]    = useState(expenseToEdit?.currency ?? 'GBP')
-  const [categoryId,  setCategoryId]  = useState(expenseToEdit?.category_id ?? categories[0]?.id ?? '')
+  const [categoryId,  setCategoryId]  = useState(expenseToEdit?.category_id ?? '')
   const [expenseDate, setExpenseDate] = useState(expenseToEdit?.expense_date ?? '')
   const [tripId,      setTripId]      = useState(expenseToEdit?.trip_id ?? props.defaultTripId ?? '')
   const [notes,            setNotes]            = useState(expenseToEdit?.notes ?? '')
@@ -137,6 +137,12 @@ function AddExpenseForm(props: Props) {
       if (data.amount !== null) setAmount(String(data.amount))
       if (data.currency)        setCurrency(data.currency)
       if (data.date)            setExpenseDate(data.date)
+      if (data.category) {
+        const match = categories.find(
+          c => c.name.toLowerCase() === data.category!.toLowerCase()
+        )
+        if (match) setCategoryId(match.id)
+      }
 
       const allNull = data.title === null && data.amount === null && data.currency === null && data.date === null
       if (allNull) {
