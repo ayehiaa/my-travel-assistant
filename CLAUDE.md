@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active implementation plan: `specs/014-gbp-expense-chart/plan.md`
+Active implementation plan: `specs/015-portfolio-advisor/plan.md`
 <!-- SPECKIT END -->
