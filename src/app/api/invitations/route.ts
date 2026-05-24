@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium') {
+  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium' && roleRecord?.role !== 'premium_plus') {
     return NextResponse.json({ error: 'Only main or premium accounts can invite assistants' }, { status: 403 })
   }
 

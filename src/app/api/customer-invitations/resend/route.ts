@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'premium') {
+  if (roleRecord?.role !== 'premium' && roleRecord?.role !== 'premium_plus') {
     return NextResponse.json({ error: 'Premium accounts only' }, { status: 403 })
   }
 
