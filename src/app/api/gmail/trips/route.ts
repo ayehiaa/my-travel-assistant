@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
@@ -20,7 +20,7 @@ const GmailTripSaveSchema = z.object({
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isPremiumOrAbove(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()
   const parsed = GmailTripSaveSchema.safeParse(body)

@@ -37,8 +37,8 @@ export default function Nav() {
     { href: '/search',   label: 'Plan a trip' },
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
-    ...(user.role === 'main' || user.role === 'premium' ? [{ href: '/settings', label: 'Settings' }] : []),
-    ...(user.role === 'premium' ? [{ href: '/agents', label: 'Agents' }] : []),
+    ...(user.role === 'main' || user.role === 'premium' || user.role === 'premium_plus' ? [{ href: '/settings', label: 'Settings' }] : []),
+    ...(user.role === 'premium_plus' ? [{ href: '/agents', label: 'Agents' }, { href: '/portfolio', label: 'Portfolio' }] : []),
   ]
 
   const initials = user.displayName
@@ -126,7 +126,7 @@ export default function Nav() {
             </div>
           ) : (
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>
-              {firstName} · {user.role === 'premium' ? 'Premium' : 'Main'}
+              {firstName} · {user.role === 'premium_plus' ? 'Premium+' : user.role === 'premium' ? 'Premium' : 'Main'}
             </span>
           )}
 
@@ -209,7 +209,7 @@ export default function Nav() {
 
           <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.1)' }}>
             <p className="text-[11px] px-3 mb-1" style={{ opacity: 0.5 }}>
-              {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · ${user.role === 'premium' ? 'Premium' : 'Main'}`}
+              {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · ${user.role === 'premium_plus' ? 'Premium+' : user.role === 'premium' ? 'Premium' : 'Main'}`}
             </p>
             <button
               onClick={handleSignOut}
