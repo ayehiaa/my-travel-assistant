@@ -134,3 +134,151 @@ To promote a test user to `premium_plus` after migration:
 ```sql
 UPDATE user_roles SET role = 'premium_plus' WHERE user_id = '<your-user-id>';
 ```
+
+---
+---
+
+# Tasks: Portfolio Holdings Management + Settings (Issue #74)
+
+**Issue**: #74 | **Spec**: `specs/015-portfolio-advisor/spec.md` | **Plan**: `specs/015-portfolio-advisor/plan.md`
+
+**Scope**: Issue #74 only — `portfolio_holdings` and `portfolio_settings` DB tables + migration, holdings CRUD API, Polygon.io ticker autocomplete proxy, settings API, portfolio overview UI, settings UI, and TypeScript types. Issue #73 (tier system, middleware, T&C gate, Nav, `user_profiles` migration) is already merged.
+
+**Auth pattern**: Use `getAuthUser()` from `@/lib/auth` — returns `AuthUser | null` with `.role` already resolved. Check `user.role !== 'premium_plus'` for 403. Do NOT use raw `supabase.auth.getUser()` + separate `user_roles` query.
+
+**Data scoping**: Scope all portfolio queries to `user.id` directly — portfolio is owner-only, no assistant access. Do NOT use `getActiveMainAccountId`.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies on incomplete tasks)
+- **[Story]**: User story label — maps to spec.md stories 2–9
+
+---
+
+## Phase 1: Foundational (Blocking Prerequisites)
+
+**Purpose**: TypeScript types, audit action strings, and DB migration that all other tasks depend on.
+
+**⚠️ CRITICAL**: No other tasks can begin until T101 and T102 are complete.
+
+- [ ] T101 Add to `src/types/database.ts`: (1) `RiskProfile = 'conservative' | 'moderate' | 'aggressive'` type alias; (2) `PortfolioHolding { id: string, user_id: string, ticker: string, company_name: string, total_value_usd: number, created_at: string, updated_at: string }` interface; (3) `PortfolioSettings { user_id: string, cash_usd: number, target_return_pct: number, risk_profile: RiskProfile, run_interval_days: 7 | 14 | 30, last_run_at: string | null, next_run_at: string | null, created_at: string, updated_at: string }` interface; (4) extend `AuditAction` union to add `'holding_created' | 'holding_updated' | 'holding_deleted' | 'portfolio_settings_updated'`
+- [ ] T102 [P] Create `supabase/migrations/015_portfolio_holdings_settings.sql`: create `portfolio_holdings` table (`id uuid PRIMARY KEY DEFAULT gen_random_uuid()`, `user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`, `ticker text NOT NULL`, `company_name text NOT NULL`, `total_value_usd numeric(12,2) NOT NULL CHECK (total_value_usd > 0)`, `created_at timestamptz NOT NULL DEFAULT now()`, `updated_at timestamptz NOT NULL DEFAULT now()`, `UNIQUE (user_id, ticker)`); create `portfolio_settings` table (`user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`, `cash_usd numeric(12,2) NOT NULL DEFAULT 0 CHECK (cash_usd >= 0)`, `target_return_pct numeric(5,2) NOT NULL DEFAULT 10 CHECK (target_return_pct > 0)`, `risk_profile text NOT NULL DEFAULT 'moderate' CHECK (risk_profile IN ('conservative','moderate','aggressive'))`, `run_interval_days integer NOT NULL DEFAULT 30 CHECK (run_interval_days IN (7,14,30))`, `last_run_at timestamptz NULL`, `next_run_at timestamptz NULL`, `created_at timestamptz NOT NULL DEFAULT now()`, `updated_at timestamptz NOT NULL DEFAULT now()`); enable RLS on both tables; `portfolio_holdings` policy: users can SELECT/INSERT/UPDATE/DELETE only rows where `user_id = auth.uid()`; `portfolio_settings` policy: users can SELECT/UPDATE only their own row
+
+**Checkpoint**: TypeScript compiles with new types and audit actions; migration SQL file exists and is ready to apply.
+
+---
+
+## Phase 2: Holdings API (User Stories 2, 3, 5)
+
+**Goal**: All backend CRUD routes for stock holdings + Polygon.io ticker autocomplete proxy.
+
+**Independent Test**: `POST /api/portfolio/holdings` with valid body → 201. Same ticker again → 409. `GET` → list by value desc with total. `PUT /[id]` → 200. `DELETE /[id]` → 204. Wrong user's holding → 404. Unauthenticated → 401. Non-`premium_plus` → 403. `GET /tickers/search?q=AAPL` → results array.
+
+- [ ] T103 [US2] Create `src/app/api/portfolio/holdings/route.ts`: `GET` — `const user = await getAuthUser()` → 401 if null; `if (user.role !== 'premium_plus')` → 403; `const supabase = await createClient()`; query `portfolio_holdings` where `user_id = user.id` order by `total_value_usd DESC`; compute `total_holdings_usd` as sum; return `{ holdings, total_holdings_usd }`; `POST` — same auth/role checks; Zod `z.object({ ticker: z.string().min(1).max(10), company_name: z.string().min(1).max(100), total_value_usd: z.number().positive() })`; use `createClient()` to insert (RLS enforces user_id scoping); catch Postgres unique constraint violation (`error.code === '23505'`) → 409 `{ error: 'This ticker is already in your portfolio' }`; `await logAudit({ performedBy: user.id, action: 'holding_created', tripId: null })`; return 201 `{ holding }`
+- [ ] T104 [P] [US5] Create `src/app/api/portfolio/holdings/[id]/route.ts`: `PUT` — `getAuthUser()` → 401/403; `const { id } = await params` (params is `Promise<{ id: string }>` in Next.js 16 App Router); Zod `z.object({ total_value_usd: z.number().positive() })`; `const supabase = await createClient()`; update where `id = id AND user_id = user.id`; if 0 rows updated → 404 `{ error: 'Holding not found' }`; `await logAudit({ performedBy: user.id, action: 'holding_updated', tripId: null })`; return 200 `{ holding }`; `DELETE` — `getAuthUser()` → 401/403; `const { id } = await params`; use `createClient()` to delete where `id = id AND user_id = user.id`; if 0 rows deleted → 404; `await logAudit({ performedBy: user.id, action: 'holding_deleted', tripId: null })`; return 204
+- [ ] T105 [P] [US2] Create `src/app/api/portfolio/tickers/search/route.ts`: `GET` — `getAuthUser()` → 401/403; read `q` from `request.nextUrl.searchParams`; if missing/empty → 400 `{ error: 'Missing q parameter' }`; fetch `https://api.polygon.io/v3/reference/tickers?search=${q}&active=true&market=stocks&limit=10&apiKey=${process.env.POLYGON_API_KEY}`; map response to `{ results: [{ ticker, name, primary_exchange }] }`; return 200; on fetch error → 500 `{ error: 'Ticker search unavailable' }`
+
+**Checkpoint**: All holdings CRUD and ticker search routes return correct status codes; auth/role guards work; duplicate ticker returns 409.
+
+---
+
+## Phase 3: Settings API (User Stories 7, 8, 9)
+
+**Goal**: Backend for portfolio configuration (risk profile, target return, schedule, cash).
+
+**Independent Test**: `GET /api/portfolio/settings` with no prior row → creates default, returns it; call again → same row (idempotent). `PUT` with `{ risk_profile: 'aggressive' }` → 200. Invalid `risk_profile` → 400. `cash_usd: -1` → 400. Unauthenticated → 401.
+
+- [ ] T106 [US7] Create `src/app/api/portfolio/settings/route.ts`: `GET` — `getAuthUser()` → 401/403; `const supabase = await createClient()`; attempt insert of default row via `supabase.from('portfolio_settings').insert({ user_id: user.id }).select().single()` — if error code `23505` (row exists) do nothing; then select the row with `supabase.from('portfolio_settings').select().eq('user_id', user.id).single()` and return `{ settings: PortfolioSettings }`; `PUT` — `getAuthUser()` → 401/403; Zod partial `z.object({ cash_usd: z.number().min(0).optional(), target_return_pct: z.number().positive().optional(), risk_profile: z.enum(['conservative','moderate','aggressive']).optional(), run_interval_days: z.union([z.literal(7), z.literal(14), z.literal(30)]).optional() }).strict()`; `const supabase = await createClient()`; update `portfolio_settings` set validated fields + `updated_at = now()` where `user_id = user.id`; `await logAudit({ performedBy: user.id, action: 'portfolio_settings_updated', tripId: null })`; return 200 `{ settings }`
+
+**Checkpoint**: GET always returns a row (creates default on first access). PUT accepts partial updates, rejects invalid values with 400.
+
+---
+
+## Phase 4: Portfolio Overview UI (User Stories 2, 3, 4, 5, 6)
+
+**Goal**: Upgrade `/portfolio` from placeholder to working overview — holdings table, totals, add/edit/delete.
+
+**Independent Test**: Log in as `premium_plus` with T&C accepted → `/portfolio` shows `PortfolioOverview` (skeleton → table or empty state). "Add holding" button opens modal. Autocomplete fires on 2+ chars. Submit adds row. Edit prefills modal. Delete removes row. Totals update. T&C gate still works for new users.
+
+- [ ] T107 [US2] Create `src/components/portfolio/TickerAutocomplete.tsx` (`'use client'`): props `{ value: string, onChange: (val: string) => void, onSelect: (result: { ticker: string, company_name: string }) => void, placeholder?: string }`; debounce `GET /api/portfolio/tickers/search?q=${value}` 300ms (min 2 chars) via `useEffect` + `useRef` timeout; render relative-positioned wrapper with input + absolute dropdown below; each item shows `{ticker} — {name}`; on select: call `onSelect`, clear dropdown; close on Escape and outside click; spinner inside input during fetch; "No matching tickers" empty state
+- [ ] T108 [US2] Create `src/components/portfolio/HoldingForm.tsx` (`'use client'`): modal form (consistent with existing `AddExpenseModal` pattern); props `{ isOpen: boolean, onClose: () => void, onSuccess: () => void, editHolding?: PortfolioHolding }`; add mode: `TickerAutocomplete` populates `ticker` + `company_name` + number input for `total_value_usd` (min 0.01, step 0.01, "$" prefix); edit mode: read-only ticker/company display, only `total_value_usd` editable via the same modal (AC2 "inline" = within the app via modal, not in-place table cell editing); add calls `POST /api/portfolio/holdings`, edit calls `PUT /api/portfolio/holdings/${editHolding.id}`; on 409 show inline error "This ticker is already in your portfolio"; on success: `onSuccess()` then `onClose()`; `useToast()` for other errors; fixed overlay modal with centered white card; disable submit while loading
+- [ ] T109 [P] [US6] Create `src/components/portfolio/PortfolioOverview.tsx` (`'use client'`): fetch `GET /api/portfolio/holdings` and `GET /api/portfolio/settings` in parallel on mount; show `<Skeleton />` (`import { Skeleton } from '@/components/ui/Skeleton'`) during load; empty state: "No holdings yet — add your first holding"; holdings table columns: Ticker, Company, Value (USD), Actions (Edit / Delete); table footer: "Total Holdings" + formatted sum; Cash row from settings; Grand Total = holdings + cash; "Add Holding" button (top right) opens `HoldingForm` add mode; Edit opens `HoldingForm` edit mode prefilled; Delete calls `DELETE /api/portfolio/holdings/${id}` with `window.confirm` then re-fetches; `onSuccess` triggers re-fetch; link "Update cash & settings →" to `/portfolio/settings`; scope all fetches to `user.id` via the API (no `activeMainAccountId`)
+- [ ] T110 [US6] Upgrade `src/app/portfolio/page.tsx` (server component): keep `getAuthUser()` → redirect `/login` if null; keep redirect `/` if not `premium_plus`; keep T&C gate (`<PortfolioTosGate />` if no `portfolio_tos_accepted_at`); replace placeholder `<div>` with `<PortfolioOverview />` when T&C accepted; page heading "Portfolio"
+
+**Checkpoint**: Full portfolio overview works end-to-end. T&C gate unchanged. Holdings CRUD flows correctly in browser.
+
+---
+
+## Phase 5: Portfolio Settings UI (User Stories 7, 8, 9)
+
+**Goal**: `/portfolio/settings` page for risk profile, target return, schedule, and cash configuration.
+
+**Independent Test**: Visit `/portfolio/settings` → form loads with current values. Change risk profile to "aggressive" → Save → reload → persists. Invalid target return (0) → inline error. Toast "Settings saved" on success. Non-`premium_plus` user → redirected to `/`.
+
+- [ ] T111 [US7] Create `src/components/portfolio/PortfolioSettingsForm.tsx` (`'use client'`): fetch `GET /api/portfolio/settings` on mount; show `<Skeleton />` while loading; form: (1) risk_profile — three radio buttons "Conservative" / "Moderate" / "Aggressive"; (2) target_return_pct — number input with `%` suffix, min 0.1, step 0.1; (3) run_interval_days — `<select>` with options 7 / 14 / 30 labelled "Weekly / Every 2 weeks / Monthly"; (4) cash_usd — number input with `$` prefix, min 0, step 0.01; submit: client-side validate (return > 0, cash >= 0) then `PUT /api/portfolio/settings`; `useToast()` success "Settings saved"; inline validation errors; loading state on submit button
+- [ ] T112 [US7] Create `src/app/portfolio/settings/page.tsx` (server component): `getAuthUser()` → redirect `/login` if null; redirect `/` if not `premium_plus`; render heading "Portfolio Settings" + back link "← Portfolio" + `<PortfolioSettingsForm />`
+
+**Checkpoint**: Settings page loads, saves all four fields, persists on reload. Wrong-role users blocked.
+
+---
+
+## Phase 6: Pure Function + Polish
+
+**Purpose**: Testable value calculation utility; all quality gates green.
+
+- [ ] T113 Create `src/lib/portfolioCalculator.ts` with `computeTotalPortfolioValue(holdings: Pick<PortfolioHolding, 'total_value_usd'>[], cashUsd: number): number` — sum of all `total_value_usd` values plus `cashUsd`; cashUsd is pre-validated by Zod (min 0) so no negative-cash guard needed; create `src/lib/portfolioCalculator.test.ts`: empty holdings + zero cash → 0; empty holdings + cash → cash value; multiple holdings + no cash → sum; multiple holdings + cash → full sum
+- [ ] T114 [P] Run `npm run build` — fix TypeScript errors in new files; verify `AuditAction` extension compiles across all files that import it
+- [ ] T115 [P] Run `npm run lint` — fix ESLint errors in new/modified files; no `console.log` in production code
+- [ ] T116 Run `npm test` — confirm `portfolioCalculator.test.ts` passes and no regressions
+
+**Checkpoint**: `npm run build`, `npm test`, `npm run lint` all pass with zero errors.
+
+---
+
+## Dependencies & Execution Order
+
+```
+T101 (types + AuditAction) + T102 (migration) — parallel, MUST complete before everything else
+    ↓
+T103 [Holdings GET+POST]  T104 [Holdings PUT+DELETE]  T105 [Ticker search]  T106 [Settings API]
+    ↓ (all four run in parallel after T101+T102)
+T107 [TickerAutocomplete]
+    ↓
+T108 [HoldingForm]   T109 [PortfolioOverview]   ← parallel (different files)
+    ↓
+T110 [Upgrade /portfolio page]
+    ↓
+T111 [PortfolioSettingsForm]
+    ↓
+T112 [/portfolio/settings page]
+    ↓
+T113 [portfolioCalculator + test]
+T114 [build] + T115 [lint] + T116 [test]  ← parallel
+```
+
+### Parallel Opportunities
+
+```
+# After T101+T102 — all API routes simultaneously:
+T103: Holdings GET+POST
+T104: Holdings PUT+DELETE
+T105: Ticker search proxy
+T106: Settings GET+PUT
+
+# After T107 — simultaneously:
+T108: HoldingForm modal
+T109: PortfolioOverview list
+
+# Polish — simultaneously:
+T114: npm run build
+T115: npm run lint
+T116: npm test
+```
+
+---
+
+## DB Migration Required (Issue #74)
+
+Apply to Supabase after migrations 013 + 014 (from issue #73):
+
+1. `015_portfolio_holdings_settings.sql` — creates `portfolio_holdings` and `portfolio_settings` tables with RLS
