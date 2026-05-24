@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { UserRoleRecord } from '@/types/database'
@@ -19,11 +19,11 @@ function initials(name: string) {
 export default async function SettingsPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role !== 'main' && user.role !== 'premium') redirect('/')
+  if (user.role !== 'main' && !isPremiumOrAbove(user.role)) redirect('/')
 
   const supabase = await createClient()
   const admin = createAdminClient()
-  const isPremium = user.role === 'premium'
+  const isPremium = isPremiumOrAbove(user.role)
 
   // Expire any pending links past their expires_at before rendering (main only)
   const now = new Date().toISOString()

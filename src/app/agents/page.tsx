@@ -9,7 +9,7 @@ export const metadata = {
 export default async function AgentsPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role !== 'premium') redirect('/')
+  if (user.role !== 'premium_plus') redirect('/')
 
   return <AgentsDemoPage />
 }

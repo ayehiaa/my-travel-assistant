@@ -1,4 +1,4 @@
-export type UserRole = 'main' | 'assistant' | 'premium'
+export type UserRole = 'main' | 'assistant' | 'premium' | 'premium_plus'
 
 export type UserRoleStatus = 'active' | 'deactivated'
 
@@ -150,4 +150,10 @@ export interface GmailImportedMessage {
   gmail_message_id: string
   trip_id: string | null
   imported_at: string
+}
+
+export interface UserProfile {
+  user_id: string
+  portfolio_tos_accepted_at: string | null
+  created_at: string
 }

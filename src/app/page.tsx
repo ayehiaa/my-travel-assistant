@@ -1,4 +1,4 @@
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import DashboardClient from '@/components/dashboard/DashboardClient'
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
         refEnd,
       ), 0)
   }
-  const atTripLimit = roleRow?.role !== 'premium' && enriched.length >= 10
+  const atTripLimit = !(roleRow?.role && isPremiumOrAbove(roleRow.role)) && enriched.length >= 10
 
   const expensesByTripId = ((rawExpenses ?? []) as ExpenseWithCategory[]).reduce<Record<string, ExpenseWithCategory[]>>((acc, e) => {
     if (!e.trip_id) return acc

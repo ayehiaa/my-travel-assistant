@@ -30,7 +30,7 @@ function runClaude(
     proc.stderr?.on('data', (c: Buffer) => { stderr += c.toString() })
     proc.stdout?.on('data', (c: Buffer) => { stdout += c.toString() })
     proc.on('close', (code) => {
-      console.error(`[agents/${phase}] exit ${code}${stderr ? ' stderr: ' + stderr.slice(0, 200) : ''}${code !== 0 ? ' stdout: ' + stdout.slice(0, 400) : ''}`)
+      if (process.env.NODE_ENV !== 'production') console.error(`[agents/${phase}] exit ${code}${stderr ? ' stderr: ' + stderr.slice(0, 200) : ''}${code !== 0 ? ' stdout: ' + stdout.slice(0, 400) : ''}`)
       const error = stderr.trim() || (code !== 0 ? stdout.slice(0, 400) : undefined)
       resolve({ success: code === 0, error })
     })
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const { data: roleRecord } = await supabase
     .from('user_roles').select('role').eq('user_id', user.id).single()
-  if (roleRecord?.role !== 'premium') return new Response('Forbidden', { status: 403 })
+  if (!roleRecord || roleRecord.role !== 'premium_plus') return new Response('Forbidden', { status: 403 })
 
   const body = await req.json().catch(() => ({}))
   let requirement = String(body.requirement ?? '').trim()
@@ -57,14 +57,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const enc = new TextEncoder()
   let closed = false
-  const SECRET_ENV_KEYS = new Set([
-    'ANTHROPIC_API_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'SERPAPI_KEY',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  ])
+  // Allowlist: child process only needs shell/runtime vars; it authenticates via ~/.claude/ session files
+  const CHILD_ENV_ALLOWLIST = new Set(['PATH', 'HOME', 'NODE_ENV', 'TMPDIR', 'TEMP', 'TMP', 'TERM', 'USER', 'USERNAME', 'SHELL', 'LANG', 'LC_ALL'])
   const childEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !SECRET_ENV_KEYS.has(k))
+    Object.entries(process.env).filter(([k]) => CHILD_ENV_ALLOWLIST.has(k))
   ) as NodeJS.ProcessEnv
 
   const stream = new ReadableStream({

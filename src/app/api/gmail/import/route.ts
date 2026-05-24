@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -26,7 +26,7 @@ export type GmailCandidate = z.infer<typeof GmailCandidateSchema>
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isPremiumOrAbove(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
@@ -76,7 +76,7 @@ export async function GET() {
   const { messages, rawCount, filteredSenders } = await fetchFlightEmails(accessToken)
   const newMessages = messages.filter(m => !importedIds.has(m.id))
 
-  console.log(`[Import] Pipeline: rawCount=${rawCount} trustedSenders=${messages.length} newAfterDedup=${newMessages.length} alreadyImported=${messages.length - newMessages.length}`)
+  if (process.env.NODE_ENV !== 'production') console.log(`[Import] Pipeline: rawCount=${rawCount} trustedSenders=${messages.length} newAfterDedup=${newMessages.length} alreadyImported=${messages.length - newMessages.length}`)
 
   // Parse sequentially to avoid Claude concurrent connection rate limit
   const results: PromiseSettledResult<GmailCandidate>[] = []
@@ -90,10 +90,12 @@ export async function GET() {
   const fulfilled = results.filter((r): r is PromiseFulfilledResult<GmailCandidate> => r.status === 'fulfilled')
   const candidates: GmailCandidate[] = fulfilled.map(r => r.value).filter(c => c.parsed !== null)
 
-  console.log(`[Import] Parse results: attempted=${results.length} fulfilled=${fulfilled.length} failed=${results.length - fulfilled.length} parsedNonNull=${candidates.length}`)
-  results.forEach((r, i) => {
-    if (r.status === 'rejected') console.log(`[Import] Parse rejected [${i}]:`, r.reason)
-  })
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[Import] Parse results: attempted=${results.length} fulfilled=${fulfilled.length} failed=${results.length - fulfilled.length} parsedNonNull=${candidates.length}`)
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.log(`[Import] Parse rejected [${i}]:`, r.reason)
+    })
+  }
 
   const debug = process.env.NODE_ENV !== 'production' ? {
     raw_from_gmail: rawCount,

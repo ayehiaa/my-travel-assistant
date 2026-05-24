@@ -1,5 +1,5 @@
 import { createClient } from './supabase/server'
-import { UserRole } from '@/types/database'
+import type { UserRole } from '@/types/database'
 
 export interface AuthUser {
   id: string
@@ -28,4 +28,8 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     role: roleRecord.role as UserRole,
     displayName: roleRecord.display_name,
   }
+}
+
+export function isPremiumOrAbove(role: UserRole): boolean {
+  return role === 'premium' || role === 'premium_plus'
 }

@@ -51,7 +51,7 @@ export default function DashboardClient({
         daysMax={annualMax}
         referenceDate={referenceDate}
         onLogPastTrip={() => setShowModal(true)}
-        onImportFromGmail={role === 'premium' ? handleImportFromGmail : undefined}
+        onImportFromGmail={(role === 'premium' || role === 'premium_plus') ? handleImportFromGmail : undefined}
       />
 
       {atTripLimit && (
