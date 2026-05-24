@@ -100,17 +100,34 @@ Spawn the `architect` subagent with `spec.md`, `plan.md`, `tasks.md`, and the pr
 1. Split `tasks.md` into a backend list and a frontend list
 2. Add any missing implementation details (migrations, Zod schemas, component props)
 3. Flag conflicts with existing code
+4. Write all output to `specs/<feature>/architect-notes.md` using this structure:
+
+```markdown
+# Architect Notes — <feature name>
+
+## Backend Tasks
+<task list with implementation details>
+
+## Frontend Tasks
+<task list with implementation details>
+
+## Migration SQL (if any)
+<migration filenames and any notes>
+
+## Conflicts / Risks
+<any conflicts with existing code, or "None">
+```
 
 **If START_STEP > 1 (existing artifacts loaded)**: The spec/plan may cover a broader scope than this issue. Pass `ISSUE_TITLE` and `ISSUE_BODY` from Step 0 as the explicit scope boundary. Instruct the architect: "Restrict your task split strictly to the work described in this issue. Ignore unrelated sections of the spec/plan."
 
-Wait for output before proceeding.
+Wait for `architect-notes.md` to be written before proceeding.
 
 ### 8 — Backend + Frontend (parallel)
-Spawn both agents in parallel:
+Spawn both agents in parallel, each reading `specs/<feature>/architect-notes.md` for their task list:
 
-**backend-dev**: architect's backend list + `data-model.md` + `contracts/` + any migration SQL. Implement all tasks completely.
+**backend-dev**: Backend Tasks section from `architect-notes.md` + `data-model.md` + `contracts/` + any migration SQL. Implement all tasks completely.
 
-**frontend-dev**: architect's frontend list + `spec.md` user scenarios as acceptance criteria. Read nearby components before implementing. Implement all tasks completely.
+**frontend-dev**: Frontend Tasks section from `architect-notes.md` + `spec.md` user scenarios as acceptance criteria. Read nearby components before implementing. Implement all tasks completely.
 
 Wait for both.
 
