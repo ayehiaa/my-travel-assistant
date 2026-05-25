@@ -144,9 +144,9 @@ Wait for `architect-notes.md` to be written before proceeding.
 ### 8 — Backend + Frontend (parallel)
 Spawn both agents in parallel, each reading `specs/<feature>/architect-notes.md` for their task list:
 
-**backend-dev**: Backend Tasks section from `architect-notes.md` + `data-model.md` + `contracts/` + any migration SQL. Implement all tasks completely.
+**backend-dev**: Backend Tasks section from `ISSUE_DIR/architect-notes.md` + `MODULE_DIR/data-model.md` + `MODULE_DIR/contracts/` + any migration SQL. Implement all tasks completely.
 
-**frontend-dev**: Frontend Tasks section from `architect-notes.md` + `spec.md` user scenarios as acceptance criteria. Read nearby components before implementing. Implement all tasks completely.
+**frontend-dev**: Frontend Tasks section from `ISSUE_DIR/architect-notes.md` + `MODULE_DIR/spec.md` user scenarios as acceptance criteria. Read nearby components before implementing. Implement all tasks completely.
 
 Wait for both.
 
