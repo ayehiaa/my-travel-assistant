@@ -98,9 +98,15 @@ Load `plan.md` as `PLAN_CONTENT`.
 **Constitution Check is a hard gate** — resolve any failure before continuing.
 
 ### 5 — Tasks *(skip if START_STEP > 5)*
-**If skipping**: Verify `specs/<feature>/tasks.md` exists. If missing, abort: "tasks.md not found — run /speckit-tasks first or adjust --from flag."
+**If skipping**: Verify `ISSUE_DIR/tasks.md` exists (when `ISSUE_DIR` is set). Fall back to `specs/<feature>/tasks.md` for non-module runs. If missing, abort: "tasks.md not found — run /speckit-tasks first or adjust --from flag."
 
 **If running**: Run `/speckit-tasks`. Produces `tasks.md` with dependency markers and `[P]` parallel hints.
+
+**When `ISSUE_DIR` is set** — after speckit-tasks writes `tasks.md` to `MODULE_DIR`, move it into the issue subdirectory:
+```bash
+mv MODULE_DIR/tasks.md ISSUE_DIR/tasks.md
+```
+All subsequent steps that read `tasks.md` use `ISSUE_DIR/tasks.md`.
 
 ### 6 — Analyze *(skip if START_STEP > 6)*
 **If skipping**: Skip silently.
