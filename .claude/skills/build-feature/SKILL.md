@@ -182,7 +182,8 @@ Closes #<ISSUE_NUM>
 <2–4 bullet points>
 
 ## Spec & plan
-`specs/<FEATURE_NUM>-<slug>/` — spec, plan, tasks, and contracts committed to this branch.
+Module artifacts: `MODULE_DIR/` — spec, plan, data-model, contracts (shared across issues).
+Issue artifacts: `ISSUE_DIR/` — tasks.md and architect-notes.md for this issue only.
 
 ## Files changed
 <new and modified files with one-line description each>
