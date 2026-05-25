@@ -1,20 +1,19 @@
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
-import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
-import { PortfolioHolding, PortfolioSettings } from '@/types/database'
+import { PortfolioSettings } from '@/types/database'
+import PortfolioSettingsForm from '@/components/portfolio/PortfolioSettingsForm'
 
-export const metadata = {
-  title: 'Sojourn — Portfolio',
-}
+export const metadata = { title: 'Sojourn — Portfolio Settings' }
 
-export default async function PortfolioPage() {
+export default async function PortfolioSettingsPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.role !== 'premium_plus') redirect('/')
 
   const supabase = await createClient()
+
+  // Enforce T&C gate — if not accepted, redirect to portfolio page where gate renders
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('portfolio_tos_accepted_at')
@@ -22,28 +21,18 @@ export default async function PortfolioPage() {
     .maybeSingle()
 
   if (!profile?.portfolio_tos_accepted_at) {
-    return <PortfolioTosGate />
+    redirect('/portfolio')
   }
 
-  // Fetch holdings and settings in parallel
-  const [holdingsRes, settingsRes] = await Promise.all([
-    supabase
-      .from('portfolio_holdings')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('total_value_usd', { ascending: false }),
-    supabase
-      .from('portfolio_settings')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle(),
-  ])
+  // Fetch settings; insert defaults on first visit
+  const { data: settingsRow } = await supabase
+    .from('portfolio_settings')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  const holdings = (holdingsRes.data ?? []) as PortfolioHolding[]
-
-  let settings = settingsRes.data as PortfolioSettings | null
+  let settings = settingsRow as PortfolioSettings | null
   if (!settings) {
-    // First visit: insert default row
     const { data: inserted } = await supabase
       .from('portfolio_settings')
       .insert({ user_id: user.id })
@@ -70,20 +59,17 @@ export default async function PortfolioPage() {
         style={{
           fontFamily: 'var(--display)',
           fontWeight: 700,
-          fontSize: 32,
+          fontSize: 28,
           marginBottom: 8,
           color: 'var(--ink)',
         }}
       >
-        Portfolio
+        Portfolio Settings
       </h1>
       <p style={{ color: 'var(--ink-3)', fontSize: 14, marginBottom: 32 }}>
-        Manage your US stock holdings and cash position.
+        Configure your risk preferences and analysis schedule.
       </p>
-      <PortfolioOverview
-        initialHoldings={holdings}
-        initialSettings={settings ?? defaultSettings}
-      />
+      <PortfolioSettingsForm initialSettings={settings ?? defaultSettings} />
     </main>
   )
 }

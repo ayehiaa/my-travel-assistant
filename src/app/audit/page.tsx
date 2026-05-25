@@ -96,7 +96,7 @@ export default async function AuditPage({
           }}>
             <span>Action</span>
             <span>Performer</span>
-            <span>Trip</span>
+            <span>Subject</span>
             <span>When</span>
           </div>
 

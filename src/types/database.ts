@@ -14,6 +14,10 @@ export type AuditAction =
   | 'expense_deleted'
   | 'expense_reclaimed'
   | 'expense_unreclaimed'
+  | 'holding_created'
+  | 'holding_updated'
+  | 'holding_deleted'
+  | 'portfolio_settings_updated'
 
 export interface UserRoleRecord {
   user_id: string
@@ -156,4 +160,28 @@ export interface UserProfile {
   user_id: string
   portfolio_tos_accepted_at: string | null
   created_at: string
+}
+
+export type RiskProfile = 'conservative' | 'moderate' | 'aggressive'
+
+export interface PortfolioHolding {
+  id: string
+  user_id: string
+  ticker: string
+  company_name: string
+  total_value_usd: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PortfolioSettings {
+  user_id: string
+  cash_usd: number
+  target_return_pct: number
+  risk_profile: RiskProfile
+  run_interval_days: 7 | 14 | 30
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+  updated_at: string
 }
