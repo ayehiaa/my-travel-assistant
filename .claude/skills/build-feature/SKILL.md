@@ -34,6 +34,19 @@ Activated when the invocation contains **"autonomous"** or **"autonomously"**:
 - **Free text**: use directly as requirements.
 - If `START_STEP > 1`, confirm which steps are being skipped: "Skipping steps 1–[START_STEP-1] — loading existing artifacts."
 
+**When `START_STEP >= 5` and input is an issue number** — resolve the module spec dir and issue dir:
+
+1. **Find MODULE_DIR**: Scan `specs/` for subdirectories that contain both `spec.md` and `plan.md`. If exactly one is found, use it. If multiple are found, ask the user which module this issue belongs to. Store as `MODULE_DIR` (e.g. `specs/015-portfolio-advisor`).
+
+2. **Derive ISSUE_SLUG**: Lowercase the issue title, replace spaces and special characters with hyphens, truncate to 40 chars (e.g. `"Portfolio Holdings"` → `portfolio-holdings`).
+
+3. **Set ISSUE_DIR**: `MODULE_DIR/issues/<ISSUE_NUM>-<ISSUE_SLUG>` (e.g. `specs/015-portfolio-advisor/issues/74-portfolio-holdings`). Create it if it doesn't exist:
+   ```bash
+   mkdir -p <ISSUE_DIR>
+   ```
+
+All per-issue artifacts (tasks.md, architect-notes.md) are written to `ISSUE_DIR`. Module-level artifacts (spec.md, plan.md, data-model.md, contracts/, research.md) stay in `MODULE_DIR` and are read-only for this run.
+
 ### 1 — Specify *(skip if START_STEP > 1)*
 **If skipping**: Verify `specs/<feature>/spec.md` exists. If missing, abort: "spec.md not found — run /speckit-specify first or remove --from flag." Load spec.md as `SPEC_CONTENT`. Capture `BRANCH_NAME` and `FEATURE_NUM` from the directory name.
 
