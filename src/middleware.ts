@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
     pathname === '/gmail/callback' ||
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
+    pathname === '/api/inngest' ||
     pathname === '/api/customer-invitations/validate' ||
     pathname === '/api/customer-invitations/accept' ||
     pathname === '/api/auth/signup'
