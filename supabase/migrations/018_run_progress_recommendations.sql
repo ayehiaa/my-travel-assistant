@@ -1,18 +1,3 @@
-CREATE TABLE public.run_progress (
-  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  run_id        uuid        NOT NULL,
-  agent_name    text        NOT NULL,
-  status        text        NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending', 'running', 'complete', 'error')),
-  error_message text        NULL,
-  completed_at  timestamptz NULL,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (run_id, agent_name)
-);
-ALTER TABLE public.run_progress ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "run_progress_select_own" ON public.run_progress FOR SELECT
-  USING (run_id IN (SELECT id FROM public.recommendations WHERE user_id = auth.uid()));
-
 CREATE TABLE public.recommendations (
   id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id            uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -33,3 +18,18 @@ ALTER TABLE public.recommendations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "recommendations_select_own" ON public.recommendations FOR SELECT
   USING (user_id = auth.uid());
 CREATE INDEX recommendations_user_id_run_at ON public.recommendations(user_id, run_at DESC);
+
+CREATE TABLE public.run_progress (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id        uuid        NOT NULL,
+  agent_name    text        NOT NULL,
+  status        text        NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'running', 'complete', 'error')),
+  error_message text        NULL,
+  completed_at  timestamptz NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (run_id, agent_name)
+);
+ALTER TABLE public.run_progress ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "run_progress_select_own" ON public.run_progress FOR SELECT
+  USING (run_id IN (SELECT id FROM public.recommendations WHERE user_id = auth.uid()));
