@@ -209,7 +209,8 @@ All 10 security categories passed. ✅
 ### 12 — Report
 - PR URL
 - DB migration to run (if any)
-- Spec artifacts location: `specs/<FEATURE_NUM>-<slug>/`
+- Issue artifacts location: `ISSUE_DIR/` (tasks.md + architect-notes.md)
+- Module artifacts location: `MODULE_DIR/` (spec, plan, data-model — shared)
 - One-paragraph summary of what was built
 - **Autonomous mode only**: Vercel preview URL
 
