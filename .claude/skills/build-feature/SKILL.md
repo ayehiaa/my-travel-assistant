@@ -119,7 +119,7 @@ Spawn the `architect` subagent with `spec.md`, `plan.md`, `tasks.md`, and the pr
 1. Split `tasks.md` into a backend list and a frontend list
 2. Add any missing implementation details (migrations, Zod schemas, component props)
 3. Flag conflicts with existing code
-4. Write all output to `specs/<feature>/architect-notes.md` using this structure:
+4. Write all output to `ISSUE_DIR/architect-notes.md` when `ISSUE_DIR` is set, otherwise `specs/<feature>/architect-notes.md`. Use this structure:
 
 ```markdown
 # Architect Notes — <feature name>
