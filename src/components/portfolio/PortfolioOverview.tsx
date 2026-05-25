@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { PortfolioHolding, PortfolioSettings } from '@/types/database'
@@ -54,8 +55,28 @@ export default function PortfolioOverview({ initialHoldings, initialSettings }: 
 
   return (
     <>
-      {/* Add holding button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 20 }}>
+        <Link
+          href="/portfolio/settings"
+          style={{
+            padding: '10px 20px',
+            borderRadius: 'var(--r)',
+            fontSize: 14,
+            fontWeight: 600,
+            border: '1.5px solid var(--rule)',
+            background: 'white',
+            color: 'var(--ink-2)',
+            cursor: 'pointer',
+            fontFamily: 'var(--sans)',
+            textDecoration: 'none',
+            lineHeight: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+        >
+          Settings
+        </Link>
         <button
           onClick={() => {
             setEditingHolding(null)
