@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 
 const HoldingInsertSchema = z.object({
-  ticker:          z.string().min(1).max(10).transform(v => v.toUpperCase()),
+  ticker:          z.string().min(1).max(10).regex(/^[A-Za-z0-9.]{1,10}$/).transform(v => v.toUpperCase()),
   company_name:    z.string().min(1).max(100),
   total_value_usd: z.number().positive(),
 })

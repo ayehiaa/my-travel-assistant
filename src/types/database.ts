@@ -18,6 +18,7 @@ export type AuditAction =
   | 'holding_updated'
   | 'holding_deleted'
   | 'portfolio_settings_updated'
+  | 'run_triggered'
 
 export interface UserRoleRecord {
   user_id: string
@@ -182,6 +183,64 @@ export interface PortfolioSettings {
   run_interval_days: 7 | 14 | 30
   last_run_at: string | null
   next_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type RunStatus = 'running' | 'complete' | 'error'
+
+export type AgentStatus = 'pending' | 'running' | 'complete' | 'error'
+
+export interface RunProgress {
+  id: string
+  run_id: string
+  agent_name: string
+  status: AgentStatus
+  error_message: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface AgentOutput {
+  analysis: string
+  confidence: 'low' | 'medium' | 'high'
+  stance: 'bullish' | 'bearish' | 'neutral'
+}
+
+export interface PortfolioSnapshot {
+  holdings: Array<{ ticker: string; company_name: string; total_value_usd: number }>
+  cash_usd: number
+  total_value_usd: number
+}
+
+export interface TargetAllocationItem {
+  ticker: string
+  target_pct: number
+  rationale: string
+}
+
+export interface ActionItem {
+  ticker: string
+  action: 'buy' | 'sell' | 'hold'
+  current_pct: number
+  target_pct: number
+  current_usd: number
+  target_usd: number
+  delta_usd: number
+}
+
+export interface Recommendation {
+  id: string
+  user_id: string
+  run_at: string
+  status: RunStatus
+  target_allocation: TargetAllocationItem[] | null
+  action_list: ActionItem[] | null
+  summary_text: string | null
+  conflict_notes: string | null
+  agent_outputs: Record<string, AgentOutput> | null
+  portfolio_snapshot: PortfolioSnapshot | null
+  error_message: string | null
   created_at: string
   updated_at: string
 }
