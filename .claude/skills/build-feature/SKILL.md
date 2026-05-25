@@ -239,15 +239,16 @@ All 10 security categories passed. ✅
 # Full run from a GitHub issue
 /build-feature 73
 
-# Skip planning — spec/plan/tasks already exist, start at architect
-/build-feature 73 --from 7
+# Module-level spec exists — generate tasks for this issue, then build
+# tasks.md and architect-notes.md land in specs/<module>/issues/74-<slug>/
+/build-feature 74 --from 5
 
-# Skip planning and tasks — spec/plan exist, run tasks then build
-/build-feature 73 --from 5
+# Module-level spec exists — tasks already written, start at architect
+/build-feature 74 --from 7
 
 # Fully autonomous from an issue
 /build-feature 73 autonomously
 
 # Autonomous starting from architect (all planning done)
-/build-feature 73 --from 7 autonomously
+/build-feature 74 --from 7 autonomously
 ```
