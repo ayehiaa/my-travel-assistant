@@ -36,7 +36,7 @@ Activated when the invocation contains **"autonomous"** or **"autonomously"**:
 
 **When `START_STEP >= 5` and input is an issue number** — resolve the module spec dir and issue dir:
 
-1. **Find MODULE_DIR**: Scan `specs/` for subdirectories that contain both `spec.md` and `plan.md`. If exactly one is found, use it. If multiple are found, ask the user which module this issue belongs to. Store as `MODULE_DIR` (e.g. `specs/015-portfolio-advisor`).
+1. **Find MODULE_DIR**: First, check `CLAUDE.md` for a line matching `Active implementation plan:` and extract the `specs/<dir>/` path from it — use that as `MODULE_DIR` without scanning. If no such line exists, scan `specs/` for subdirectories that contain both `spec.md` and `plan.md`: if exactly one is found, use it; if multiple are found, ask the user which module this issue belongs to. Store as `MODULE_DIR` (e.g. `specs/015-portfolio-advisor`).
 
 2. **Derive ISSUE_SLUG**: Lowercase the issue title, replace spaces and special characters with hyphens, truncate to 40 chars (e.g. `"Portfolio Holdings"` → `portfolio-holdings`).
 
