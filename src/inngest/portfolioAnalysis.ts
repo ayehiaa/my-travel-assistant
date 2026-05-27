@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runMacroeconomicsAgent } from '@/inngest/agents/macroeconomics'
 import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import { runGeopoliticsAgent } from '@/inngest/agents/geopolitics'
+import { runSentimentAgent } from '@/inngest/agents/sentiment'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -101,11 +102,11 @@ export const portfolioAnalysis = inngest.createFunction(
         .from('run_progress')
         .update({ status: 'running' })
         .eq('run_id', run_id)
-        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics'])
+        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment'])
     })
 
-    // Step 3: Run macroeconomics, fed rates, and geopolitics agents in parallel
-    const [macroOutput, fedRatesOutput, geopoliticsOutput] = await Promise.all([
+    // Step 3: Run macroeconomics, fed rates, geopolitics, and sentiment agents in parallel
+    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput] = await Promise.all([
       step.run('run-macroeconomics', async (): Promise<AgentOutput> => {
         try {
           return await runMacroeconomicsAgent({
@@ -186,6 +187,33 @@ export const portfolioAnalysis = inngest.createFunction(
           throw err
         }
       }),
+
+      step.run('run-sentiment', async (): Promise<AgentOutput> => {
+        try {
+          return await runSentimentAgent({
+            risk_profile:      settings.risk_profile,
+            target_return_pct: settings.target_return_pct,
+            holdings_tickers:  tickers,
+          })
+        } catch (err) {
+          const errorMessage = sanitizeErrorMessage(err)
+          const admin = createAdminClient()
+
+          await Promise.all([
+            admin
+              .from('run_progress')
+              .update({ status: 'error', error_message: errorMessage })
+              .eq('run_id', run_id)
+              .eq('agent_name', 'sentiment'),
+            admin
+              .from('recommendations')
+              .update({ status: 'error', error_message: errorMessage, updated_at: new Date().toISOString() })
+              .eq('id', run_id),
+          ])
+
+          throw err
+        }
+      }),
     ])
 
     // Step 4: Store outputs
@@ -198,11 +226,11 @@ export const portfolioAnalysis = inngest.createFunction(
           .from('run_progress')
           .update({ status: 'complete', completed_at: now })
           .eq('run_id', run_id)
-          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics']),
+          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment']),
         admin
           .from('recommendations')
           .update({
-            agent_outputs:      { macroeconomics: macroOutput, fed_rates: fedRatesOutput, geopolitics: geopoliticsOutput },
+            agent_outputs:      { macroeconomics: macroOutput, fed_rates: fedRatesOutput, geopolitics: geopoliticsOutput, sentiment: sentimentOutput },
             portfolio_snapshot: snapshot,
             status:             'complete',
             updated_at:         now,

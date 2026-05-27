@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { GEOPOLITICS_QUERY, fetchGeopoliticsArticles } from './newsapi'
+import { GEOPOLITICS_QUERY, fetchGeopoliticsArticles, SENTIMENT_QUERY, fetchSentimentArticles } from './newsapi'
 
 describe('GEOPOLITICS_QUERY', () => {
   it('is a non-empty string', () => {
@@ -23,6 +23,33 @@ describe('fetchGeopoliticsArticles', () => {
     const original = process.env.NEWS_API_KEY
     delete process.env.NEWS_API_KEY
     const result = await fetchGeopoliticsArticles()
+    expect(result).toEqual([])
+    process.env.NEWS_API_KEY = original
+  })
+})
+
+describe('SENTIMENT_QUERY', () => {
+  it('is a non-empty string', () => {
+    expect(typeof SENTIMENT_QUERY).toBe('string')
+    expect(SENTIMENT_QUERY.length).toBeGreaterThan(0)
+  })
+
+  it('contains expected sentiment terms', () => {
+    const lower = SENTIMENT_QUERY.toLowerCase()
+    const hasAtLeastOne = ['investor sentiment', 's&p 500', 'earnings season', 'market mood'].some(t => lower.includes(t))
+    expect(hasAtLeastOne).toBe(true)
+  })
+})
+
+describe('fetchSentimentArticles', () => {
+  it('is exported as a function', () => {
+    expect(typeof fetchSentimentArticles).toBe('function')
+  })
+
+  it('returns empty array when NEWS_API_KEY is not set', async () => {
+    const original = process.env.NEWS_API_KEY
+    delete process.env.NEWS_API_KEY
+    const result = await fetchSentimentArticles()
     expect(result).toEqual([])
     process.env.NEWS_API_KEY = original
   })
