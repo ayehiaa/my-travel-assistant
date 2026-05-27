@@ -29,7 +29,7 @@ interface FredApiResponse {
   observations: FredObservation[]
 }
 
-async function fetchOneSeries(config: FredSeriesConfig): Promise<FredSeries> {
+export async function fetchOneSeries(config: FredSeriesConfig): Promise<FredSeries> {
   try {
     const url =
       `https://api.stlouisfed.org/fred/series/observations` +
@@ -54,10 +54,22 @@ async function fetchOneSeries(config: FredSeriesConfig): Promise<FredSeries> {
 
     return { ...config, latest_value, observations }
   } catch {
+    // IMPORTANT: Do not log `err` or `url` here — the URL contains FRED_API_KEY in plaintext.
     return { ...config, latest_value: null, observations: [] }
   }
 }
 
 export async function fetchFredData(): Promise<FredSeries[]> {
   return Promise.all(FRED_SERIES_CONFIG.map(fetchOneSeries))
+}
+
+export const FED_RATES_SERIES_CONFIG: FredSeriesConfig[] = [
+  { id: 'FEDFUNDS', title: 'Federal Funds Effective Rate',        unit: 'Percent' },
+  { id: 'FEDTARMD', title: 'Fed Funds Target Rate - Upper Limit', unit: 'Percent' },
+  { id: 'DGS2',     title: '2-Year Treasury Yield',               unit: 'Percent' },
+  { id: 'DGS30',    title: '30-Year Treasury Yield',              unit: 'Percent' },
+]
+
+export async function fetchFedRatesData(): Promise<FredSeries[]> {
+  return Promise.all(FED_RATES_SERIES_CONFIG.map(fetchOneSeries))
 }
