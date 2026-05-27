@@ -6,6 +6,8 @@ import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import { runGeopoliticsAgent } from '@/inngest/agents/geopolitics'
 import { runSentimentAgent } from '@/inngest/agents/sentiment'
 import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
+import { fetchPriceHistory, type PriceHistory } from '@/inngest/dataSources/polygon'
+import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -15,7 +17,7 @@ const EventDataSchema = z.object({
 
 function sanitizeErrorMessage(err: unknown): string {
   const raw = (err instanceof Error ? err.message : String(err)).slice(0, 500)
-  const keys = [process.env.FRED_API_KEY, process.env.ANTHROPIC_API_KEY, process.env.NEWS_API_KEY].filter(Boolean) as string[]
+  const keys = [process.env.FRED_API_KEY, process.env.ANTHROPIC_API_KEY, process.env.NEWS_API_KEY, process.env.POLYGON_API_KEY].filter(Boolean) as string[]
   return keys.reduce((msg, key) => msg.split(key).join('[REDACTED]'), raw)
 }
 
@@ -96,18 +98,24 @@ export const portfolioAnalysis = inngest.createFunction(
       },
     )
 
-    // Step 2: Mark all agents as running
+    // Step 2: Pre-fetch Polygon.io OHLCV data (once per run — rate-limit safe)
+    const priceData = await step.run(
+      'fetch-price-data',
+      async (): Promise<PriceHistory> => fetchPriceHistory(tickers),
+    )
+
+    // Step 3: Mark all agents as running
     await step.run('mark-agents-running', async (): Promise<void> => {
       const admin = createAdminClient()
       await admin
         .from('run_progress')
         .update({ status: 'running' })
         .eq('run_id', run_id)
-        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals'])
+        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis'])
     })
 
-    // Step 3: Run macroeconomics, fed rates, geopolitics, and sentiment agents in parallel
-    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput] = await Promise.all([
+    // Step 4: Run all agents in parallel
+    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput, technicalOutput] = await Promise.all([
       step.run('run-macroeconomics', async (): Promise<AgentOutput> => {
         try {
           return await runMacroeconomicsAgent({
@@ -242,9 +250,37 @@ export const portfolioAnalysis = inngest.createFunction(
           throw err
         }
       }),
+
+      step.run('run-technical-analysis', async (): Promise<AgentOutput> => {
+        try {
+          return await runTechnicalAnalysisAgent({
+            risk_profile:      settings.risk_profile,
+            target_return_pct: settings.target_return_pct,
+            holdings_tickers:  tickers,
+            priceData,
+          })
+        } catch (err) {
+          const errorMessage = sanitizeErrorMessage(err)
+          const admin = createAdminClient()
+
+          await Promise.all([
+            admin
+              .from('run_progress')
+              .update({ status: 'error', error_message: errorMessage })
+              .eq('run_id', run_id)
+              .eq('agent_name', 'technical_analysis'),
+            admin
+              .from('recommendations')
+              .update({ status: 'error', error_message: errorMessage, updated_at: new Date().toISOString() })
+              .eq('id', run_id),
+          ])
+
+          throw err
+        }
+      }),
     ])
 
-    // Step 4: Store outputs
+    // Step 5: Store outputs
     await step.run('store-outputs', async (): Promise<void> => {
       const admin = createAdminClient()
       const now = new Date().toISOString()
@@ -254,11 +290,18 @@ export const portfolioAnalysis = inngest.createFunction(
           .from('run_progress')
           .update({ status: 'complete', completed_at: now })
           .eq('run_id', run_id)
-          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals']),
+          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis']),
         admin
           .from('recommendations')
           .update({
-            agent_outputs:      { macroeconomics: macroOutput, fed_rates: fedRatesOutput, geopolitics: geopoliticsOutput, sentiment: sentimentOutput, fundamentals: fundamentalsOutput },
+            agent_outputs: {
+              macroeconomics:     macroOutput,
+              fed_rates:          fedRatesOutput,
+              geopolitics:        geopoliticsOutput,
+              sentiment:          sentimentOutput,
+              fundamentals:       fundamentalsOutput,
+              technical_analysis: technicalOutput,
+            },
             portfolio_snapshot: snapshot,
             status:             'complete',
             updated_at:         now,

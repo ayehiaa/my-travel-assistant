@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.portfolio_holdings (
   id               uuid           PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id          uuid           NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  ticker           text           NOT NULL,
+  ticker           text           NOT NULL CHECK (ticker ~ '^[A-Za-z0-9.]{1,10}$'),
   company_name     text           NOT NULL,
   total_value_usd  numeric(12,2)  NOT NULL CHECK (total_value_usd > 0),
   created_at       timestamptz    NOT NULL DEFAULT now(),
