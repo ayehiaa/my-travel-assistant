@@ -11,9 +11,10 @@ import HoldingForm from './HoldingForm'
 interface Props {
   initialHoldings: PortfolioHolding[]
   initialSettings: PortfolioSettings
+  latestRecommendation?: { id: string; run_at: string; summary_text: string | null } | null
 }
 
-export default function PortfolioOverview({ initialHoldings, initialSettings }: Props) {
+export default function PortfolioOverview({ initialHoldings, initialSettings, latestRecommendation }: Props) {
   const router = useRouter()
   const toast = useToast()
 
@@ -317,6 +318,56 @@ export default function PortfolioOverview({ initialHoldings, initialSettings }: 
           </span>
         </div>
       </div>
+
+      {/* Latest recommendation card */}
+      {latestRecommendation && (
+        <div
+          style={{
+            marginTop: 32,
+            padding: '20px 24px',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+          }}
+        >
+          <h2
+            style={{
+              fontFamily: 'var(--display)',
+              fontWeight: 700,
+              fontSize: 18,
+              color: 'var(--ink)',
+              marginBottom: 8,
+            }}
+          >
+            Latest Analysis
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 8 }}>
+            {new Date(latestRecommendation.run_at).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
+          </p>
+          {latestRecommendation.summary_text && (
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', marginBottom: 12 }}>
+              {latestRecommendation.summary_text.length > 200
+                ? latestRecommendation.summary_text.slice(0, 200) + '…'
+                : latestRecommendation.summary_text}
+            </p>
+          )}
+          <Link
+            href={`/portfolio/recommendations/${latestRecommendation.id}`}
+            style={{
+              fontSize: 14,
+              color: 'var(--r)',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            View full recommendation →
+          </Link>
+        </div>
+      )}
 
       {/* Modal */}
       {(showAddModal || editingHolding !== null) && (

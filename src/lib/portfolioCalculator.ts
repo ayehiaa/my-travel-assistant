@@ -1,3 +1,5 @@
+import type { ActionItem } from '@/types/database'
+
 export interface HoldingSummary {
   ticker: string
   company_name: string
@@ -50,4 +52,48 @@ export function formatUsd(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+/**
+ * Given current holdings, cash, and a target allocation, compute a list of
+ * buy/sell/hold actions needed to reach the target allocation.
+ * Pure deterministic function — no network calls, safe for Vitest.
+ */
+export function computeActionList(
+  holdings: Array<{ ticker: string; company_name: string; total_value_usd: number }>,
+  cash_usd: number,
+  targetAllocation: Array<{ ticker: string; target_pct: number }>
+): ActionItem[] {
+  const grand_total = holdings.reduce((s, h) => s + h.total_value_usd, 0) + cash_usd
+
+  const holdingMap = new Map<string, number>()
+  for (const h of holdings) {
+    holdingMap.set(h.ticker, h.total_value_usd)
+  }
+
+  const allocationMap = new Map<string, number>()
+  for (const a of targetAllocation) {
+    allocationMap.set(a.ticker, a.target_pct)
+  }
+
+  const allTickers = new Set<string>([
+    ...holdings.map(h => h.ticker),
+    ...targetAllocation.map(a => a.ticker),
+  ])
+
+  const actions: ActionItem[] = []
+  for (const ticker of allTickers) {
+    const current_usd = holdingMap.get(ticker) ?? 0
+    const target_pct = allocationMap.get(ticker) ?? 0
+    const target_usd = (target_pct / 100) * grand_total
+    const delta_usd = target_usd - current_usd
+    const action: 'buy' | 'sell' | 'hold' =
+      delta_usd > 0 ? 'buy' : delta_usd < 0 ? 'sell' : 'hold'
+    const current_pct =
+      grand_total > 0 ? Math.round((current_usd / grand_total) * 10000) / 100 : 0
+
+    actions.push({ ticker, action, current_pct, target_pct, current_usd, target_usd, delta_usd })
+  }
+
+  return actions
 }
