@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeHoldingSummaries, formatUsd } from './portfolioCalculator'
+import { computeHoldingSummaries, formatUsd, computeActionList } from './portfolioCalculator'
 
 describe('computeHoldingSummaries', () => {
   it('returns empty summaries and zero totals for an empty holdings array with zero cash', () => {
@@ -98,5 +98,132 @@ describe('formatUsd', () => {
 
   it('formats a small fractional value with two decimal places', () => {
     expect(formatUsd(0.5)).toBe('$0.50')
+  })
+})
+
+describe('computeActionList', () => {
+  it('produces action "buy" when target_usd > current_usd', () => {
+    const result = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 200 }],
+      0,
+      [{ ticker: 'AAPL', target_pct: 100 }]
+    )
+    // current = 200, target = 200, delta = 0 — need a case where delta > 0
+    const result2 = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 100 }],
+      0,
+      [{ ticker: 'AAPL', target_pct: 100 }]
+    )
+    // grand_total=100, target_usd=100, delta=0 — equal case; use cash to shift
+    const result3 = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 500 }],
+      500,
+      [{ ticker: 'AAPL', target_pct: 100 }]
+    )
+    // grand_total=1000, target_usd=1000, current=500, delta=500 → buy
+    const aapl3 = result3.find(a => a.ticker === 'AAPL')!
+    expect(aapl3.action).toBe('buy')
+    expect(aapl3.delta_usd).toBe(500)
+    void result
+    void result2
+  })
+
+  it('produces action "sell" when target_usd < current_usd', () => {
+    const result = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 1000 }],
+      0,
+      [{ ticker: 'AAPL', target_pct: 50 }]
+    )
+    // grand_total=1000, target_usd=500, current=1000, delta=-500 → sell
+    const aapl = result.find(a => a.ticker === 'AAPL')!
+    expect(aapl.action).toBe('sell')
+    expect(aapl.delta_usd).toBe(-500)
+  })
+
+  it('produces action "hold" when target_usd === current_usd', () => {
+    const result = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 500 }],
+      500,
+      [{ ticker: 'AAPL', target_pct: 50 }]
+    )
+    // grand_total=1000, target_usd=500, current=500, delta=0 → hold
+    const aapl = result.find(a => a.ticker === 'AAPL')!
+    expect(aapl.action).toBe('hold')
+    expect(aapl.delta_usd).toBe(0)
+  })
+
+  it('computes correct current_usd, target_usd, delta_usd with multiple holdings and cash', () => {
+    const holdings = [
+      { ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 300 },
+      { ticker: 'MSFT', company_name: 'Microsoft Corp.', total_value_usd: 500 },
+    ]
+    const allocation = [
+      { ticker: 'AAPL', target_pct: 40 },
+      { ticker: 'MSFT', target_pct: 60 },
+    ]
+    // grand_total = 300 + 500 + 200(cash) = 1000
+    const result = computeActionList(holdings, 200, allocation)
+    const aapl = result.find(a => a.ticker === 'AAPL')!
+    const msft = result.find(a => a.ticker === 'MSFT')!
+    expect(aapl.current_usd).toBe(300)
+    expect(aapl.target_usd).toBe(400)
+    expect(aapl.delta_usd).toBe(100)
+    expect(msft.current_usd).toBe(500)
+    expect(msft.target_usd).toBe(600)
+    expect(msft.delta_usd).toBe(100)
+  })
+
+  it('produces balanced action list when allocation sums to 100% and cash is 0', () => {
+    const holdings = [
+      { ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 700 },
+      { ticker: 'MSFT', company_name: 'Microsoft Corp.', total_value_usd: 300 },
+    ]
+    const allocation = [
+      { ticker: 'AAPL', target_pct: 50 },
+      { ticker: 'MSFT', target_pct: 50 },
+    ]
+    // grand_total=1000, AAPL: target=500 delta=-200 (sell), MSFT: target=500 delta=200 (buy)
+    const result = computeActionList(holdings, 0, allocation)
+    const totalBuys = result.filter(a => a.action === 'buy').reduce((s, a) => s + a.delta_usd, 0)
+    const totalSells = result.filter(a => a.action === 'sell').reduce((s, a) => s + Math.abs(a.delta_usd), 0)
+    expect(totalBuys).toBeCloseTo(totalSells, 2)
+  })
+
+  it('includes ticker absent from holdings with current_usd 0 and action "buy"', () => {
+    const result = computeActionList(
+      [],
+      1000,
+      [{ ticker: 'NVDA', target_pct: 100 }]
+    )
+    // grand_total=1000, NVDA: current=0, target=1000, delta=1000 → buy
+    const nvda = result.find(a => a.ticker === 'NVDA')!
+    expect(nvda.current_usd).toBe(0)
+    expect(nvda.action).toBe('buy')
+    expect(nvda.delta_usd).toBe(1000)
+  })
+
+  it('includes ticker absent from allocation with target_pct 0, target_usd 0, action "sell"', () => {
+    const result = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 500 }],
+      0,
+      []
+    )
+    // grand_total=500, AAPL: target_pct=0, target_usd=0, delta=-500 → sell
+    const aapl = result.find(a => a.ticker === 'AAPL')!
+    expect(aapl.target_pct).toBe(0)
+    expect(aapl.target_usd).toBe(0)
+    expect(aapl.action).toBe('sell')
+  })
+
+  it('returns all current_pct as 0 and target_usd as 0 when grand_total is 0', () => {
+    const result = computeActionList(
+      [{ ticker: 'AAPL', company_name: 'Apple Inc.', total_value_usd: 0 }],
+      0,
+      [{ ticker: 'AAPL', target_pct: 100 }]
+    )
+    const aapl = result.find(a => a.ticker === 'AAPL')!
+    expect(aapl.current_pct).toBe(0)
+    expect(aapl.target_usd).toBe(0)
+    expect(aapl.action).toBe('hold') // delta = 0 - 0 = 0
   })
 })

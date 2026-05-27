@@ -9,6 +9,8 @@ import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
 import { fetchPriceHistory, fetchTickerDetails, type PriceHistory, type TickerDetailsMap } from '@/inngest/dataSources/polygon'
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
+import { runSynthesizer } from '@/inngest/synthesizer'
+import { computeActionList } from '@/lib/portfolioCalculator'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -47,6 +49,8 @@ export const portfolioAnalysis = inngest.createFunction(
     const { settings, tickers, snapshot } = await step.run(
       'fetch-portfolio',
       async (): Promise<FetchPortfolioResult> => {
+        // No cookie session in Inngest — admin client used intentionally.
+        // RLS is enforced in application code via the user_id equality check below.
         const admin = createAdminClient()
 
         // Verify run ownership before reading portfolio data (defence in depth)
@@ -340,11 +344,73 @@ export const portfolioAnalysis = inngest.createFunction(
               sector_analysis:    sectorOutput,
             },
             portfolio_snapshot: snapshot,
-            status:             'complete',
             updated_at:         now,
           })
           .eq('id', run_id),
       ])
+    })
+
+    // Step 6: Fetch recent recommendation summaries for context
+    const recentSummaries = await step.run('fetch-summaries', async (): Promise<string[]> => {
+      const admin = createAdminClient()
+      const { data: recIds } = await admin
+        .from('recommendations')
+        .select('id')
+        .eq('user_id', user_id)
+        .order('run_at', { ascending: false })
+        .limit(5)
+      if (!recIds || recIds.length === 0) return []
+      const ids = recIds.map(r => r.id)
+      const { data: summaries } = await admin
+        .from('recommendation_summaries')
+        .select('summary_text')
+        .in('recommendation_id', ids)
+        .order('created_at', { ascending: false })
+      return (summaries ?? []).map(s => s.summary_text)
+    })
+
+    // Step 7: Synthesize agent outputs into a final recommendation
+    await step.run('synthesize', async (): Promise<void> => {
+      const admin = createAdminClient()
+      const now = new Date().toISOString()
+      try {
+        const agentOutputs = {
+          macroeconomics:     macroOutput,
+          fed_rates:          fedRatesOutput,
+          geopolitics:        geopoliticsOutput,
+          sentiment:          sentimentOutput,
+          fundamentals:       fundamentalsOutput,
+          technical_analysis: technicalOutput,
+          sector_analysis:    sectorOutput,
+        }
+        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries })
+        const actionList = computeActionList(snapshot.holdings, snapshot.cash_usd, synthResult.target_allocation)
+        await admin
+          .from('recommendations')
+          .update({
+            target_allocation: synthResult.target_allocation,
+            action_list:       actionList,
+            summary_text:      synthResult.summary_text,
+            conflict_notes:    synthResult.conflict_notes,
+            status:            'complete',
+            updated_at:        now,
+          })
+          .eq('id', run_id)
+        await step.sendEvent('emit-completed', {
+          name: 'portfolio/run.completed',
+          data: { run_id, user_id },
+        })
+      } catch (err) {
+        await admin
+          .from('recommendations')
+          .update({
+            status:        'error',
+            error_message: sanitizeErrorMessage(err),
+            updated_at:    now,
+          })
+          .eq('id', run_id)
+        throw err
+      }
     })
   },
 )

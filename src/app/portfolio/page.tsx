@@ -25,8 +25,8 @@ export default async function PortfolioPage() {
     return <PortfolioTosGate />
   }
 
-  // Fetch holdings and settings in parallel
-  const [holdingsRes, settingsRes] = await Promise.all([
+  // Fetch holdings, settings, and latest recommendation in parallel
+  const [holdingsRes, settingsRes, recRes] = await Promise.all([
     supabase
       .from('portfolio_holdings')
       .select('*')
@@ -36,6 +36,14 @@ export default async function PortfolioPage() {
       .from('portfolio_settings')
       .select('*')
       .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('recommendations')
+      .select('id, run_at, summary_text')
+      .eq('user_id', user.id)
+      .eq('status', 'complete')
+      .order('run_at', { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ])
 
@@ -83,6 +91,7 @@ export default async function PortfolioPage() {
       <PortfolioOverview
         initialHoldings={holdings}
         initialSettings={settings ?? defaultSettings}
+        latestRecommendation={recRes.data ?? null}
       />
     </main>
   )
