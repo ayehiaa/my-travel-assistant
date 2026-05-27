@@ -6,8 +6,9 @@ import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import { runGeopoliticsAgent } from '@/inngest/agents/geopolitics'
 import { runSentimentAgent } from '@/inngest/agents/sentiment'
 import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
-import { fetchPriceHistory, type PriceHistory } from '@/inngest/dataSources/polygon'
+import { fetchPriceHistory, fetchTickerDetails, type PriceHistory, type TickerDetailsMap } from '@/inngest/dataSources/polygon'
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
+import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -104,6 +105,12 @@ export const portfolioAnalysis = inngest.createFunction(
       async (): Promise<PriceHistory> => fetchPriceHistory(tickers),
     )
 
+    // Step 3a: Pre-fetch Polygon.io ticker reference data (for sector groupings)
+    const tickerDetails = await step.run(
+      'fetch-ticker-details',
+      async (): Promise<TickerDetailsMap> => fetchTickerDetails(tickers),
+    )
+
     // Step 3: Mark all agents as running
     await step.run('mark-agents-running', async (): Promise<void> => {
       const admin = createAdminClient()
@@ -111,11 +118,11 @@ export const portfolioAnalysis = inngest.createFunction(
         .from('run_progress')
         .update({ status: 'running' })
         .eq('run_id', run_id)
-        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis'])
+        .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis', 'sector_analysis'])
     })
 
     // Step 4: Run all agents in parallel
-    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput, technicalOutput] = await Promise.all([
+    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput, technicalOutput, sectorOutput] = await Promise.all([
       step.run('run-macroeconomics', async (): Promise<AgentOutput> => {
         try {
           return await runMacroeconomicsAgent({
@@ -278,6 +285,35 @@ export const portfolioAnalysis = inngest.createFunction(
           throw err
         }
       }),
+
+      step.run('run-sector-analysis', async (): Promise<AgentOutput> => {
+        try {
+          return await runSectorAnalysisAgent({
+            risk_profile:      settings.risk_profile,
+            target_return_pct: settings.target_return_pct,
+            holdings_tickers:  tickers,
+            priceData,
+            tickerDetails,
+          })
+        } catch (err) {
+          const errorMessage = sanitizeErrorMessage(err)
+          const admin = createAdminClient()
+
+          await Promise.all([
+            admin
+              .from('run_progress')
+              .update({ status: 'error', error_message: errorMessage })
+              .eq('run_id', run_id)
+              .eq('agent_name', 'sector_analysis'),
+            admin
+              .from('recommendations')
+              .update({ status: 'error', error_message: errorMessage, updated_at: new Date().toISOString() })
+              .eq('id', run_id),
+          ])
+
+          throw err
+        }
+      }),
     ])
 
     // Step 5: Store outputs
@@ -290,7 +326,7 @@ export const portfolioAnalysis = inngest.createFunction(
           .from('run_progress')
           .update({ status: 'complete', completed_at: now })
           .eq('run_id', run_id)
-          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis']),
+          .in('agent_name', ['macroeconomics', 'fed_rates', 'geopolitics', 'sentiment', 'fundamentals', 'technical_analysis', 'sector_analysis']),
         admin
           .from('recommendations')
           .update({
@@ -301,6 +337,7 @@ export const portfolioAnalysis = inngest.createFunction(
               sentiment:          sentimentOutput,
               fundamentals:       fundamentalsOutput,
               technical_analysis: technicalOutput,
+              sector_analysis:    sectorOutput,
             },
             portfolio_snapshot: snapshot,
             status:             'complete',
