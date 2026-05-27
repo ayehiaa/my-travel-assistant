@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runMacroeconomicsAgent } from '@/inngest/agents/macroeconomics'
+import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -30,7 +31,11 @@ interface FetchPortfolioResult {
 export const portfolioAnalysis = inngest.createFunction(
   { id: 'portfolio-analysis', triggers: [{ event: 'portfolio/analysis.requested' }] },
   async ({ event, step }) => {
-    const { run_id, user_id } = EventDataSchema.parse(event.data)
+    const parseResult = EventDataSchema.safeParse(event.data)
+    if (!parseResult.success) {
+      throw new Error('Invalid event payload: expected run_id and user_id as UUIDs')
+    }
+    const { run_id, user_id } = parseResult.data
 
     // Step 1: Fetch portfolio data
     const { settings, tickers, snapshot } = await step.run(
@@ -88,20 +93,19 @@ export const portfolioAnalysis = inngest.createFunction(
       },
     )
 
-    // Step 2: Mark macroeconomics agent as running
-    await step.run('mark-macro-running', async (): Promise<void> => {
+    // Step 2: Mark both agents as running
+    await step.run('mark-agents-running', async (): Promise<void> => {
       const admin = createAdminClient()
       await admin
         .from('run_progress')
         .update({ status: 'running' })
         .eq('run_id', run_id)
-        .eq('agent_name', 'macroeconomics')
+        .in('agent_name', ['macroeconomics', 'fed_rates'])
     })
 
-    // Step 3: Run macroeconomics agent
-    const macroOutput = await step.run(
-      'run-macroeconomics',
-      async (): Promise<AgentOutput> => {
+    // Step 3: Run macroeconomics and fed rates agents in parallel
+    const [macroOutput, fedRatesOutput] = await Promise.all([
+      step.run('run-macroeconomics', async (): Promise<AgentOutput> => {
         try {
           return await runMacroeconomicsAgent({
             risk_profile:      settings.risk_profile,
@@ -126,8 +130,35 @@ export const portfolioAnalysis = inngest.createFunction(
 
           throw err
         }
-      },
-    )
+      }),
+
+      step.run('run-fed-rates', async (): Promise<AgentOutput> => {
+        try {
+          return await runFedRatesAgent({
+            risk_profile:      settings.risk_profile,
+            target_return_pct: settings.target_return_pct,
+            holdings_tickers:  tickers,
+          })
+        } catch (err) {
+          const errorMessage = sanitizeErrorMessage(err)
+          const admin = createAdminClient()
+
+          await Promise.all([
+            admin
+              .from('run_progress')
+              .update({ status: 'error', error_message: errorMessage })
+              .eq('run_id', run_id)
+              .eq('agent_name', 'fed_rates'),
+            admin
+              .from('recommendations')
+              .update({ status: 'error', error_message: errorMessage, updated_at: new Date().toISOString() })
+              .eq('id', run_id),
+          ])
+
+          throw err
+        }
+      }),
+    ])
 
     // Step 4: Store outputs
     await step.run('store-outputs', async (): Promise<void> => {
@@ -139,11 +170,11 @@ export const portfolioAnalysis = inngest.createFunction(
           .from('run_progress')
           .update({ status: 'complete', completed_at: now })
           .eq('run_id', run_id)
-          .eq('agent_name', 'macroeconomics'),
+          .in('agent_name', ['macroeconomics', 'fed_rates']),
         admin
           .from('recommendations')
           .update({
-            agent_outputs:      { macroeconomics: macroOutput },
+            agent_outputs:      { macroeconomics: macroOutput, fed_rates: fedRatesOutput },
             portfolio_snapshot: snapshot,
             status:             'complete',
             updated_at:         now,
