@@ -94,7 +94,7 @@ export const portfolioAnalysis = inngest.createFunction(
       },
     )
 
-    // Step 2: Mark both agents as running
+    // Step 2: Mark all agents as running
     await step.run('mark-agents-running', async (): Promise<void> => {
       const admin = createAdminClient()
       await admin
