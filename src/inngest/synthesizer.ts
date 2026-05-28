@@ -97,15 +97,16 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
   })
 
   const block = response.content[0]
-  const raw = block.type === 'text' ? block.text.trim() : ''
-  // Strip markdown code fences the LLM occasionally wraps around JSON
-  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+  const raw = block.type === 'text' ? block.text : ''
+  // Extract the JSON object regardless of surrounding prose or code fences
+  const jsonMatch = raw.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Synthesizer returned no JSON object')
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(jsonMatch[0])
   } catch {
-    throw new Error('Synthesizer returned non-JSON output')
+    throw new Error('Synthesizer returned malformed JSON')
   }
 
   const validationResult = SynthesisSchema.safeParse(parsed)
