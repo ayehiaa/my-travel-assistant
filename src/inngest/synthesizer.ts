@@ -45,8 +45,8 @@ function buildSystemPrompt(settings: PortfolioSettings, snapshot: PortfolioSnaps
     'into a unified investment recommendation. ' +
     'Return ONLY a raw JSON object (no markdown, no code fences) with exactly three fields: ' +
     '"target_allocation" (array of { ticker, target_pct, rationale }), ' +
-    '"summary_text" (200–400 word overall assessment string), ' +
-    '"conflict_notes" (string describing key agent disagreements, or empty string if none).\n\n' +
+    '"summary_text" (100–200 word overall assessment string), ' +
+    '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n' +
     `Risk profile: ${settings.risk_profile}\n` +
     `Target return: ${settings.target_return_pct}%\n\n` +
     'Current portfolio holdings:\n' +
@@ -55,9 +55,9 @@ function buildSystemPrompt(settings: PortfolioSettings, snapshot: PortfolioSnaps
     `Total portfolio value: $${snapshot.total_value_usd.toFixed(2)}\n\n` +
     'Output format — return a JSON object with exactly these three keys:\n' +
     '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
-    '(percentages must sum to 100%)\n' +
-    '  summary_text: string (overall market assessment and recommendation rationale)\n' +
-    '  conflict_notes: string (notable disagreements between agents, or "" if none)'
+    '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +
+    '  summary_text: string (100–200 word overall assessment)\n' +
+    '  conflict_notes: string (1–2 sentences on agent disagreements, or "" if none)'
   )
 }
 
@@ -91,7 +91,7 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
 
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
-    max_tokens: 1200,
+    max_tokens: 3000,
     system:     buildSystemPrompt(settings, snapshot),
     messages:   [{ role: 'user', content: buildUserPrompt(agentOutputs, recentSummaries) }],
   })
