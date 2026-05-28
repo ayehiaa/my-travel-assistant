@@ -38,7 +38,7 @@ export default function Nav() {
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
     ...(user.role === 'main' || user.role === 'premium' || user.role === 'premium_plus' ? [{ href: '/settings', label: 'Settings' }] : []),
-    ...(user.role === 'premium_plus' ? [{ href: '/agents', label: 'Agents' }, { href: '/portfolio', label: 'Portfolio' }] : []),
+    ...(user.role === 'premium_plus' ? [{ href: '/agents', label: 'Agents' }, { href: '/portfolio', label: 'Portfolio' }, { href: '/portfolio/run', label: 'Run Analysis' }] : []),
   ]
 
   const initials = user.displayName
