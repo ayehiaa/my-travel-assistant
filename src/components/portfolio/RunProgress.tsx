@@ -180,9 +180,15 @@ export default function RunProgress({ runId }: Props) {
             color: '#15803d',
           }}
         >
-          <strong>Run complete</strong> — synthesizer coming soon.
+          <strong>Analysis complete</strong>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#166534' }}>
-            Full recommendations will be available in a future update.
+            Your recommendation is ready.{' '}
+            <a
+              href={`/portfolio/recommendations/${runId}`}
+              style={{ color: '#15803d', fontWeight: 600 }}
+            >
+              View full recommendation →
+            </a>
           </p>
         </div>
       )}
