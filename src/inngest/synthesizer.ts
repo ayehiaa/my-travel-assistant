@@ -97,7 +97,9 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
   })
 
   const block = response.content[0]
-  const text = block.type === 'text' ? block.text : ''
+  const raw = block.type === 'text' ? block.text.trim() : ''
+  // Strip markdown code fences the LLM occasionally wraps around JSON
+  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
 
   let parsed: unknown
   try {
