@@ -118,7 +118,7 @@ export default function AgentsDemoPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [elapsedMins, setElapsedMins] = useState<number | null>(null)
   const startTimeRef = useRef<number | null>(null)
-  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
+  const esRef = useRef<EventSource | null>(null)
 
   // Warn before page refresh while the pipeline is running
   useEffect(() => {
@@ -159,70 +159,57 @@ export default function AgentsDemoPage() {
     setPhaseStatus(INITIAL_STATUS)
     startTimeRef.current = Date.now()
 
-    let response: Response
+    let pipelineId: string
     try {
-      response = await fetch('/api/agents/run', {
+      const response = await fetch('/api/agents/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requirement, full }),
       })
+      if (!response.ok) {
+        setErrorMsg(`Error ${response.status}: ${await response.text()}`)
+        setIsRunning(false)
+        return
+      }
+      const { id } = await response.json() as { id: string }
+      pipelineId = id
     } catch (e) {
       setErrorMsg(`Network error: ${String(e)}`)
       setIsRunning(false)
       return
     }
 
-    if (!response.ok) {
-      setErrorMsg(`Error ${response.status}: ${await response.text()}`)
-      setIsRunning(false)
-      return
+    // EventSource auto-reconnects if the connection drops; the server replays
+    // all buffered events on reconnect so UI state is always consistent.
+    const es = new EventSource(`/api/agents/events?id=${pipelineId}`)
+    esRef.current = es
+
+    es.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data) as SSEEvent
+        if (ev.type === 'phase_start' && ev.phase) handlePhaseStart(ev.phase)
+        else if (ev.type === 'phase_done' && ev.phase) handlePhaseDone(ev.phase)
+        else if (ev.type === 'pipeline_done') {
+          if (startTimeRef.current) {
+            setElapsedMins(Math.round((Date.now() - startTimeRef.current) / 60000 * 10) / 10)
+          }
+          handlePipelineDone(ev.success ?? false)
+          es.close()
+          esRef.current = null
+        } else if (ev.type === 'error') {
+          setErrorMsg(ev.message ?? 'Unknown error')
+        }
+      } catch { /* skip malformed event */ }
     }
 
-    const reader = response.body!.getReader()
-    readerRef.current = reader
-    const decoder = new TextDecoder()
-    let buf = ''
-
-    let receivedDone = false
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const ev = JSON.parse(line.slice(6)) as SSEEvent
-            if (ev.type === 'phase_start' && ev.phase) handlePhaseStart(ev.phase)
-            else if (ev.type === 'phase_done' && ev.phase) handlePhaseDone(ev.phase)
-            else if (ev.type === 'pipeline_done') {
-              receivedDone = true
-              if (startTimeRef.current) {
-                setElapsedMins(Math.round((Date.now() - startTimeRef.current) / 60000 * 10) / 10)
-              }
-              handlePipelineDone(ev.success ?? false)
-            }
-            else if (ev.type === 'error') {
-              setErrorMsg(ev.message ?? 'Unknown error')
-              setIsRunning(false)
-            }
-          } catch { /* skip malformed line */ }
-        }
-      }
-    } catch { /* stream closed by server or user navigated away */ }
-    finally {
-      if (!receivedDone) {
-        setErrorMsg('Connection lost — the pipeline is still running on the server. Avoid refreshing during a run.')
-      }
-      setIsRunning(false)
+    es.onerror = () => {
+      // EventSource will retry automatically — no action needed unless pipeline_done was received
     }
   }
 
   function handleStop() {
-    readerRef.current?.cancel()
-    readerRef.current = null
+    esRef.current?.close()
+    esRef.current = null
     setIsRunning(false)
   }
 
