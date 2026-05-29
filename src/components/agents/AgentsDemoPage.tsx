@@ -30,10 +30,11 @@ const INITIAL_STATUS: Record<PhaseId, PhaseStatus> = {
 }
 
 interface SSEEvent {
-  type: 'phase_start' | 'phase_done' | 'pipeline_done' | 'error'
+  type: 'phase_start' | 'phase_done' | 'pipeline_done' | 'error' | 'text_delta'
   phase?: PhaseId
   success?: boolean
   message?: string
+  text?: string
 }
 
 function PipelineNode({ id, status }: { id: PhaseId; status: PhaseStatus }) {
@@ -117,8 +118,10 @@ export default function AgentsDemoPage() {
   const [pipelineResult, setPipelineResult] = useState<'success' | 'error' | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [elapsedMins, setElapsedMins] = useState<number | null>(null)
+  const [phaseOutput, setPhaseOutput] = useState<Partial<Record<PhaseId, string>>>({})
   const startTimeRef = useRef<number | null>(null)
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
+  const outputRef = useRef<HTMLPreElement>(null)
 
   // Warn before page refresh while the pipeline is running
   useEffect(() => {
@@ -128,6 +131,13 @@ export default function AgentsDemoPage() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [isRunning])
+
+  // Auto-scroll the output panel when new text arrives
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    }
+  }, [phaseOutput])
 
   const handlePhaseStart = useCallback((phase: PhaseId) => {
     setPhaseStatus(prev => ({ ...prev, [phase]: 'active' }))
@@ -157,6 +167,7 @@ export default function AgentsDemoPage() {
     setErrorMsg(null)
     setElapsedMins(null)
     setPhaseStatus(INITIAL_STATUS)
+    setPhaseOutput({})
     startTimeRef.current = Date.now()
 
     let response: Response
@@ -207,6 +218,12 @@ export default function AgentsDemoPage() {
             else if (ev.type === 'error') {
               setErrorMsg(ev.message ?? 'Unknown error')
               setIsRunning(false)
+            }
+            else if (ev.type === 'text_delta' && ev.phase) {
+              setPhaseOutput(prev => ({
+                ...prev,
+                [ev.phase!]: (prev[ev.phase!] ?? '') + ev.text,
+              }))
             }
           } catch { /* skip malformed line */ }
         }
@@ -357,6 +374,44 @@ export default function AgentsDemoPage() {
             </>
           )}
         </div>
+
+        {/* Live output panel */}
+        {(() => {
+          const activePhase = PHASE_ORDER.find(p => phaseStatus[p] === 'active')
+          const lastOutputPhase = [...PHASE_ORDER].reverse().find(p => phaseOutput[p])
+          const displayPhase = activePhase ?? lastOutputPhase
+          const displayText = displayPhase ? (phaseOutput[displayPhase] ?? '') : ''
+          return Object.keys(phaseOutput).length > 0 && displayPhase ? (
+            <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: 'var(--paper)', border: '1px solid var(--rule)' }}>
+              <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b" style={{ borderColor: 'var(--rule)' }}>
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--ink-4)' }}>
+                  {PHASE_META[displayPhase].icon} {PHASE_META[displayPhase].label}
+                </span>
+                {isRunning && activePhase && (
+                  <span className="relative flex h-1.5 w-1.5 ml-1">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--blue-700)' }} />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: 'var(--blue-700)' }} />
+                  </span>
+                )}
+              </div>
+              <pre
+                ref={outputRef}
+                className="px-4 py-3 text-xs overflow-y-auto"
+                style={{
+                  maxHeight: '40vh',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: 'var(--font-mono, monospace)',
+                  color: 'var(--ink)',
+                  background: 'var(--paper)',
+                  margin: 0,
+                }}
+              >
+                {displayText}
+              </pre>
+            </div>
+          ) : null
+        })()}
 
         {/* Legend */}
         <div className="flex items-center justify-center gap-6 text-xs" style={{ color: 'var(--ink-4)' }}>
