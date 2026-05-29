@@ -51,6 +51,8 @@ function pctOf(date: string, windowStart: Date, totalDays: number) {
   return (Math.max(0, Math.min(totalDays, offset)) / totalDays) * 100
 }
 
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function buildMonths(windowStart: Date, windowEnd: Date, totalDays: number) {
   const today = new Date()
   const months: { label: string; year: string; leftPct: number; widthPct: number; isCurrent: boolean }[] = []
@@ -66,7 +68,7 @@ function buildMonths(windowStart: Date, windowEnd: Date, totalDays: number) {
     const isCurrent = cur.getMonth() === today.getMonth() && cur.getFullYear() === today.getFullYear()
 
     months.push({
-      label: cur.toLocaleDateString('en-GB', { month: 'short' }),
+      label: MONTH_SHORT[cur.getMonth()],
       year: cur.getFullYear() !== today.getFullYear() ? String(cur.getFullYear()) : '',
       leftPct: (monthStart / totalDays) * 100,
       widthPct: ((monthEnd - monthStart) / totalDays) * 100,
