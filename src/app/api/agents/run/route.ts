@@ -93,7 +93,7 @@ async function executePipeline(
           'Follow CLAUDE.md conventions.',
       childEnv,
       undefined,
-      40,
+      80,
     )
     emit({ type: 'phase_done', phase: phaseId })
     if (!result.success) {
