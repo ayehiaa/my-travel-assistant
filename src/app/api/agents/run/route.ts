@@ -63,7 +63,7 @@ async function executePipeline(
     'Stop after writing those two files. Follow CLAUDE.md conventions.',
     childEnv,
     HAIKU,
-    15,
+    25,
   )
 
   emit({ type: 'phase_done', phase: 'specify' })
