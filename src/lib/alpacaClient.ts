@@ -4,6 +4,9 @@ export function getAlpacaBaseUrl(isPaper: boolean): string {
     : 'https://api.alpaca.markets'
 }
 
+// Market data always goes through data.alpaca.markets regardless of paper/live
+const ALPACA_DATA_URL = 'https://data.alpaca.markets'
+
 function alpacaHeaders(keyId: string, secret: string): Record<string, string> {
   return {
     'APCA-API-KEY-ID': keyId,
@@ -23,10 +26,9 @@ export async function fetchQuotes(
   secret: string,
   isPaper: boolean
 ): Promise<Record<string, number>> {
-  const base = getAlpacaBaseUrl(isPaper)
   const symbols = tickers.join(',')
   const response = await fetch(
-    `${base}/v2/stocks/quotes/latest?symbols=${encodeURIComponent(symbols)}`,
+    `${ALPACA_DATA_URL}/v2/stocks/quotes/latest?symbols=${encodeURIComponent(symbols)}`,
     { headers: alpacaHeaders(keyId, secret) }
   )
 
