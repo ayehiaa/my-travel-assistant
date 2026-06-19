@@ -1,9 +1,16 @@
-import { Recommendation } from '@/types/database'
+import { AlpacaExecution, Recommendation } from '@/types/database'
 import ActionList from './ActionList'
 import AgentBreakdown from './AgentBreakdown'
+import AlpacaExecuteButton from './AlpacaExecuteButton'
+import AlpacaResultsPanel from './AlpacaResultsPanel'
 
 interface Props {
   recommendation: Recommendation
+  recommendationId: string
+  isLatest: boolean
+  hasCredentials: boolean
+  isPaper: boolean
+  execution: AlpacaExecution | null
 }
 
 const DISCLAIMER_TEXT =
@@ -11,7 +18,14 @@ const DISCLAIMER_TEXT =
   'It does not constitute regulated financial advice. ' +
   'Always consult a qualified financial adviser before making investment decisions.'
 
-export default function RecommendationDetail({ recommendation }: Props) {
+export default function RecommendationDetail({
+  recommendation,
+  recommendationId,
+  isLatest,
+  hasCredentials,
+  isPaper,
+  execution,
+}: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {/* Disclaimer banner */}
@@ -57,6 +71,19 @@ export default function RecommendationDetail({ recommendation }: Props) {
         >
           Recommended Actions
         </h2>
+        <div style={{ marginBottom: 16 }}>
+          <AlpacaExecuteButton
+            recommendationId={recommendationId}
+            hasCredentials={hasCredentials}
+            isPaper={isPaper}
+            isLatest={isLatest}
+            alreadyExecuted={execution !== null}
+            executedAt={execution?.executed_at ?? null}
+          />
+          {execution !== null && (
+            <AlpacaResultsPanel execution={execution} />
+          )}
+        </div>
         <ActionList actionList={recommendation.action_list ?? []} />
       </section>
 

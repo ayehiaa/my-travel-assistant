@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PortfolioSettings } from '@/types/database'
 import PortfolioSettingsForm from '@/components/portfolio/PortfolioSettingsForm'
+import AlpacaCredentialsForm from '@/components/portfolio/AlpacaCredentialsForm'
 
 export const metadata = { title: 'Sojourn — Portfolio Settings' }
 
@@ -41,6 +42,12 @@ export default async function PortfolioSettingsPage() {
     settings = inserted as PortfolioSettings | null
   }
 
+  const { data: alpacaCred } = await supabase
+    .from('alpaca_credentials')
+    .select('is_paper')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
   const defaultSettings: PortfolioSettings = {
     user_id: user.id,
     cash_usd: 0,
@@ -70,6 +77,26 @@ export default async function PortfolioSettingsPage() {
         Configure your risk preferences and analysis schedule.
       </p>
       <PortfolioSettingsForm initialSettings={settings ?? defaultSettings} />
+      <div style={{ marginTop: 32 }}>
+        <h2
+          style={{
+            fontFamily: 'var(--display)',
+            fontWeight: 700,
+            fontSize: 20,
+            color: 'var(--ink)',
+            marginBottom: 8,
+          }}
+        >
+          Alpaca Connection
+        </h2>
+        <p style={{ color: 'var(--ink-3)', fontSize: 14, marginBottom: 16 }}>
+          Connect your Alpaca account to execute trades from recommendations.
+        </p>
+        <AlpacaCredentialsForm
+          initialConnected={!!alpacaCred}
+          initialIsPaper={alpacaCred?.is_paper ?? true}
+        />
+      </div>
     </main>
   )
 }
