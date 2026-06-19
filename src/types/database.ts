@@ -19,6 +19,9 @@ export type AuditAction =
   | 'holding_deleted'
   | 'portfolio_settings_updated'
   | 'run_triggered'
+  | 'alpaca_credentials_connected'
+  | 'alpaca_credentials_disconnected'
+  | 'alpaca_executed'
 
 export interface UserRoleRecord {
   user_id: string
@@ -243,4 +246,35 @@ export interface Recommendation {
   error_message: string | null
   created_at: string
   updated_at: string
+}
+
+export interface AlpacaCredential {
+  user_id: string
+  encrypted_key_id: string
+  key_id_iv: string
+  encrypted_secret: string
+  secret_iv: string
+  is_paper: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AlpacaOrderResult {
+  ticker: string
+  action: 'buy' | 'sell'
+  qty: number
+  price_at_execution: number
+  estimated_value: number
+  alpaca_order_id: string | null
+  status: 'submitted' | 'rejected' | 'error' | 'skipped'
+  error_message: string | null
+}
+
+export interface AlpacaExecution {
+  id: string
+  recommendation_id: string
+  user_id: string
+  executed_at: string
+  is_paper: boolean
+  orders: AlpacaOrderResult[]
 }
