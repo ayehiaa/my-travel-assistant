@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/auditLogger'
 const SettingsUpdateSchema = z.object({
   cash_usd:          z.number().nonnegative().optional(),
   target_return_pct: z.number().positive().optional(),
+  target_horizon:    z.enum(['monthly', 'annual']).optional(),
   risk_profile:      z.enum(['conservative', 'moderate', 'aggressive']).optional(),
   run_interval_days: z.union([z.literal(7), z.literal(14), z.literal(30)]).optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field required' })

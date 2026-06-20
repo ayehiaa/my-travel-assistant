@@ -1,4 +1,4 @@
-import type { ActionItem } from '@/types/database'
+import type { ActionItem, TargetHorizon } from '@/types/database'
 
 export interface HoldingSummary {
   ticker: string
@@ -52,6 +52,66 @@ export function formatUsd(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+export interface PortfolioReturnMetrics {
+  weighted_30d_return_pct: number  // value-weighted return over the price data window
+  annualized_return_pct:   number  // ×12 approximation
+  target_annual_pct:       number  // user target converted to annual terms
+  annual_gap_pct:          number  // annualized − target_annual (negative = underperforming)
+  data_coverage_pct:       number  // percentage of portfolio value with usable price data
+}
+
+/**
+ * Computes how the portfolio has actually performed versus the stated target.
+ * Uses the first and last close of each holding's price data window (typically 30 days).
+ * Pure function — no network calls, safe for Vitest.
+ */
+export function computePortfolioReturnMetrics(
+  holdings: Array<{ ticker: string; total_value_usd: number }>,
+  priceData: Record<string, Array<{ close: number }>>,
+  target_return_pct: number,
+  target_horizon: TargetHorizon,
+): PortfolioReturnMetrics {
+  const totalValue = holdings.reduce((s, h) => s + h.total_value_usd, 0)
+  const target_annual_pct = target_horizon === 'annual' ? target_return_pct : target_return_pct * 12
+
+  if (totalValue === 0) {
+    return {
+      weighted_30d_return_pct: 0,
+      annualized_return_pct:   0,
+      target_annual_pct,
+      annual_gap_pct:          -target_annual_pct,
+      data_coverage_pct:       0,
+    }
+  }
+
+  let weightedReturnSum = 0
+  let coveredValue      = 0
+
+  for (const h of holdings) {
+    const candles = priceData[h.ticker]
+    if (!candles || candles.length < 2) continue
+    const first = candles[0].close
+    if (first === 0) continue
+    const last   = candles[candles.length - 1].close
+    const ret30d = ((last - first) / first) * 100
+    weightedReturnSum += ret30d * h.total_value_usd
+    coveredValue      += h.total_value_usd
+  }
+
+  const weighted_30d_return_pct = coveredValue > 0 ? weightedReturnSum / coveredValue : 0
+  const annualized_return_pct   = weighted_30d_return_pct * 12
+  const annual_gap_pct          = annualized_return_pct - target_annual_pct
+  const data_coverage_pct       = Math.round((coveredValue / totalValue) * 100)
+
+  return {
+    weighted_30d_return_pct,
+    annualized_return_pct,
+    target_annual_pct,
+    annual_gap_pct,
+    data_coverage_pct,
+  }
 }
 
 /**

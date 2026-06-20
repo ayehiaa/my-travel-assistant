@@ -12,6 +12,7 @@ const AgentOutputSchema = z.object({
 export interface FundamentalsAgentInput {
   risk_profile:      string
   target_return_pct: number
+  target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
 }
 
@@ -23,6 +24,9 @@ const SYSTEM_PROMPT =
   'recency of filings as a governance and transparency signal, ' +
   'companies with missing or delayed filings as a risk flag, ' +
   'and whether the overall fundamental picture supports or contradicts a bullish portfolio stance. ' +
+  'Explicitly assess whether the earnings and revenue trajectory of the holdings is consistent with ' +
+  'generating the investor\'s target return (see portfolio context). Flag any holdings whose fundamentals ' +
+  'are too weak to justify their allocation if the target is to be met. ' +
   'Return ONLY a raw JSON object (no markdown, no code fences) ' +
   'with exactly three fields: "analysis" (200–400 word string), ' +
   '"confidence" ("low" | "medium" | "high"), and "stance" ("bullish" | "bearish" | "neutral").'
@@ -39,7 +43,7 @@ export async function runFundamentalsAgent(input: FundamentalsAgentInput): Promi
   const portfolioContext =
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
-    `Target return: ${input.target_return_pct}%\n` +
+    `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
     `Holdings: ${input.holdings_tickers.join(', ')}`
 
   const userContent = `Recent SEC filings:\n${articleContent}${portfolioContext}`

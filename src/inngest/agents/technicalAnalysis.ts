@@ -12,6 +12,7 @@ const AgentOutputSchema = z.object({
 export interface TechnicalAnalysisAgentInput {
   risk_profile:      string
   target_return_pct: number
+  target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
   priceData:         PriceHistory
 }
@@ -23,6 +24,9 @@ const SYSTEM_PROMPT =
   'simple moving average relationship — whether the latest close is above or below the 30-day average close (bullish or bearish bias); ' +
   'momentum — compare the average close of the most recent 5 days versus the earliest 5 days to determine if momentum is accelerating or decelerating; ' +
   'and support and resistance — use the 30-day high and low as key reference levels for potential reversals or breakouts. ' +
+  'Explicitly compute and state the aggregate 30-day price return across the portfolio holdings (weighted by position size if possible) ' +
+  'and compare it to the investor\'s target return (see portfolio context). ' +
+  'State whether current price momentum is tracking ahead of, in line with, or behind the target. ' +
   'Return ONLY a raw JSON object (no markdown, no code fences) ' +
   'with exactly three fields: "analysis" (200–400 word string), ' +
   '"confidence" ("low" | "medium" | "high"), and "stance" ("bullish" | "bearish" | "neutral").'
@@ -49,7 +53,7 @@ export async function runTechnicalAnalysisAgent(
   const portfolioContext =
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
-    `Target return: ${input.target_return_pct}%\n` +
+    `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
     `Holdings: ${input.holdings_tickers.join(', ')}`
 
   const userContent =

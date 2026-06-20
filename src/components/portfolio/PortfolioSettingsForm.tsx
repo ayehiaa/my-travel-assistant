@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '@/context/ToastContext'
-import { PortfolioSettings, RiskProfile } from '@/types/database'
+import { PortfolioSettings, RiskProfile, TargetHorizon } from '@/types/database'
 
 interface Props {
   initialSettings: PortfolioSettings
@@ -48,6 +48,9 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
   const [targetReturnStr, setTargetReturnStr] = useState(
     String(initialSettings.target_return_pct)
   )
+  const [targetHorizon, setTargetHorizon] = useState<TargetHorizon>(
+    initialSettings.target_horizon ?? 'annual'
+  )
   const [riskProfile, setRiskProfile] = useState<RiskProfile>(initialSettings.risk_profile)
   const [runIntervalDays, setRunIntervalDays] = useState<7 | 14 | 30>(
     initialSettings.run_interval_days
@@ -67,6 +70,7 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
         body: JSON.stringify({
           cash_usd: parsedCash,
           target_return_pct: parsedReturn,
+          target_horizon: targetHorizon,
           risk_profile: riskProfile,
           run_interval_days: runIntervalDays,
         }),
@@ -111,19 +115,30 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
           />
         </div>
 
-        {/* Target Return (%) */}
+        {/* Target Return */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={labelStyle}>Target Return (%)</label>
-          <input
-            type="number"
-            min="0.01"
-            step="0.1"
-            value={targetReturnStr}
-            placeholder="10"
-            style={inputStyle}
-            onChange={e => setTargetReturnStr(e.target.value)}
-            {...focusHandlers}
-          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="number"
+              min="0.01"
+              step="0.1"
+              value={targetReturnStr}
+              placeholder="10"
+              style={{ ...inputStyle, flex: 1 }}
+              onChange={e => setTargetReturnStr(e.target.value)}
+              {...focusHandlers}
+            />
+            <select
+              value={targetHorizon}
+              style={{ ...inputStyle, width: 'auto', cursor: 'pointer', flexShrink: 0 }}
+              onChange={e => setTargetHorizon(e.target.value as TargetHorizon)}
+              {...focusHandlers}
+            >
+              <option value="annual">per year</option>
+              <option value="monthly">per month</option>
+            </select>
+          </div>
         </div>
 
         {/* Risk Profile */}

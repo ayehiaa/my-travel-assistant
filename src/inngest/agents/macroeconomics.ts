@@ -12,13 +12,18 @@ const AgentOutputSchema = z.object({
 export interface MacroAgentInput {
   risk_profile: string
   target_return_pct: number
+  target_horizon: 'monthly' | 'annual'
   holdings_tickers: string[]
 }
 
 const SYSTEM_PROMPT =
   'You are a macroeconomic analyst specializing in US market conditions. ' +
   'Analyze the Federal Reserve economic indicators provided and assess their implications ' +
-  'for a US stock portfolio. Return ONLY a raw JSON object (no markdown, no code fences) ' +
+  'for a US stock portfolio. Focus on: GDP growth trajectory, inflation trends, employment data, ' +
+  'and consumer confidence — and whether these conditions historically support or hinder ' +
+  'the level of equity returns implied by the investor\'s target return (see portfolio context). ' +
+  'Conclude with an explicit sentence stating whether current macro conditions make the target return achievable, at risk, or unrealistic. ' +
+  'Return ONLY a raw JSON object (no markdown, no code fences) ' +
   'with exactly three fields: "analysis" (200–400 word string), ' +
   '"confidence" ("low" | "medium" | "high"), and "stance" ("bullish" | "bearish" | "neutral").'
 
@@ -32,7 +37,7 @@ export async function runMacroeconomicsAgent(input: MacroAgentInput): Promise<Ag
   const portfolioContext =
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
-    `Target return: ${input.target_return_pct}%\n` +
+    `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
     `Holdings: ${input.holdings_tickers.join(', ')}`
 
   const userContent = `Economic indicators:\n${indicatorLines}${portfolioContext}`

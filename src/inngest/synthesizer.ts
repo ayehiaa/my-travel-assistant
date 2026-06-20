@@ -1,12 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
+import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 
 export interface SynthesizerParams {
-  agentOutputs: Record<string, AgentOutput>
-  snapshot: PortfolioSnapshot
-  settings: PortfolioSettings
+  agentOutputs:    Record<string, AgentOutput>
+  snapshot:        PortfolioSnapshot
+  settings:        PortfolioSettings
   recentSummaries: string[]
+  returnMetrics:   PortfolioReturnMetrics
 }
 
 export interface SynthesizerOutput {
@@ -35,10 +37,22 @@ const SynthesisSchema = z.object({
   conflict_notes: z.string(),
 })
 
-function buildSystemPrompt(settings: PortfolioSettings, snapshot: PortfolioSnapshot): string {
-  const holdingsText = snapshot.holdings
+function buildSystemPrompt(
+  settings:      PortfolioSettings,
+  snapshot:      PortfolioSnapshot,
+  returnMetrics: PortfolioReturnMetrics,
+): string {
+  const holdingsText   = snapshot.holdings
     .map(h => `  ${h.ticker} (${h.company_name}): $${h.total_value_usd.toFixed(2)}`)
     .join('\n')
+
+  const horizonLabel   = settings.target_horizon === 'annual' ? 'annually' : 'per month'
+  const gapLabel       = returnMetrics.annual_gap_pct >= 0
+    ? `+${returnMetrics.annual_gap_pct.toFixed(2)}% (outperforming)`
+    : `${returnMetrics.annual_gap_pct.toFixed(2)}% (underperforming — must close this gap)`
+  const coverageNote   = returnMetrics.data_coverage_pct < 80
+    ? ` (note: only ${returnMetrics.data_coverage_pct}% of portfolio value has price data — treat with caution)`
+    : ''
 
   return (
     'You are a senior portfolio strategist synthesizing analysis from multiple specialised agents ' +
@@ -48,28 +62,39 @@ function buildSystemPrompt(settings: PortfolioSettings, snapshot: PortfolioSnaps
     '"summary_text" (100–200 word overall assessment string), ' +
     '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n' +
     `Risk profile: ${settings.risk_profile}\n` +
-    `Target return: ${settings.target_return_pct}%\n\n` +
+    `Target return: ${settings.target_return_pct}% ${horizonLabel}\n\n` +
     'Current portfolio holdings:\n' +
     holdingsText + '\n' +
     `Cash: $${snapshot.cash_usd.toFixed(2)}\n` +
     `Total portfolio value: $${snapshot.total_value_usd.toFixed(2)}\n\n` +
-    'You may recommend new stocks or ETFs not currently in the portfolio if they would help achieve ' +
-    `the target return of ${settings.target_return_pct}% and suit the stated risk profile. ` +
+    '--- PERFORMANCE VS TARGET ---\n' +
+    `  30-day weighted return:  ${returnMetrics.weighted_30d_return_pct.toFixed(2)}%${coverageNote}\n` +
+    `  Annualised equivalent:   ${returnMetrics.annualized_return_pct.toFixed(2)}%\n` +
+    `  Target (annualised):     ${returnMetrics.target_annual_pct.toFixed(2)}%\n` +
+    `  Gap:                     ${gapLabel}\n\n` +
+    'IMPORTANT — your allocation MUST address this gap:\n' +
+    (returnMetrics.annual_gap_pct < 0
+      ? `  The portfolio is ${Math.abs(returnMetrics.annual_gap_pct).toFixed(2)}% behind its annualised target. ` +
+        'Overweight instruments with stronger growth profiles or introduce new higher-return instruments. ' +
+        'Reduce or eliminate positions whose recent momentum is too weak to contribute to the target.\n\n'
+      : `  The portfolio is ahead of its target. Assess whether to maintain positioning or reduce risk ` +
+        'to lock in gains while preserving the ability to stay on target.\n\n') +
+    'You may recommend new stocks or ETFs not currently in the portfolio if they would help close the gap. ' +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
     '  1. Use only real, valid US-traded ticker symbols (e.g. "XLF", "QQQ", "MSFT", "VOO").\n' +
     '  2. Never invent tickers or use sector labels as tickers (e.g. "Financials_ETF" is invalid; "XLF" is correct).\n' +
     '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
-    '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped and your rationale will be lost.\n\n' +
+    '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
     'Output format — return a JSON object with exactly these three keys:\n' +
     '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
     '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +
-    '  summary_text: string (100–200 word overall assessment)\n' +
+    '  summary_text: string (100–200 word overall assessment; must mention the performance gap and how the allocation addresses it)\n' +
     '  conflict_notes: string (1–2 sentences on agent disagreements, or "" if none)'
   )
 }
 
 function buildUserPrompt(
-  agentOutputs: Record<string, AgentOutput>,
+  agentOutputs:    Record<string, AgentOutput>,
   recentSummaries: string[]
 ): string {
   const parts: string[] = []
@@ -92,14 +117,14 @@ function buildUserPrompt(
 }
 
 export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerOutput> {
-  const { agentOutputs, snapshot, settings, recentSummaries } = params
+  const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics } = params
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 3000,
-    system:     buildSystemPrompt(settings, snapshot),
+    system:     buildSystemPrompt(settings, snapshot, returnMetrics),
     messages:   [{ role: 'user', content: buildUserPrompt(agentOutputs, recentSummaries) }],
   })
 
