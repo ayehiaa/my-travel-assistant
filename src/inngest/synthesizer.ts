@@ -53,6 +53,13 @@ function buildSystemPrompt(settings: PortfolioSettings, snapshot: PortfolioSnaps
     holdingsText + '\n' +
     `Cash: $${snapshot.cash_usd.toFixed(2)}\n` +
     `Total portfolio value: $${snapshot.total_value_usd.toFixed(2)}\n\n` +
+    'You may recommend new stocks or ETFs not currently in the portfolio if they would help achieve ' +
+    `the target return of ${settings.target_return_pct}% and suit the stated risk profile. ` +
+    'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
+    '  1. Use only real, valid US-traded ticker symbols (e.g. "XLF", "QQQ", "MSFT", "VOO").\n' +
+    '  2. Never invent tickers or use sector labels as tickers (e.g. "Financials_ETF" is invalid; "XLF" is correct).\n' +
+    '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
+    '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped and your rationale will be lost.\n\n' +
     'Output format — return a JSON object with exactly these three keys:\n' +
     '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
     '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +

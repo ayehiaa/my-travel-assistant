@@ -6,7 +6,7 @@ import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import { runGeopoliticsAgent } from '@/inngest/agents/geopolitics'
 import { runSentimentAgent } from '@/inngest/agents/sentiment'
 import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
-import { fetchPriceHistory, fetchTickerDetails, type PriceHistory, type TickerDetailsMap } from '@/inngest/dataSources/polygon'
+import { fetchPriceHistory, fetchTickerDetails, checkTickersExist, type PriceHistory, type TickerDetailsMap } from '@/inngest/dataSources/polygon'
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
 import { runSynthesizer } from '@/inngest/synthesizer'
@@ -384,11 +384,45 @@ export const portfolioAnalysis = inngest.createFunction(
           sector_analysis:    sectorOutput,
         }
         const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries })
-        const actionList = computeActionList(snapshot.holdings, snapshot.cash_usd, synthResult.target_allocation)
+
+        // Validate any tickers the synthesizer added that are not in the current holdings.
+        // Polygon confirms the symbol exists; invalid ones are stripped and the remaining
+        // percentages are renormalised to 100 before the allocation is saved or executed.
+        const existingTickerSet = new Set(tickers)
+        const newTickers = synthResult.target_allocation
+          .map(a => a.ticker)
+          .filter(t => !existingTickerSet.has(t))
+
+        let cleanedAllocation = synthResult.target_allocation
+        if (newTickers.length > 0) {
+          const confirmedNew = await checkTickersExist(newTickers)
+          const invalidTickers = newTickers.filter(t => !confirmedNew.has(t))
+
+          if (invalidTickers.length > 0) {
+            const invalidSet = new Set(invalidTickers)
+            const valid = synthResult.target_allocation.filter(a => !invalidSet.has(a.ticker))
+            const total  = valid.reduce((s, a) => s + a.target_pct, 0)
+
+            if (total > 0 && total < 99.5) {
+              const scale   = 100 / total
+              const scaled  = valid.map(a => ({ ...a, target_pct: a.target_pct * scale }))
+              // Absorb floating-point rounding into the largest position
+              const scaledTotal = scaled.reduce((s, a) => s + a.target_pct, 0)
+              const diff    = 100 - scaledTotal
+              const maxIdx  = scaled.reduce((mi, a, i) => a.target_pct > scaled[mi].target_pct ? i : mi, 0)
+              scaled[maxIdx] = { ...scaled[maxIdx], target_pct: scaled[maxIdx].target_pct + diff }
+              cleanedAllocation = scaled
+            } else {
+              cleanedAllocation = valid
+            }
+          }
+        }
+
+        const actionList = computeActionList(snapshot.holdings, snapshot.cash_usd, cleanedAllocation)
         await admin
           .from('recommendations')
           .update({
-            target_allocation: synthResult.target_allocation,
+            target_allocation: cleanedAllocation,
             action_list:       actionList,
             summary_text:      synthResult.summary_text,
             conflict_notes:    synthResult.conflict_notes,
