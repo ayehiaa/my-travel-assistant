@@ -52,6 +52,7 @@ export default async function PortfolioSettingsPage() {
     user_id: user.id,
     cash_usd: 0,
     target_return_pct: 10,
+    target_horizon: 'annual',
     risk_profile: 'moderate',
     run_interval_days: 30,
     last_run_at: null,

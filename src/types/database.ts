@@ -180,10 +180,13 @@ export interface PortfolioHolding {
   updated_at: string
 }
 
+export type TargetHorizon = 'monthly' | 'annual'
+
 export interface PortfolioSettings {
   user_id: string
   cash_usd: number
   target_return_pct: number
+  target_horizon: TargetHorizon
   risk_profile: RiskProfile
   run_interval_days: 7 | 14 | 30
   last_run_at: string | null

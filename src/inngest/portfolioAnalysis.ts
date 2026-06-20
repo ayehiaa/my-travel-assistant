@@ -10,7 +10,7 @@ import { fetchPriceHistory, fetchTickerDetails, checkTickersExist, type PriceHis
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
 import { runSynthesizer } from '@/inngest/synthesizer'
-import { computeActionList } from '@/lib/portfolioCalculator'
+import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -76,7 +76,11 @@ export const portfolioAnalysis = inngest.createFunction(
             .eq('user_id', user_id),
         ])
 
-        const portfolioSettings = settingsResult.data as PortfolioSettings
+        const raw = settingsResult.data as PortfolioSettings & { target_horizon?: string }
+        const portfolioSettings: PortfolioSettings = {
+          ...raw,
+          target_horizon: (raw.target_horizon === 'monthly' ? 'monthly' : 'annual'),
+        }
         const holdings = (holdingsResult.data ?? []) as PortfolioHoldingRow[]
 
         const holdingsTotal = holdings.reduce(
@@ -132,6 +136,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runMacroeconomicsAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
           })
         } catch (err) {
@@ -159,6 +164,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runFedRatesAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
           })
         } catch (err) {
@@ -186,6 +192,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runGeopoliticsAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
           })
         } catch (err) {
@@ -213,6 +220,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runSentimentAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
           })
         } catch (err) {
@@ -240,6 +248,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runFundamentalsAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
           })
         } catch (err) {
@@ -267,6 +276,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runTechnicalAnalysisAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             priceData,
           })
@@ -295,6 +305,7 @@ export const portfolioAnalysis = inngest.createFunction(
           return await runSectorAnalysisAgent({
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
+            target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             priceData,
             tickerDetails,
@@ -383,7 +394,14 @@ export const portfolioAnalysis = inngest.createFunction(
           technical_analysis: technicalOutput,
           sector_analysis:    sectorOutput,
         }
-        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries })
+        const returnMetrics = computePortfolioReturnMetrics(
+          snapshot.holdings,
+          priceData,
+          settings.target_return_pct,
+          settings.target_horizon,
+        )
+
+        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics })
 
         // Validate any tickers the synthesizer added that are not in the current holdings.
         // Polygon confirms the symbol exists; invalid ones are stripped and the remaining

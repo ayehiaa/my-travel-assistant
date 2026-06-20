@@ -13,6 +13,7 @@ const AgentOutputSchema = z.object({
 export interface SectorAnalysisAgentInput {
   risk_profile:      string
   target_return_pct: number
+  target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
   priceData:         PriceHistory
   tickerDetails:     TickerDetailsMap
@@ -25,6 +26,8 @@ const SYSTEM_PROMPT =
   'rotation signals — identify which sectors are showing relative strength versus weakness based on recent price trends; ' +
   'diversification recommendations — highlight gaps or excessive concentrations and suggest rebalancing; ' +
   'and alignment with risk profile — assess whether the current sector mix is appropriate for the stated risk profile and target return. ' +
+  'Explicitly assess whether the current sector allocation is likely to generate returns consistent with the investor\'s target (see portfolio context). ' +
+  'Name any specific sector rotation — overweighting or underweighting a sector — that would materially improve the probability of hitting the target. ' +
   'Return ONLY a raw JSON object (no markdown, no code fences) ' +
   'with exactly three fields: "analysis" (200–400 word string), ' +
   '"confidence" ("low" | "medium" | "high"), and "stance" ("bullish" | "bearish" | "neutral").'
@@ -66,7 +69,7 @@ export async function runSectorAnalysisAgent(
   const portfolioContext =
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
-    `Target return: ${input.target_return_pct}%\n` +
+    `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
     `Holdings: ${input.holdings_tickers.join(', ')}`
 
   const userContent =
