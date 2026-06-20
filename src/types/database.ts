@@ -22,6 +22,7 @@ export type AuditAction =
   | 'alpaca_credentials_connected'
   | 'alpaca_credentials_disconnected'
   | 'alpaca_executed'
+  | 'alpaca_synced'
 
 export interface UserRoleRecord {
   user_id: string
@@ -174,6 +175,7 @@ export interface PortfolioHolding {
   ticker: string
   company_name: string
   total_value_usd: number
+  qty: number | null
   created_at: string
   updated_at: string
 }
@@ -186,6 +188,7 @@ export interface PortfolioSettings {
   run_interval_days: 7 | 14 | 30
   last_run_at: string | null
   next_run_at: string | null
+  last_synced_at: string | null
   created_at: string
   updated_at: string
 }

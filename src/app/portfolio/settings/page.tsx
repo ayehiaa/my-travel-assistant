@@ -56,6 +56,7 @@ export default async function PortfolioSettingsPage() {
     run_interval_days: 30,
     last_run_at: null,
     next_run_at: null,
+    last_synced_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }

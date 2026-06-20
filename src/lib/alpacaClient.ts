@@ -72,6 +72,34 @@ export async function fetchPosition(
 }
 
 /**
+ * Fetch all open positions from Alpaca.
+ * Returns an array of positions with symbol, qty (decimal string), and market_value (decimal string).
+ * Throws on non-2xx so the caller can handle the error.
+ * Uses parseFloat — not parseInt — because Alpaca supports fractional shares.
+ */
+export async function fetchAllPositions(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<Array<{ symbol: string; qty: string; market_value: string }>> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(
+    `${base}/v2/positions`,
+    {
+      headers: alpacaHeaders(keyId, secret),
+      signal: AbortSignal.timeout(5000),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Alpaca positions fetch failed: ${response.status}`)
+  }
+
+  const data = await response.json() as Array<{ symbol: string; qty: string; market_value: string }>
+  return data
+}
+
+/**
  * Submit a market order to Alpaca.
  * NEVER throws — always returns the result shape so the caller can record
  * partial failures without aborting the whole execution.
