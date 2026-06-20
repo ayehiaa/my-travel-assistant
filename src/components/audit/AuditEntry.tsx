@@ -17,6 +17,7 @@ const ACTION_PILLS = {
   holding_updated:            { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Holding updated' },
   holding_deleted:            { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Holding removed' },
   portfolio_settings_updated: { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Portfolio settings' },
+  alpaca_synced:              { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Alpaca synced' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -58,6 +59,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'portfolio_settings_updated') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Settings</span>
+  }
+  if (action === 'alpaca_synced') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Alpaca sync</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Account</span>

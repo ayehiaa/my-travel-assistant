@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { syncAlpacaPositionsForUser } from '@/lib/alpacaPortfolioSync'
 import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
 import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
 import { PortfolioHolding, PortfolioSettings } from '@/types/database'
@@ -47,8 +48,6 @@ export default async function PortfolioPage() {
       .maybeSingle(),
   ])
 
-  const holdings = (holdingsRes.data ?? []) as PortfolioHolding[]
-
   let settings = settingsRes.data as PortfolioSettings | null
   if (!settings) {
     // First visit: insert default row
@@ -68,8 +67,33 @@ export default async function PortfolioPage() {
     run_interval_days: 30,
     last_run_at: null,
     next_run_at: null,
+    last_synced_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+  }
+
+  // Sync Alpaca positions if connected; admin client usage is encapsulated in the lib function
+  let holdings = (holdingsRes.data ?? []) as PortfolioHolding[]
+  let syncError = false
+  let lastSyncedAt: string | null = null
+
+  const syncResult = await syncAlpacaPositionsForUser(user.id)
+  const hasAlpaca = syncResult.hasAlpaca
+
+  if (syncResult.hasAlpaca) {
+    if (syncResult.ok) {
+      lastSyncedAt = syncResult.lastSyncedAt
+      // FR-015: re-query holdings after sync for fresh DB state
+      const { data: freshHoldings } = await supabase
+        .from('portfolio_holdings')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('total_value_usd', { ascending: false })
+      holdings = (freshHoldings ?? []) as PortfolioHolding[]
+    } else {
+      syncError = true
+      lastSyncedAt = settings?.last_synced_at ?? null
+    }
   }
 
   return (
@@ -92,6 +116,9 @@ export default async function PortfolioPage() {
         initialHoldings={holdings}
         initialSettings={settings ?? defaultSettings}
         latestRecommendation={recRes.data ?? null}
+        lastSyncedAt={lastSyncedAt}
+        syncError={syncError}
+        hasAlpaca={hasAlpaca}
       />
     </main>
   )

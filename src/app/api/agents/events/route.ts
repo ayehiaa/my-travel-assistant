@@ -18,8 +18,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   const stream = new ReadableStream({
     start(controller) {
       let closed = false
-      let heartbeat: ReturnType<typeof setInterval>
       let unsubscribe: () => void = () => {}
+      const hb: { id?: ReturnType<typeof setInterval> } = {}
 
       const send = (event: PipelineEvent) => {
         if (closed) return
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       }
 
       const finish = () => {
-        clearInterval(heartbeat)
+        clearInterval(hb.id)
         unsubscribe()
         if (!closed) { closed = true; controller.close() }
       }
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         if (event.type === 'pipeline_done') finish()
       })
 
-      heartbeat = setInterval(() => {
+      hb.id = setInterval(() => {
         if (closed) { finish(); return }
         try { controller.enqueue(enc.encode(': ping\n\n')) }
         catch { finish() }

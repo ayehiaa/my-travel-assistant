@@ -12,9 +12,31 @@ interface Props {
   initialHoldings: PortfolioHolding[]
   initialSettings: PortfolioSettings
   latestRecommendation?: { id: string; run_at: string; summary_text: string | null } | null
+  lastSyncedAt: string | null
+  syncError: boolean
+  hasAlpaca: boolean
 }
 
-export default function PortfolioOverview({ initialHoldings, initialSettings, latestRecommendation }: Props) {
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return 'just now'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
+  const diffDays = Math.floor(diffHr / 24)
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+}
+
+export default function PortfolioOverview({
+  initialHoldings,
+  initialSettings,
+  latestRecommendation,
+  lastSyncedAt,
+  syncError,
+  hasAlpaca,
+}: Props) {
   const router = useRouter()
   const toast = useToast()
 
@@ -23,7 +45,35 @@ export default function PortfolioOverview({ initialHoldings, initialSettings, la
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingHolding, setEditingHolding] = useState<PortfolioHolding | null>(null)
 
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [localLastSynced, setLocalLastSynced] = useState<string | null>(lastSyncedAt)
+  const [localSyncError, setLocalSyncError] = useState(syncError)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+
   const { summaries, totals } = computeHoldingSummaries(holdings, settings.cash_usd)
+
+  async function handleSync() {
+    setIsSyncing(true)
+    try {
+      const res = await fetch('/api/portfolio/alpaca/sync', { method: 'POST' })
+      if (!res.ok) {
+        toast('Could not sync with Alpaca', 'error')
+        setLocalSyncError(true)
+      } else {
+        const body = await res.json() as { holdings: PortfolioHolding[]; last_synced_at: string }
+        setHoldings(body.holdings)
+        setLocalLastSynced(body.last_synced_at)
+        setLocalSyncError(false)
+        setBannerDismissed(false)
+        router.refresh()
+      }
+    } catch {
+      toast('Could not sync with Alpaca', 'error')
+      setLocalSyncError(true)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   async function handleDelete(id: string) {
     try {
@@ -54,8 +104,74 @@ export default function PortfolioOverview({ initialHoldings, initialSettings, la
     setEditingHolding(null)
   }
 
+  const showErrorBanner = localSyncError && hasAlpaca && !bannerDismissed
+
   return (
     <>
+      {/* Amber error banner — F3 */}
+      {showErrorBanner && (
+        <div
+          role="alert"
+          className="bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center justify-between gap-3 px-4 py-3 mb-4 text-sm"
+        >
+          <span>Portfolio may be out of date — could not reach Alpaca.</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="font-semibold text-amber-800 bg-transparent border-none cursor-pointer disabled:opacity-50"
+            >
+              {isSyncing ? 'Syncing…' : 'Retry sync'}
+            </button>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              aria-label="Dismiss"
+              className="text-amber-800 bg-transparent border-none cursor-pointer text-base leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sync status line — F2 */}
+      {hasAlpaca && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 12,
+            fontSize: 13,
+            color: 'var(--ink-3)',
+          }}
+        >
+          <span>
+            {localLastSynced
+              ? `Synced ${formatRelativeTime(localLastSynced)}`
+              : 'Never synced'}
+          </span>
+          <span style={{ color: 'var(--rule)' }}>·</span>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: isSyncing ? 'default' : 'pointer',
+              color: 'var(--ink-3)',
+              fontSize: 13,
+              fontFamily: 'var(--sans)',
+              textDecoration: isSyncing ? 'none' : 'underline',
+              opacity: isSyncing ? 0.6 : 1,
+            }}
+          >
+            {isSyncing ? 'Syncing…' : 'Sync now'}
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 20 }}>
         <Link
@@ -119,7 +235,7 @@ export default function PortfolioOverview({ initialHoldings, initialSettings, la
           </p>
         </div>
       ) : (
-        /* Holdings table */
+        /* Holdings table — F1: Shares column added */
         <div style={{ overflowX: 'auto', marginBottom: 24 }}>
           <table
             style={{
@@ -136,7 +252,7 @@ export default function PortfolioOverview({ initialHoldings, initialSettings, la
                   textAlign: 'left',
                 }}
               >
-                {['Ticker', 'Company', 'Value (USD)', '% of Portfolio', 'Actions'].map(col => (
+                {['Ticker', 'Company', 'Shares', 'Value (USD)', '% of Portfolio', 'Actions'].map(col => (
                   <th
                     key={col}
                     style={{
@@ -178,6 +294,16 @@ export default function PortfolioOverview({ initialHoldings, initialSettings, la
                     </td>
                     <td style={{ padding: '12px 12px', color: 'var(--ink-2)' }}>
                       {summary.company_name}
+                    </td>
+                    {/* Shares column — F1 */}
+                    <td
+                      style={{
+                        padding: '12px 12px',
+                        fontFamily: 'var(--mono)',
+                        color: 'var(--ink-2)',
+                      }}
+                    >
+                      {holding.qty != null ? Number(holding.qty).toFixed(2) : '—'}
                     </td>
                     <td
                       style={{
