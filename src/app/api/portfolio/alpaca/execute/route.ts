@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { decryptCredential } from '@/lib/alpacaCrypto'
-import { fetchQuotes, fetchPosition, submitOrder } from '@/lib/alpacaClient'
+import { fetchQuotes, fetchPosition, submitOrder, isTradeableAsset } from '@/lib/alpacaClient'
 import { computeOrderQty } from '@/lib/alpacaOrderCalculator'
 import { logAudit } from '@/lib/auditLogger'
 import type { ActionItem, AlpacaOrderResult } from '@/types/database'
@@ -76,7 +76,22 @@ export async function POST(request: NextRequest) {
   // Extract non-hold items from action_list
   const actionList = (rec.action_list ?? []) as ActionItem[]
   const nonHoldItems = actionList.filter((item) => item.action !== 'hold')
-  const tickers = nonHoldItems.map((item) => item.ticker)
+
+  // Validate every ticker against Alpaca before touching the market
+  const tradeableChecks = await Promise.all(
+    nonHoldItems.map(async (item) => {
+      try {
+        const ok = await isTradeableAsset(item.ticker, keyId, secret, cred.is_paper)
+        return { item, tradeable: ok }
+      } catch {
+        return { item, tradeable: false }
+      }
+    })
+  )
+
+  const invalidItems = tradeableChecks.filter((c) => !c.tradeable).map((c) => c.item)
+  const validNonHoldItems = tradeableChecks.filter((c) => c.tradeable).map((c) => c.item)
+  const tickers = validNonHoldItems.map((item) => item.ticker)
 
   // Fetch live quotes
   let quotes: Record<string, number>
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Fetch positions for sell items
-  const sellItems = nonHoldItems.filter((item) => item.action === 'sell')
+  const sellItems = validNonHoldItems.filter((item) => item.action === 'sell')
   const positionEntries = await Promise.all(
     sellItems.map(async (item) => {
       const qty = await fetchPosition(item.ticker, keyId, secret, cred.is_paper)
@@ -96,14 +111,14 @@ export async function POST(request: NextRequest) {
   )
   const positions = Object.fromEntries(positionEntries)
 
-  // Compute qty for every non-hold item and categorise
+  // Compute qty for every valid non-hold item and categorise
   type CategorisedItem = {
     item: ActionItem
     qty: number
     askPrice: number
   }
 
-  const categorised: CategorisedItem[] = nonHoldItems.map((item) => {
+  const categorised: CategorisedItem[] = validNonHoldItems.map((item) => {
     const askPrice = quotes[item.ticker] ?? 0
     const positionQty = item.action === 'sell' ? (positions[item.ticker] ?? 0) : 0
     const qty = computeOrderQty(item.delta_usd, askPrice, positionQty, item.action as 'buy' | 'sell')
@@ -145,8 +160,18 @@ export async function POST(request: NextRequest) {
     submittedResults.push({ item: c.item, qty: c.qty, askPrice: c.askPrice, result })
   }
 
-  // Build the orders JSONB array — include ALL non-hold items (skipped + submitted)
+  // Build the orders JSONB array — include ALL non-hold items (invalid + skipped + submitted)
   const orders: AlpacaOrderResult[] = [
+    ...invalidItems.map((item) => ({
+      ticker:              item.ticker,
+      action:              item.action as 'buy' | 'sell',
+      qty:                 0,
+      price_at_execution:  0,
+      estimated_value:     0,
+      alpaca_order_id:     null,
+      status:              'skipped' as const,
+      error_message:       `${item.ticker} is not a tradeable asset on Alpaca`,
+    })),
     ...skippedItems.map((c) => ({
       ticker:              c.item.ticker,
       action:              c.item.action as 'buy' | 'sell',

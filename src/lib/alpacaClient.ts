@@ -100,6 +100,31 @@ export async function fetchAllPositions(
 }
 
 /**
+ * Check whether a ticker is a tradeable asset on Alpaca.
+ * Returns true if the asset exists, is active, and is tradeable.
+ * Returns false for any 4xx (not found, not tradeable) — throws on 5xx.
+ */
+export async function isTradeableAsset(
+  ticker: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<boolean> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(
+    `${base}/v2/assets/${encodeURIComponent(ticker)}`,
+    { headers: alpacaHeaders(keyId, secret) }
+  )
+
+  if (response.status === 404) return false
+  if (response.status >= 400 && response.status < 500) return false
+  if (!response.ok) throw new Error(`Alpaca asset lookup failed: ${response.status}`)
+
+  const data = await response.json() as { status: string; tradable: boolean }
+  return data.status === 'active' && data.tradable === true
+}
+
+/**
  * Submit a market order to Alpaca.
  * NEVER throws — always returns the result shape so the caller can record
  * partial failures without aborting the whole execution.

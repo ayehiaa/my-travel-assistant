@@ -80,6 +80,39 @@ interface PolygonTickerDetailResponse {
   }
 }
 
+/**
+ * Confirms which tickers actually exist in Polygon's reference database.
+ * Returns a Set of tickers that got a valid 200 response with results.
+ * Tickers absent from the returned Set should be treated as invalid/unrecognised.
+ * Falls back to treating all tickers as valid when POLYGON_API_KEY is absent.
+ */
+export async function checkTickersExist(tickers: string[]): Promise<Set<string>> {
+  if (tickers.length === 0) return new Set()
+  if (!process.env.POLYGON_API_KEY) return new Set(tickers)
+
+  const key    = process.env.POLYGON_API_KEY
+  const valid  = new Set<string>()
+
+  for (let i = 0; i < tickers.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 200))
+
+    const ticker = tickers[i]
+    const url    = `https://api.polygon.io/v3/reference/tickers/${encodeURIComponent(ticker)}?apiKey=${key}`
+
+    try {
+      const res = await fetch(url)
+      if (res.ok) {
+        const json = await res.json() as PolygonTickerDetailResponse
+        if (json.results) valid.add(ticker)
+      }
+    } catch {
+      // IMPORTANT: Do not log `url` or error here — the URL contains POLYGON_API_KEY in plaintext.
+    }
+  }
+
+  return valid
+}
+
 export async function fetchTickerDetails(tickers: string[]): Promise<TickerDetailsMap> {
   if (tickers.length === 0) return {}
   if (!process.env.POLYGON_API_KEY) return {}
