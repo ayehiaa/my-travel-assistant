@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active implementation plan: `specs/016-alpaca-trade-execution/plan.md`
+Active feature spec: `specs/018-alpaca-live-portfolio/spec.md` (Alpaca is the live source of holdings + cash; nothing stored manually)
 <!-- SPECKIT END -->

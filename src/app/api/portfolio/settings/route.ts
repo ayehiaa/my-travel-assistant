@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 
 const SettingsUpdateSchema = z.object({
-  cash_usd:          z.number().nonnegative().optional(),
   target_return_pct: z.number().positive().optional(),
   target_horizon:    z.enum(['monthly', 'annual']).optional(),
   risk_profile:      z.enum(['conservative', 'moderate', 'aggressive']).optional(),
