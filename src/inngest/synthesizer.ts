@@ -9,6 +9,10 @@ export interface SynthesizerParams {
   settings:        PortfolioSettings
   recentSummaries: string[]
   returnMetrics:   PortfolioReturnMetrics
+  /** True when the account holds only cash — build a portfolio instead of rebalancing one. */
+  isNewPortfolio?:   boolean
+  /** Starter candidates the agents researched (new portfolio only). */
+  candidateTickers?: string[]
 }
 
 export interface SynthesizerOutput {
@@ -37,6 +41,50 @@ const SynthesisSchema = z.object({
   conflict_notes: z.string(),
 })
 
+const OUTPUT_HEADER =
+  'You are a senior portfolio strategist synthesizing analysis from multiple specialised agents ' +
+  'into a unified investment recommendation. ' +
+  'Return ONLY a raw JSON object (no markdown, no code fences) with exactly three fields: ' +
+  '"target_allocation" (array of { ticker, target_pct, rationale }), ' +
+  '"summary_text" (100–200 word overall assessment string), ' +
+  '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n'
+
+const TICKER_RULES =
+  '  1. Use only real, valid US-traded ticker symbols (e.g. "XLF", "QQQ", "MSFT", "VOO").\n' +
+  '  2. Never invent tickers or use sector labels as tickers (e.g. "Financials_ETF" is invalid; "XLF" is correct).\n'
+
+function buildNewPortfolioPrompt(
+  settings:         PortfolioSettings,
+  snapshot:         PortfolioSnapshot,
+  candidateTickers: string[],
+): string {
+  const horizonLabel = settings.target_horizon === 'annual' ? 'annually' : 'per month'
+  return (
+    OUTPUT_HEADER +
+    `Risk profile: ${settings.risk_profile}\n` +
+    `Target return: ${settings.target_return_pct}% ${horizonLabel}\n\n` +
+    '--- NEW PORTFOLIO ---\n' +
+    'The account holds no positions yet. You are BUILDING a first portfolio from cash, not rebalancing one.\n' +
+    `Cash available to invest: $${snapshot.cash_usd.toFixed(2)}\n` +
+    `Candidate instruments the agents researched: ${candidateTickers.join(', ')}\n\n` +
+    'Construction rules:\n' +
+    '  - Allocate across 4–8 positions sized for the risk profile; avoid putting more than 40% in any single stock ' +
+    '(broad-market ETFs may be larger).\n' +
+    '  - Prefer the researched candidates, but you may use other valid US tickers if the agent analysis supports it.\n' +
+    '  - Orders are whole shares, so very small positions may not be executable for small accounts.\n' +
+    '  - There is no performance history yet: do not describe a performance gap; explain how the allocation is ' +
+    'positioned to reach the target return.\n\n' +
+    'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
+    TICKER_RULES +
+    '  3. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
+    'Output format — return a JSON object with exactly these three keys:\n' +
+    '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
+    '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +
+    '  summary_text: string (100–200 word overall assessment of the new portfolio and why it fits the risk profile and target)\n' +
+    '  conflict_notes: string (1–2 sentences on agent disagreements, or "" if none)'
+  )
+}
+
 function buildSystemPrompt(
   settings:      PortfolioSettings,
   snapshot:      PortfolioSnapshot,
@@ -55,12 +103,7 @@ function buildSystemPrompt(
     : ''
 
   return (
-    'You are a senior portfolio strategist synthesizing analysis from multiple specialised agents ' +
-    'into a unified investment recommendation. ' +
-    'Return ONLY a raw JSON object (no markdown, no code fences) with exactly three fields: ' +
-    '"target_allocation" (array of { ticker, target_pct, rationale }), ' +
-    '"summary_text" (100–200 word overall assessment string), ' +
-    '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n' +
+    OUTPUT_HEADER +
     `Risk profile: ${settings.risk_profile}\n` +
     `Target return: ${settings.target_return_pct}% ${horizonLabel}\n\n` +
     'Current portfolio holdings:\n' +
@@ -81,8 +124,7 @@ function buildSystemPrompt(
         'to lock in gains while preserving the ability to stay on target.\n\n') +
     'You may recommend new stocks or ETFs not currently in the portfolio if they would help close the gap. ' +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
-    '  1. Use only real, valid US-traded ticker symbols (e.g. "XLF", "QQQ", "MSFT", "VOO").\n' +
-    '  2. Never invent tickers or use sector labels as tickers (e.g. "Financials_ETF" is invalid; "XLF" is correct).\n' +
+    TICKER_RULES +
     '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
     '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
     'Output format — return a JSON object with exactly these three keys:\n' +
@@ -117,14 +159,18 @@ function buildUserPrompt(
 }
 
 export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerOutput> {
-  const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics } = params
+  const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers } = params
+
+  const systemPrompt = isNewPortfolio
+    ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [])
+    : buildSystemPrompt(settings, snapshot, returnMetrics)
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 3000,
-    system:     buildSystemPrompt(settings, snapshot, returnMetrics),
+    system:     systemPrompt,
     messages:   [{ role: 'user', content: buildUserPrompt(agentOutputs, recentSummaries) }],
   })
 

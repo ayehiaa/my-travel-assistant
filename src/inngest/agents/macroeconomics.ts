@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { AgentOutput } from '@/types/database'
 import { fetchFredData } from '@/inngest/dataSources/fred'
+import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 const AgentOutputSchema = z.object({
   analysis:   z.string(),
@@ -14,6 +15,7 @@ export interface MacroAgentInput {
   target_return_pct: number
   target_horizon: 'monthly' | 'annual'
   holdings_tickers: string[]
+  is_new_portfolio?: boolean
 }
 
 const SYSTEM_PROMPT =
@@ -38,7 +40,7 @@ export async function runMacroeconomicsAgent(input: MacroAgentInput): Promise<Ag
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
     `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
-    `Holdings: ${input.holdings_tickers.join(', ')}`
+    describeTickers(input.holdings_tickers, input.is_new_portfolio)
 
   const userContent = `Economic indicators:\n${indicatorLines}${portfolioContext}`
 

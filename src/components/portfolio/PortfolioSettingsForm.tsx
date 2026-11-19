@@ -44,7 +44,6 @@ const labelStyle: React.CSSProperties = {
 export default function PortfolioSettingsForm({ initialSettings }: Props) {
   const toast = useToast()
 
-  const [cashStr, setCashStr] = useState(String(initialSettings.cash_usd))
   const [targetReturnStr, setTargetReturnStr] = useState(
     String(initialSettings.target_return_pct)
   )
@@ -57,9 +56,8 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
   )
   const [saving, setSaving] = useState(false)
 
-  const parsedCash = parseFloat(cashStr)
   const parsedReturn = parseFloat(targetReturnStr)
-  const isValid = !isNaN(parsedCash) && parsedCash >= 0 && !isNaN(parsedReturn) && parsedReturn > 0
+  const isValid = !isNaN(parsedReturn) && parsedReturn > 0
 
   async function handleSave() {
     setSaving(true)
@@ -68,7 +66,6 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cash_usd: parsedCash,
           target_return_pct: parsedReturn,
           target_horizon: targetHorizon,
           risk_profile: riskProfile,
@@ -100,21 +97,6 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {/* Cash (USD) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={labelStyle}>Cash (USD)</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={cashStr}
-            placeholder="0.00"
-            style={inputStyle}
-            onChange={e => setCashStr(e.target.value)}
-            {...focusHandlers}
-          />
-        </div>
-
         {/* Target Return */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={labelStyle}>Target Return (%)</label>

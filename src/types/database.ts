@@ -180,6 +180,22 @@ export interface PortfolioHolding {
   updated_at: string
 }
 
+/** A position read live from the connected Alpaca account (never stored). */
+export interface LiveHolding {
+  ticker: string
+  company_name: string
+  qty: number
+  total_value_usd: number
+}
+
+export interface LivePortfolio {
+  holdings: LiveHolding[]
+  cash_usd: number
+  total_value_usd: number
+  is_paper: boolean
+  fetched_at: string
+}
+
 export type TargetHorizon = 'monthly' | 'annual'
 
 export interface PortfolioSettings {

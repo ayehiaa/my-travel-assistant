@@ -11,6 +11,8 @@ import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
 import { runSynthesizer } from '@/inngest/synthesizer'
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
+import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
+import { getStarterUniverse } from '@/lib/starterUniverse'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -24,15 +26,10 @@ function sanitizeErrorMessage(err: unknown): string {
   return keys.reduce((msg, key) => msg.split(key).join('[REDACTED]'), raw)
 }
 
-interface PortfolioHoldingRow {
-  ticker: string
-  company_name: string
-  total_value_usd: number
-}
-
 interface FetchPortfolioResult {
   settings: PortfolioSettings
   tickers: string[]
+  isNewPortfolio: boolean
   snapshot: PortfolioSnapshot
 }
 
@@ -46,7 +43,7 @@ export const portfolioAnalysis = inngest.createFunction(
     const { run_id, user_id } = parseResult.data
 
     // Step 1: Fetch portfolio data
-    const { settings, tickers, snapshot } = await step.run(
+    const { settings, tickers, isNewPortfolio, snapshot } = await step.run(
       'fetch-portfolio',
       async (): Promise<FetchPortfolioResult> => {
         // No cookie session in Inngest — admin client used intentionally.
@@ -64,45 +61,54 @@ export const portfolioAnalysis = inngest.createFunction(
           throw new Error(`Run ${run_id} does not belong to user — aborting`)
         }
 
-        const [settingsResult, holdingsResult] = await Promise.all([
-          admin
-            .from('portfolio_settings')
-            .select('*')
-            .eq('user_id', user_id)
-            .single(),
-          admin
-            .from('portfolio_holdings')
-            .select('ticker, company_name, total_value_usd')
-            .eq('user_id', user_id),
-        ])
+        const { data: settingsRow } = await admin
+          .from('portfolio_settings')
+          .select('*')
+          .eq('user_id', user_id)
+          .single()
 
-        const raw = settingsResult.data as PortfolioSettings & { target_horizon?: string }
+        const raw = settingsRow as PortfolioSettings & { target_horizon?: string }
         const portfolioSettings: PortfolioSettings = {
           ...raw,
           target_horizon: (raw.target_horizon === 'monthly' ? 'monthly' : 'annual'),
         }
-        const holdings = (holdingsResult.data ?? []) as PortfolioHoldingRow[]
 
-        const holdingsTotal = holdings.reduce(
-          (sum, h) => sum + h.total_value_usd,
-          0,
-        )
-        const cash_usd = portfolioSettings?.cash_usd ?? 0
+        // The account is read live from Alpaca — holdings and cash are never stored in the app.
+        // Decrypted keys stay inside this step; only the snapshot is returned (and persisted by Inngest).
+        let live
+        try {
+          const creds = await loadAlpacaCredentials(user_id)
+          if (!creds) throw new Error('No Alpaca account connected')
+          live = await fetchLivePortfolio(creds)
+        } catch (err) {
+          await admin
+            .from('recommendations')
+            .update({ status: 'error', error_message: sanitizeErrorMessage(err), updated_at: new Date().toISOString() })
+            .eq('id', run_id)
+          throw err
+        }
 
         const portfolioSnapshot: PortfolioSnapshot = {
-          holdings: holdings.map(h => ({
+          holdings: live.holdings.map(h => ({
             ticker:          h.ticker,
             company_name:    h.company_name,
             total_value_usd: h.total_value_usd,
           })),
-          cash_usd,
-          total_value_usd: holdingsTotal + cash_usd,
+          cash_usd:        live.cash_usd,
+          total_value_usd: live.total_value_usd,
         }
 
+        // Starting from scratch: give the per-ticker agents a starter candidate list to research
+        const isNewPortfolio = portfolioSnapshot.holdings.length === 0
+        const analysisTickers = isNewPortfolio
+          ? getStarterUniverse(portfolioSettings.risk_profile)
+          : portfolioSnapshot.holdings.map(h => h.ticker)
+
         return {
-          settings:  portfolioSettings,
-          tickers:   holdings.map(h => h.ticker),
-          snapshot:  portfolioSnapshot,
+          settings:       portfolioSettings,
+          tickers:        analysisTickers,
+          isNewPortfolio,
+          snapshot:       portfolioSnapshot,
         }
       },
     )
@@ -138,6 +144,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err)
@@ -166,6 +173,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err)
@@ -194,6 +202,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err)
@@ -222,6 +231,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err)
@@ -250,6 +260,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err)
@@ -278,6 +289,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
             priceData,
           })
         } catch (err) {
@@ -307,6 +319,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
+            is_new_portfolio:  isNewPortfolio,
             priceData,
             tickerDetails,
           })
@@ -401,12 +414,13 @@ export const portfolioAnalysis = inngest.createFunction(
           settings.target_horizon,
         )
 
-        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics })
+        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
 
-        // Validate any tickers the synthesizer added that are not in the current holdings.
+        // Validate any tickers the synthesizer added that are not in the current holdings
+        // (for a new portfolio that is every ticker, including starter candidates).
         // Polygon confirms the symbol exists; invalid ones are stripped and the remaining
         // percentages are renormalised to 100 before the allocation is saved or executed.
-        const existingTickerSet = new Set(tickers)
+        const existingTickerSet = new Set(snapshot.holdings.map(h => h.ticker))
         const newTickers = synthResult.target_allocation
           .map(a => a.ticker)
           .filter(t => !existingTickerSet.has(t))
@@ -434,6 +448,10 @@ export const portfolioAnalysis = inngest.createFunction(
               cleanedAllocation = valid
             }
           }
+        }
+
+        if (cleanedAllocation.length === 0) {
+          throw new Error('Recommendation contained no valid tickers')
         }
 
         const actionList = computeActionList(snapshot.holdings, snapshot.cash_usd, cleanedAllocation)

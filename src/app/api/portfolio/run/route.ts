@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
+import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { inngest } from '@/inngest/client'
 
 const AGENT_NAMES = [
@@ -22,14 +23,19 @@ export async function POST() {
 
   const supabase = await createClient()
 
-  // Check holdings exist
-  const { count, error: holdingsError } = await supabase
-    .from('portfolio_holdings')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
+  // The portfolio is read live from Alpaca — require a connected account with funds or positions
+  const creds = await loadAlpacaCredentials(user.id)
+  if (!creds) return NextResponse.json({ error: 'Connect your Alpaca account first' }, { status: 400 })
 
-  if (holdingsError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  if (!count || count === 0) return NextResponse.json({ error: 'No holdings defined' }, { status: 400 })
+  let live
+  try {
+    live = await fetchLivePortfolio(creds)
+  } catch {
+    return NextResponse.json({ error: 'Could not reach Alpaca — try again shortly' }, { status: 502 })
+  }
+  if (live.total_value_usd <= 0) {
+    return NextResponse.json({ error: 'Your Alpaca account has no funds or positions' }, { status: 400 })
+  }
 
   // Check cooldown
   const { data: settingsRow, error: settingsError } = await supabase

@@ -33,7 +33,7 @@ export default function RunTrigger({ lastRunAt, onRunStarted }: Props) {
 
       if (res.status === 202) {
         onRunStarted(data.run_id)
-      } else if (res.status === 400) {
+      } else if (res.status === 400 || res.status === 502) {
         toast(data.error ?? 'Cannot start run', 'error')
       } else if (res.status === 429) {
         setSecondsLeft(data.retry_after_seconds)

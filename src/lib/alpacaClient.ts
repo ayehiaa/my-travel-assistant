@@ -88,6 +88,7 @@ export async function fetchAllPositions(
     {
       headers: alpacaHeaders(keyId, secret),
       signal: AbortSignal.timeout(5000),
+      cache: 'no-store',
     }
   )
 
@@ -183,4 +184,57 @@ export async function submitOrder(
       error_message: 'Alpaca unreachable',
     }
   }
+}
+
+/**
+ * Fetch the account summary (cash, equity) from Alpaca.
+ * Throws on non-2xx so the caller can surface an error.
+ */
+export async function fetchAccount(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ cash: number; equity: number }> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/account`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Alpaca account fetch failed: ${response.status}`)
+  }
+
+  const data = await response.json() as { cash: string; equity: string }
+  return { cash: parseFloat(data.cash), equity: parseFloat(data.equity) }
+}
+
+/**
+ * Look up display names for a set of symbols via Alpaca's assets endpoint.
+ * Never throws — a symbol whose lookup fails is simply missing from the map.
+ */
+export async function fetchAssetNames(
+  symbols: string[],
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<Record<string, string>> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const entries = await Promise.all(
+    symbols.map(async (symbol): Promise<[string, string] | null> => {
+      try {
+        const response = await fetch(`${base}/v2/assets/${encodeURIComponent(symbol)}`, {
+          headers: alpacaHeaders(keyId, secret),
+          signal: AbortSignal.timeout(5000),
+        })
+        if (!response.ok) return null
+        const data = await response.json() as { name?: string }
+        return data.name ? [symbol, data.name] : null
+      } catch {
+        return null
+      }
+    })
+  )
+  return Object.fromEntries(entries.filter((e): e is [string, string] => e !== null))
 }

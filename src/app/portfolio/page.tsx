@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { syncAlpacaPositionsForUser } from '@/lib/alpacaPortfolioSync'
+import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
 import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
-import { PortfolioHolding, PortfolioSettings } from '@/types/database'
+import type { LivePortfolio } from '@/types/database'
 
 export const metadata = {
   title: 'Sojourn — Portfolio',
@@ -26,74 +26,29 @@ export default async function PortfolioPage() {
     return <PortfolioTosGate />
   }
 
-  // Fetch holdings, settings, and latest recommendation in parallel
-  const [holdingsRes, settingsRes, recRes] = await Promise.all([
-    supabase
-      .from('portfolio_holdings')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('total_value_usd', { ascending: false }),
-    supabase
-      .from('portfolio_settings')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle(),
-    supabase
-      .from('recommendations')
-      .select('id, run_at, summary_text')
-      .eq('user_id', user.id)
-      .eq('status', 'complete')
-      .order('run_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ])
+  // Ensure the settings row exists (risk profile, target return) — the analysis run reads it
+  await supabase
+    .from('portfolio_settings')
+    .upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
 
-  let settings = settingsRes.data as PortfolioSettings | null
-  if (!settings) {
-    // First visit: insert default row
-    const { data: inserted } = await supabase
-      .from('portfolio_settings')
-      .insert({ user_id: user.id })
-      .select()
-      .single()
-    settings = inserted as PortfolioSettings | null
-  }
+  const latestRecRes = await supabase
+    .from('recommendations')
+    .select('id, run_at, summary_text')
+    .eq('user_id', user.id)
+    .eq('status', 'complete')
+    .order('run_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  const defaultSettings: PortfolioSettings = {
-    user_id: user.id,
-    cash_usd: 0,
-    target_return_pct: 10,
-    target_horizon: 'annual',
-    risk_profile: 'moderate',
-    run_interval_days: 30,
-    last_run_at: null,
-    next_run_at: null,
-    last_synced_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
-
-  // Sync Alpaca positions if connected; admin client usage is encapsulated in the lib function
-  let holdings = (holdingsRes.data ?? []) as PortfolioHolding[]
-  let syncError = false
-  let lastSyncedAt: string | null = null
-
-  const syncResult = await syncAlpacaPositionsForUser(user.id)
-  const hasAlpaca = syncResult.hasAlpaca
-
-  if (syncResult.hasAlpaca) {
-    if (syncResult.ok) {
-      lastSyncedAt = syncResult.lastSyncedAt
-      // FR-015: re-query holdings after sync for fresh DB state
-      const { data: freshHoldings } = await supabase
-        .from('portfolio_holdings')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('total_value_usd', { ascending: false })
-      holdings = (freshHoldings ?? []) as PortfolioHolding[]
-    } else {
-      syncError = true
-      lastSyncedAt = settings?.last_synced_at ?? null
+  // The whole account is read live from Alpaca — nothing about holdings or cash is stored in the app
+  const creds = await loadAlpacaCredentials(user.id)
+  let portfolio: LivePortfolio | null = null
+  let liveError = false
+  if (creds) {
+    try {
+      portfolio = await fetchLivePortfolio(creds)
+    } catch {
+      liveError = true
     }
   }
 
@@ -111,15 +66,13 @@ export default async function PortfolioPage() {
         Portfolio
       </h1>
       <p style={{ color: 'var(--ink-3)', fontSize: 14, marginBottom: 32 }}>
-        Manage your US stock holdings and cash position.
+        Your holdings and cash, read live from your Alpaca account.
       </p>
       <PortfolioOverview
-        initialHoldings={holdings}
-        initialSettings={settings ?? defaultSettings}
-        latestRecommendation={recRes.data ?? null}
-        lastSyncedAt={lastSyncedAt}
-        syncError={syncError}
-        hasAlpaca={hasAlpaca}
+        connected={creds !== null}
+        portfolio={portfolio}
+        liveError={liveError}
+        latestRecommendation={latestRecRes.data ?? null}
       />
     </main>
   )

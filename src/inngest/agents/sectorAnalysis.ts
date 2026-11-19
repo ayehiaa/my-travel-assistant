@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { AgentOutput } from '@/types/database'
 import type { PriceHistory } from '@/inngest/dataSources/polygon'
 import type { TickerDetailsMap } from '@/inngest/dataSources/polygon'
+import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 const AgentOutputSchema = z.object({
   analysis:   z.string(),
@@ -15,6 +16,7 @@ export interface SectorAnalysisAgentInput {
   target_return_pct: number
   target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
+  is_new_portfolio?: boolean
   priceData:         PriceHistory
   tickerDetails:     TickerDetailsMap
 }
@@ -70,7 +72,7 @@ export async function runSectorAnalysisAgent(
     `\nPortfolio context:\n` +
     `Risk profile: ${input.risk_profile}\n` +
     `Target return: ${input.target_return_pct}% ${input.target_horizon === 'annual' ? 'annually' : 'per month'}\n` +
-    `Holdings: ${input.holdings_tickers.join(', ')}`
+    describeTickers(input.holdings_tickers, input.is_new_portfolio)
 
   const userContent =
     `Sector composition of portfolio holdings:\n\n${sectorContext}${portfolioContext}`
