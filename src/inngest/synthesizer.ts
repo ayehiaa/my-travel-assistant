@@ -1,9 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
 import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { withIslamicMandate } from '@/lib/islamicMandate'
 import { MAX_STOCK_WEIGHT_PCT } from '@/lib/shariahRules'
+import { callClaude } from '@/lib/aiCall'
+import { assertCompleteResponse } from '@/lib/aiResponse'
+import type { AiCallUsage } from '@/lib/aiCost'
 
 export interface SynthesizerParams {
   agentOutputs:    Record<string, AgentOutput>
@@ -21,6 +23,11 @@ export interface SynthesizerOutput {
   target_allocation: TargetAllocationItem[]
   summary_text: string
   conflict_notes: string
+}
+
+export interface SynthesizerRunResult {
+  result: SynthesizerOutput
+  usage: AiCallUsage
 }
 
 const SynthesisSchema = z.object({
@@ -162,24 +169,23 @@ function buildUserPrompt(
   return parts.join('\n\n')
 }
 
-export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerOutput> {
+export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerRunResult> {
   const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers } = params
 
   const systemPrompt = withIslamicMandate(isNewPortfolio
     ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [])
     : buildSystemPrompt(settings, snapshot, returnMetrics))
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 3000,
-    system:     systemPrompt,
-    messages:   [{ role: 'user', content: buildUserPrompt(agentOutputs, recentSummaries) }],
+  const { text: raw, stopReason, usage } = await callClaude({
+    role:   'synthesizer',
+    name:   'synthesizer',
+    system: systemPrompt,
+    user:   buildUserPrompt(agentOutputs, recentSummaries),
   })
 
-  const block = response.content[0]
-  const raw = block.type === 'text' ? block.text : ''
+  // A refusal or a truncated answer must never become a recommendation — throw so the step retries / fails.
+  assertCompleteResponse(stopReason, 'Synthesizer')
+
   // Extract the JSON object regardless of surrounding prose or code fences
   const jsonMatch = raw.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('Synthesizer returned no JSON object')
@@ -199,8 +205,11 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
   const validated = validationResult.data
 
   return {
-    target_allocation: validated.target_allocation,
-    summary_text:      validated.summary_text,
-    conflict_notes:    validated.conflict_notes,
+    result: {
+      target_allocation: validated.target_allocation,
+      summary_text:      validated.summary_text,
+      conflict_notes:    validated.conflict_notes,
+    },
+    usage,
   }
 }

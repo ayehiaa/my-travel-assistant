@@ -1,15 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
-import type { AgentOutput } from '@/types/database'
+import type { AgentRunResult } from '@/inngest/agents/types'
+import { callClaude } from '@/lib/aiCall'
+import { parseAgentResponse } from '@/lib/aiResponse'
 import { fetchEdgarFilings } from '@/inngest/dataSources/edgar'
 import { withIslamicMandate } from '@/lib/islamicMandate'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
-
-const AgentOutputSchema = z.object({
-  analysis:   z.string(),
-  confidence: z.enum(['low', 'medium', 'high']),
-  stance:     z.enum(['bullish', 'bearish', 'neutral']),
-})
 
 export interface FundamentalsAgentInput {
   risk_profile:      string
@@ -34,7 +28,7 @@ const SYSTEM_PROMPT =
   'with exactly three fields: "analysis" (200–400 word string), ' +
   '"confidence" ("low" | "medium" | "high"), and "stance" ("bullish" | "bearish" | "neutral").'
 
-export async function runFundamentalsAgent(input: FundamentalsAgentInput): Promise<AgentOutput> {
+export async function runFundamentalsAgent(input: FundamentalsAgentInput): Promise<AgentRunResult> {
   const filings = await fetchEdgarFilings(input.holdings_tickers)
 
   const articleContent = filings.length === 0
@@ -51,22 +45,12 @@ export async function runFundamentalsAgent(input: FundamentalsAgentInput): Promi
 
   const userContent = `Recent SEC filings:\n${articleContent}${portfolioContext}`
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 800,
-    system:     withIslamicMandate(SYSTEM_PROMPT),
-    messages:   [{ role: 'user', content: userContent }],
+  const { text, stopReason, usage } = await callClaude({
+    role:   'agent',
+    name:   'fundamentals',
+    system: withIslamicMandate(SYSTEM_PROMPT),
+    user:   userContent,
   })
 
-  const block = response.content[0]
-  const text = block.type === 'text' ? block.text : ''
-
-  try {
-    const result = AgentOutputSchema.safeParse(JSON.parse(text))
-    return result.success ? result.data : { analysis: text, confidence: 'low', stance: 'neutral' }
-  } catch {
-    return { analysis: text, confidence: 'low', stance: 'neutral' }
-  }
+  return { output: parseAgentResponse(text, stopReason), usage }
 }

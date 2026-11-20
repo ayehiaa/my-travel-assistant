@@ -5,6 +5,8 @@ import AlpacaExecuteButton from './AlpacaExecuteButton'
 import AlpacaResultsPanel from './AlpacaResultsPanel'
 import ShariahScreeningPanel from './ShariahScreeningPanel'
 import { readShariahScreening } from '@/lib/shariahRules'
+import RunCostLine from './RunCostLine'
+import { readRunUsage } from '@/lib/aiCost'
 
 interface Props {
   recommendation: Recommendation
@@ -59,6 +61,9 @@ export default function RecommendationDetail({
       >
         {recommendation.summary_text ?? 'Summary not available.'}
       </p>
+
+      {/* Token usage + cost of this run (agent_outputs.usage; absent on older runs) */}
+      <RunCostLine usage={readRunUsage(recommendation)} />
 
       {/* Recommended Actions */}
       <section style={{ marginBottom: 32 }}>
