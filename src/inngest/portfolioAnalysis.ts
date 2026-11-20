@@ -6,14 +6,23 @@ import { runFedRatesAgent } from '@/inngest/agents/fedRates'
 import { runGeopoliticsAgent } from '@/inngest/agents/geopolitics'
 import { runSentimentAgent } from '@/inngest/agents/sentiment'
 import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
-import { fetchPriceHistory, fetchTickerDetails, checkTickersExist, type PriceHistory, type TickerDetailsMap } from '@/inngest/dataSources/polygon'
+import { fetchPriceHistory, fetchTickerDetails, checkTickersExist, fetchLatestFinancials, type PriceHistory, type TickerDetailsMap, type FinancialsMap } from '@/inngest/dataSources/polygon'
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
-import { runSynthesizer } from '@/inngest/synthesizer'
+import { runSynthesizer, type SynthesizerOutput } from '@/inngest/synthesizer'
+import { runShariahReviewer, type ReviewerTickerInput, type ReviewerVerdictMap } from '@/inngest/shariahReviewer'
+import { removeTickers } from '@/lib/allocationUtils'
+import {
+  computePolygonRatios,
+  decideTickerVerdict,
+  applyShariahScreening,
+  buildShariahScreeningResult,
+  annotateActionList,
+} from '@/lib/shariahRules'
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { getStarterUniverse } from '@/lib/starterUniverse'
-import type { AgentOutput, PortfolioSettings, PortfolioSnapshot } from '@/types/database'
+import type { AgentOutput, PortfolioSettings, PortfolioSnapshot, TargetAllocationItem } from '@/types/database'
 
 const EventDataSchema = z.object({
   run_id:  z.string().uuid(),
@@ -393,94 +402,177 @@ export const portfolioAnalysis = inngest.createFunction(
       return (summaries ?? []).map(s => s.summary_text)
     })
 
-    // Step 7: Synthesize agent outputs into a final recommendation
-    await step.run('synthesize', async (): Promise<void> => {
+    const agentOutputs: Record<string, AgentOutput> = {
+      macroeconomics:     macroOutput,
+      fed_rates:          fedRatesOutput,
+      geopolitics:        geopoliticsOutput,
+      sentiment:          sentimentOutput,
+      fundamentals:       fundamentalsOutput,
+      technical_analysis: technicalOutput,
+      sector_analysis:    sectorOutput,
+    }
+
+    const markRunError = async (err: unknown): Promise<void> => {
       const admin = createAdminClient()
-      const now = new Date().toISOString()
+      await admin
+        .from('recommendations')
+        .update({ status: 'error', error_message: sanitizeErrorMessage(err), updated_at: new Date().toISOString() })
+        .eq('id', run_id)
+    }
+
+    // Step 7: Synthesize agent outputs into a proposed allocation.
+    // Each later stage is its own step so a retry never re-runs the synthesizer.
+    const synthResult = await step.run('synthesize', async (): Promise<SynthesizerOutput> => {
       try {
-        const agentOutputs = {
-          macroeconomics:     macroOutput,
-          fed_rates:          fedRatesOutput,
-          geopolitics:        geopoliticsOutput,
-          sentiment:          sentimentOutput,
-          fundamentals:       fundamentalsOutput,
-          technical_analysis: technicalOutput,
-          sector_analysis:    sectorOutput,
-        }
         const returnMetrics = computePortfolioReturnMetrics(
           snapshot.holdings,
           priceData,
           settings.target_return_pct,
           settings.target_horizon,
         )
+        return await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
+      } catch (err) {
+        await markRunError(err)
+        throw err
+      }
+    })
 
-        const synthResult = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
-
-        // Validate any tickers the synthesizer added that are not in the current holdings
-        // (for a new portfolio that is every ticker, including starter candidates).
-        // Polygon confirms the symbol exists; invalid ones are stripped and the remaining
-        // percentages are renormalised to 100 before the allocation is saved or executed.
+    // Step 8: Validate any tickers the synthesizer added that are not in the current holdings
+    // (for a new portfolio that is every ticker, including starter candidates).
+    // Polygon confirms the symbol exists; invalid ones are stripped and the rest renormalised to 100.
+    const validatedAllocation = await step.run('validate-tickers', async (): Promise<TargetAllocationItem[]> => {
+      try {
         const existingTickerSet = new Set(snapshot.holdings.map(h => h.ticker))
         const newTickers = synthResult.target_allocation
           .map(a => a.ticker)
           .filter(t => !existingTickerSet.has(t))
 
-        let cleanedAllocation = synthResult.target_allocation
+        let cleaned = synthResult.target_allocation
         if (newTickers.length > 0) {
           const confirmedNew = await checkTickersExist(newTickers)
-          const invalidTickers = newTickers.filter(t => !confirmedNew.has(t))
-
-          if (invalidTickers.length > 0) {
-            const invalidSet = new Set(invalidTickers)
-            const valid = synthResult.target_allocation.filter(a => !invalidSet.has(a.ticker))
-            const total  = valid.reduce((s, a) => s + a.target_pct, 0)
-
-            if (total > 0 && total < 99.5) {
-              const scale   = 100 / total
-              const scaled  = valid.map(a => ({ ...a, target_pct: a.target_pct * scale }))
-              // Absorb floating-point rounding into the largest position
-              const scaledTotal = scaled.reduce((s, a) => s + a.target_pct, 0)
-              const diff    = 100 - scaledTotal
-              const maxIdx  = scaled.reduce((mi, a, i) => a.target_pct > scaled[mi].target_pct ? i : mi, 0)
-              scaled[maxIdx] = { ...scaled[maxIdx], target_pct: scaled[maxIdx].target_pct + diff }
-              cleanedAllocation = scaled
-            } else {
-              cleanedAllocation = valid
-            }
-          }
+          const invalid = new Set(newTickers.filter(t => !confirmedNew.has(t)))
+          if (invalid.size > 0) cleaned = removeTickers(synthResult.target_allocation, invalid)
         }
-
-        if (cleanedAllocation.length === 0) {
-          throw new Error('Recommendation contained no valid tickers')
-        }
-
-        const actionList = computeActionList(snapshot.holdings, snapshot.cash_usd, cleanedAllocation)
-        await admin
-          .from('recommendations')
-          .update({
-            target_allocation: cleanedAllocation,
-            action_list:       actionList,
-            summary_text:      synthResult.summary_text,
-            conflict_notes:    synthResult.conflict_notes,
-            status:            'complete',
-            updated_at:        now,
-          })
-          .eq('id', run_id)
-        await step.sendEvent('emit-completed', {
-          name: 'portfolio/run.completed',
-          data: { run_id, user_id },
-        })
+        if (cleaned.length === 0) throw new Error('Recommendation contained no valid tickers')
+        return cleaned
       } catch (err) {
-        await admin
-          .from('recommendations')
-          .update({
-            status:        'error',
-            error_message: sanitizeErrorMessage(err),
-            updated_at:    now,
-          })
-          .eq('id', run_id)
+        await markRunError(err)
         throw err
       }
+    })
+
+    // Every proposed ticker AND every current holding is screened.
+    const holdingTickers = snapshot.holdings.map(h => h.ticker)
+    const screeningTickers = Array.from(new Set([...validatedAllocation.map(a => a.ticker), ...holdingTickers]))
+
+    // Step 9: Real market data for the Shariah screen (security type, SIC, market cap, financials)
+    const screeningData = await step.run('fetch-shariah-data', async (): Promise<{ details: TickerDetailsMap; financials: FinancialsMap }> => {
+      const missing = screeningTickers.filter(t => !tickerDetails[t])
+      const extraDetails = await fetchTickerDetails(missing)
+      const financials = await fetchLatestFinancials(screeningTickers)
+      const details: TickerDetailsMap = {}
+      for (const t of screeningTickers) details[t] = tickerDetails[t] ?? extraDetails[t]
+      return { details, financials }
+    })
+
+    const holdingSet = new Set(holdingTickers)
+    const reviewerInputs: ReviewerTickerInput[] = screeningTickers.map(t => {
+      const d   = screeningData.details[t]
+      const fin = screeningData.financials[t] ?? null
+      return {
+        ticker:          t,
+        name:            d?.name ?? null,
+        is_holding:      holdingSet.has(t),
+        security_type:   d?.type ?? null,
+        sic_code:        d?.sic_code ?? null,
+        sic_description: d?.sic_description ?? null,
+        market_cap_usd:  d?.market_cap ?? null,
+        revenues_usd:    fin?.revenues ?? null,
+        period_end:      fin?.period_end ?? null,
+        polygon_ratios:  computePolygonRatios(fin, d?.market_cap ?? null),
+      }
+    })
+
+    // Step 10: Separate, strict AI business-activity review of every ticker
+    const reviewerVerdicts = await step.run('shariah-review', async (): Promise<ReviewerVerdictMap> => {
+      try {
+        return await runShariahReviewer(reviewerInputs)
+      } catch (err) {
+        await markRunError(err)
+        throw err
+      }
+    })
+
+    // Step 11: Code-level verdicts, drop non-compliant tickers, compute actions and save
+    await step.run('screen-and-save', async (): Promise<void> => {
+      const admin = createAdminClient()
+      const now = new Date().toISOString()
+
+      const screenings = reviewerInputs.map(input => decideTickerVerdict({
+        ticker:          input.ticker,
+        name:            input.name,
+        security_type:   input.security_type,
+        sic_code:        input.sic_code,
+        sic_description: input.sic_description,
+        polygonRatios:   input.polygon_ratios,
+        reviewer:        reviewerVerdicts[input.ticker] ?? null,
+        is_holding:      input.is_holding,
+        screened_at:     now,
+      }))
+
+      let screened
+      try {
+        screened = applyShariahScreening(validatedAllocation, screenings)
+      } catch (err) {
+        // Keep the screening visible on the failed run, then fail it.
+        const failed = buildShariahScreeningResult(
+          screenings,
+          screenings.filter(s => s.verdict !== 'compliant').map(s => ({ ticker: s.ticker, reasons: s.reasons })),
+          now,
+        )
+        await admin
+          .from('recommendations')
+          .update({ agent_outputs: { ...agentOutputs, shariah_review: failed }, updated_at: now })
+          .eq('id', run_id)
+        await markRunError(err)
+        throw err
+      }
+
+      const screening  = buildShariahScreeningResult(screenings, screened.excluded, now)
+      const actionList = annotateActionList(
+        computeActionList(snapshot.holdings, snapshot.cash_usd, screened.kept),
+        screened.excluded,
+      )
+
+      const { error } = await admin
+        .from('recommendations')
+        .update({
+          target_allocation: screened.kept,
+          action_list:       actionList,
+          summary_text:      synthResult.summary_text,
+          conflict_notes:    synthResult.conflict_notes,
+          // Compact copy that survives even when the shariah_screening migration is not applied
+          agent_outputs:     { ...agentOutputs, shariah_review: screening },
+          status:            'complete',
+          updated_at:        now,
+        })
+        .eq('id', run_id)
+      if (error) {
+        await markRunError(new Error('Failed to save recommendation'))
+        throw new Error('Failed to save recommendation')
+      }
+
+      // Best-effort: the dedicated column only exists once the migration is applied.
+      try {
+        await admin.from('recommendations').update({ shariah_screening: screening }).eq('id', run_id)
+      } catch {
+        // Ignored — agent_outputs.shariah_review already holds the data.
+      }
+    })
+
+    await step.sendEvent('emit-completed', {
+      name: 'portfolio/run.completed',
+      data: { run_id, user_id },
     })
   },
 )

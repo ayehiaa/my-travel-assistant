@@ -115,7 +115,13 @@ reviewer still has to pass the company.
    the repo's migrations; extending it blindly could fail on production data. Logged as a follow-up.
 10. **Options level** not changed by the safeguard button (only shorting + margin, as specified). Options cannot
     be traded through the app anyway (orders are stock market orders on screened tickers only).
-11. Reviewer uses the same model id string as the other agents, `temperature: 0`.
+11. Reviewer uses the same model id string as the other agents and, like them, the default sampling settings
+    (no temperature override) to avoid any API-parameter incompatibility. Strictness comes from the prompt + code gates.
+12. Old recommendations without screening data: preview shows a notice and skips every BUY; execute records those
+    buys as skipped. Sells still go through.
+13. Execution routes now `select('*')` on recommendations so a missing `shariah_screening` column can never break them.
+14. The Inngest pipeline was split: `synthesize` → `validate-tickers` → `fetch-shariah-data` → `shariah-review` →
+    `screen-and-save`, and `emit-completed` moved out of `step.run` (nested steps are not supported by Inngest).
 
 ## Out of scope
 

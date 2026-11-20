@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { decryptCredential } from '@/lib/alpacaCrypto'
 import { fetchQuotes, fetchPosition } from '@/lib/alpacaClient'
 import { computeOrderQty, isNYSEOpen } from '@/lib/alpacaOrderCalculator'
+import { getBuyBlockReason, readShariahScreening, NO_SCREENING_SKIP_REASON } from '@/lib/shariahRules'
 import type { ActionItem } from '@/types/database'
 
 const PreviewSchema = z.object({
@@ -43,10 +44,11 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
-  // Load recommendation (must belong to this user)
+  // Load recommendation (must belong to this user).
+  // select('*') so a missing shariah_screening column (migration not applied) cannot break the query.
   const { data: rec } = await supabase
     .from('recommendations')
-    .select('id, action_list, user_id')
+    .select('*')
     .eq('id', parsed.data.recommendation_id)
     .eq('user_id', user.id)
     .single()
@@ -85,12 +87,21 @@ export async function POST(request: NextRequest) {
   // Extract non-hold tickers from action_list
   const actionList = (rec.action_list ?? []) as ActionItem[]
   const nonHoldItems = actionList.filter((item) => item.action !== 'hold')
-  const tickers = nonHoldItems.map((item) => item.ticker)
+
+  // Shariah guard: a BUY needs a stored compliant verdict on this recommendation. Sells are always allowed.
+  const screening = readShariahScreening(rec)
+  const blockReasons = new Map<string, string>()
+  for (const item of nonHoldItems) {
+    if (item.action !== 'buy') continue
+    const reason = getBuyBlockReason(item.ticker, screening)
+    if (reason) blockReasons.set(item.ticker, reason)
+  }
+  const tickers = nonHoldItems.filter((item) => !blockReasons.has(item.ticker)).map((item) => item.ticker)
 
   // Fetch live quotes from Alpaca
-  let quotes: Record<string, number>
+  let quotes: Record<string, number> = {}
   try {
-    quotes = await fetchQuotes(tickers, keyId, secret, cred.is_paper)
+    if (tickers.length > 0) quotes = await fetchQuotes(tickers, keyId, secret, cred.is_paper)
   } catch {
     return NextResponse.json({ error: 'Failed to fetch quotes from Alpaca' }, { status: 502 })
   }
@@ -107,6 +118,18 @@ export async function POST(request: NextRequest) {
 
   // Compute preview items
   const previewItems: OrderPreviewItem[] = nonHoldItems.map((item) => {
+    const blockReason = item.action === 'buy' ? blockReasons.get(item.ticker) : undefined
+    if (blockReason) {
+      return {
+        ticker:          item.ticker,
+        action:          'buy' as const,
+        qty:             0,
+        ask_price:       0,
+        estimated_value: 0,
+        skipped:         true,
+        skip_reason:     blockReason,
+      }
+    }
     const askPrice = quotes[item.ticker] ?? 0
     const positionQty = item.action === 'sell' ? (positions[item.ticker] ?? 0) : 0
     const qty = computeOrderQty(item.delta_usd, askPrice, positionQty, item.action as 'buy' | 'sell')
@@ -126,5 +149,6 @@ export async function POST(request: NextRequest) {
     is_market_open: isNYSEOpen(),
     is_paper:       cred.is_paper,
     preview:        previewItems,
+    shariah_notice: screening ? null : NO_SCREENING_SKIP_REASON,
   })
 }

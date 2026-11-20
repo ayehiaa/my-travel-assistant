@@ -79,6 +79,17 @@ export default async function PortfolioSettingsPage() {
         Configure your risk preferences and analysis schedule.
       </p>
       <PortfolioSettingsForm initialSettings={settings ?? defaultSettings} />
+      <div className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-gray-900">Islamic screening</span>
+          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">Always on</span>
+        </div>
+        <p className="mt-2 text-sm text-gray-600">
+          Every analysis and every buy is limited to Shariah-compliant individual common stocks (max 20% each).
+          No ETFs, funds, bonds, preferred shares, options, shorting or margin. Holdings that fail screening are
+          recommended for sale.
+        </p>
+      </div>
       <div style={{ marginTop: 32 }}>
         <h2
           style={{

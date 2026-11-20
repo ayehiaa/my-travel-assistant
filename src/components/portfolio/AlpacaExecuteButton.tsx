@@ -50,6 +50,7 @@ export default function AlpacaExecuteButton({
   const toast = useToast()
   const [mode, setMode] = useState<Mode>('idle')
   const [preview, setPreview] = useState<OrderPreviewItem[] | null>(null)
+  const [shariahNotice, setShariahNotice] = useState<string | null>(null)
   const [isMarketOpen, setIsMarketOpen] = useState(true)
 
   if (!isLatest) return null
@@ -135,8 +136,9 @@ export default function AlpacaExecuteButton({
         setMode('idle')
         return
       }
-      const data = await res.json() as { preview: OrderPreviewItem[]; is_market_open: boolean }
+      const data = await res.json() as { preview: OrderPreviewItem[]; is_market_open: boolean; shariah_notice?: string | null }
       setPreview(data.preview)
+      setShariahNotice(data.shariah_notice ?? null)
       setIsMarketOpen(data.is_market_open)
       setMode('preview-ready')
     } catch {
@@ -289,6 +291,11 @@ export default function AlpacaExecuteButton({
             )}
 
             {/* Order preview table */}
+            {shariahNotice && (
+              <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {shariahNotice}. Sells can still be placed.
+              </p>
+            )}
             <AlpacaOrderPreview preview={preview ?? []} />
 
             {/* Footer */}

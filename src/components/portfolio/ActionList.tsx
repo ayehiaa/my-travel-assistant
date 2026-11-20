@@ -96,6 +96,7 @@ export default function ActionList({ actionList }: Props) {
                 >
                   {item.ticker}
                 </span>
+                {item.note && <div className="mt-1 max-w-xs text-xs text-red-700">{item.note}</div>}
               </td>
               <td style={{ padding: '12px 12px' }}>
                 <span style={ACTION_CHIP_STYLES[item.action]}>

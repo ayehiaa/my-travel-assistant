@@ -7,6 +7,7 @@ import { decryptCredential } from '@/lib/alpacaCrypto'
 import { fetchQuotes, fetchPosition, submitOrder, isTradeableAsset } from '@/lib/alpacaClient'
 import { computeOrderQty } from '@/lib/alpacaOrderCalculator'
 import { logAudit } from '@/lib/auditLogger'
+import { getBuyBlockReason, readShariahScreening } from '@/lib/shariahRules'
 import type { ActionItem, AlpacaOrderResult } from '@/types/database'
 
 const ExecuteSchema = z.object({
@@ -34,10 +35,11 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
-  // Load recommendation (must belong to this user)
+  // Load recommendation (must belong to this user).
+  // select('*') so a missing shariah_screening column (migration not applied) cannot break the query.
   const { data: rec } = await supabase
     .from('recommendations')
-    .select('id, action_list, user_id')
+    .select('*')
     .eq('id', parsed.data.recommendation_id)
     .eq('user_id', user.id)
     .single()
@@ -75,7 +77,18 @@ export async function POST(request: NextRequest) {
 
   // Extract non-hold items from action_list
   const actionList = (rec.action_list ?? []) as ActionItem[]
-  const nonHoldItems = actionList.filter((item) => item.action !== 'hold')
+  const allNonHoldItems = actionList.filter((item) => item.action !== 'hold')
+
+  // Shariah guard: never submit a BUY without a stored compliant verdict on this recommendation.
+  // Sells are always allowed (they move the account towards compliance).
+  const screening = readShariahScreening(rec)
+  const shariahBlocked: Array<{ item: ActionItem; reason: string }> = []
+  const nonHoldItems: ActionItem[] = []
+  for (const item of allNonHoldItems) {
+    const reason = item.action === 'buy' ? getBuyBlockReason(item.ticker, screening) : null
+    if (reason) shariahBlocked.push({ item, reason })
+    else nonHoldItems.push(item)
+  }
 
   // Validate every ticker against Alpaca before touching the market
   const tradeableChecks = await Promise.all(
@@ -94,9 +107,9 @@ export async function POST(request: NextRequest) {
   const tickers = validNonHoldItems.map((item) => item.ticker)
 
   // Fetch live quotes
-  let quotes: Record<string, number>
+  let quotes: Record<string, number> = {}
   try {
-    quotes = await fetchQuotes(tickers, keyId, secret, cred.is_paper)
+    if (tickers.length > 0) quotes = await fetchQuotes(tickers, keyId, secret, cred.is_paper)
   } catch {
     return NextResponse.json({ error: 'Failed to fetch quotes from Alpaca' }, { status: 502 })
   }
@@ -162,6 +175,16 @@ export async function POST(request: NextRequest) {
 
   // Build the orders JSONB array — include ALL non-hold items (invalid + skipped + submitted)
   const orders: AlpacaOrderResult[] = [
+    ...shariahBlocked.map(({ item, reason }) => ({
+      ticker:              item.ticker,
+      action:              'buy' as const,
+      qty:                 0,
+      price_at_execution:  0,
+      estimated_value:     0,
+      alpaca_order_id:     null,
+      status:              'skipped' as const,
+      error_message:       reason,
+    })),
     ...invalidItems.map((item) => ({
       ticker:              item.ticker,
       action:              item.action as 'buy' | 'sell',
