@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { PortfolioSettings } from '@/types/database'
 import PortfolioSettingsForm from '@/components/portfolio/PortfolioSettingsForm'
 import AlpacaCredentialsForm from '@/components/portfolio/AlpacaCredentialsForm'
+import RiskSafetyCard from '@/components/portfolio/RiskSafetyCard'
+import { readSafetySettings } from '@/lib/riskLimits'
 
 export const metadata = { title: 'Sojourn — Portfolio Settings' }
 
@@ -79,6 +81,7 @@ export default async function PortfolioSettingsPage() {
         Configure your risk preferences and analysis schedule.
       </p>
       <PortfolioSettingsForm initialSettings={settings ?? defaultSettings} />
+      <RiskSafetyCard initial={readSafetySettings(settings as unknown as Record<string, unknown> | null)} />
       <div className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-gray-900">Islamic screening</span>

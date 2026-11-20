@@ -7,7 +7,9 @@ import { decryptCredential } from '@/lib/alpacaCrypto'
 import { fetchClock } from '@/lib/alpacaClient'
 import { isNYSEOpen } from '@/lib/alpacaOrderCalculator'
 import { readShariahScreening, NO_SCREENING_SKIP_REASON } from '@/lib/shariahRules'
-import { loadPlanInputs, planOrders } from '@/lib/tradeExecution'
+import { buildRiskCheckedPlan, executionBlocksNewRequest } from '@/lib/tradeExecution'
+import { checkLossStops, loadSafetySettings } from '@/lib/tradingSafety'
+import type { LossStopResult, RiskAdjustment, RiskSummary } from '@/lib/riskLimits'
 import type { ActionItem } from '@/types/database'
 
 const PreviewSchema = z.object({
@@ -25,6 +27,18 @@ export interface OrderPreviewItem {
   estimated_value: number
   skipped: boolean
   skip_reason: string | null
+  /** Set when the risk limits trimmed this order. */
+  risk_note: string | null
+}
+
+export interface PreviewSafety {
+  dry_run: boolean
+  trading_paused: boolean
+  paused_reason: string | null
+  migration_applied: boolean
+  loss_stop: LossStopResult
+  risk_summary: RiskSummary
+  risk_adjustments: RiskAdjustment[]
 }
 
 // ── POST ──────────────────────────────────────────────────────────────────────
@@ -64,12 +78,13 @@ export async function POST(request: NextRequest) {
   // Guard: no existing execution for this recommendation
   const { data: existing } = await supabase
     .from('alpaca_executions')
-    .select('id')
+    .select('id, orders')
     .eq('recommendation_id', rec.id)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (existing !== null) {
+  // A finished dry run may be followed by another (dry or live) run; anything else is a real execution.
+  if (existing !== null && executionBlocksNewRequest(existing.orders)) {
     return NextResponse.json({ error: 'Recommendation already executed' }, { status: 409 })
   }
 
@@ -92,17 +107,19 @@ export async function POST(request: NextRequest) {
   const items = ((rec.action_list ?? []) as ActionItem[]).filter((item) => item.action !== 'hold')
   const screening = readShariahScreening(rec)
 
-  // Same planner as the execution engine (Shariah guard, notional buys, settlement check on sells).
-  // The engine sizes buys again to settled cash after the sells have filled.
-  let planned
+  const safety = await loadSafetySettings(user.id)
+
+  // Same planner as the execution engine (Shariah guard, notional buys, settlement check on sells, risk limits).
+  // The engine sizes buys again to settled cash (minus the cash buffer) after the sells have filled.
+  let plan
   try {
-    const inputs = await loadPlanInputs(creds, items, screening)
-    planned = planOrders({ executionId: 'preview', items, screening, ...inputs })
+    plan = await buildRiskCheckedPlan(creds, { executionId: 'preview', items, screening, limits: safety.limits })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch quotes from Alpaca' }, { status: 502 })
   }
+  const lossStop = await checkLossStops(creds, safety.limits)
 
-  const previewItems: OrderPreviewItem[] = planned.map((o) => ({
+  const previewItems: OrderPreviewItem[] = plan.orders.map((o) => ({
     ticker:          o.ticker,
     action:          o.action,
     qty:             o.qty,
@@ -111,7 +128,18 @@ export async function POST(request: NextRequest) {
     estimated_value: o.estimated_value,
     skipped:         o.status === 'skipped',
     skip_reason:     o.status === 'skipped' ? o.error_message : null,
+    risk_note:       o.risk_note ?? null,
   }))
+
+  const previewSafety: PreviewSafety = {
+    dry_run:           safety.dry_run,
+    trading_paused:    safety.trading_paused,
+    paused_reason:     safety.paused_reason,
+    migration_applied: safety.migration_applied,
+    loss_stop:         lossStop,
+    risk_summary:      plan.summary,
+    risk_adjustments:  plan.adjustments,
+  }
 
   let isMarketOpen: boolean
   try {
@@ -125,5 +153,6 @@ export async function POST(request: NextRequest) {
     is_paper:       cred.is_paper,
     preview:        previewItems,
     shariah_notice: screening ? null : NO_SCREENING_SKIP_REASON,
+    safety:         previewSafety,
   })
 }

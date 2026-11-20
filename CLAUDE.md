@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/020-order-execution-engine/spec.md` (Inngest order-execution engine: notional fractional buys, market-hours wait, sells-then-buys, fill tracking, idempotent client order ids)
+Active feature spec: `specs/021-risk-limits-kill-switch/spec.md` (hard risk limits, kill switch / trading pause, dry-run mode — every execution passes through `applyRiskLimits`)
 <!-- SPECKIT END -->

@@ -9,6 +9,8 @@ export interface OrderPreviewItem {
   estimated_value: number
   skipped: boolean
   skip_reason: string | null
+  /** Set when the risk limits trimmed this order. */
+  risk_note?: string | null
 }
 
 interface Props {
@@ -83,7 +85,12 @@ export default function AlpacaOrderPreview({ preview }: Props) {
                 {item.skipped ? (
                   <span className="font-sans italic text-[var(--ink-3)]">{item.skip_reason ?? 'Skipped'}</span>
                 ) : (
-                  amountLabel(item)
+                  <>
+                    {amountLabel(item)}
+                    {item.risk_note && (
+                      <span className="mt-1 block font-sans text-xs text-amber-700">{item.risk_note}</span>
+                    )}
+                  </>
                 )}
               </td>
               <td className="px-3 py-3 font-mono text-[var(--ink-2)]">

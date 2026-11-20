@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import AlpacaOrderPreview, { type OrderPreviewItem } from './AlpacaOrderPreview'
+import PreviewSafetyNotice, { isPreviewBlocked } from './PreviewSafetyNotice'
+import type { PreviewSafety } from '@/app/api/portfolio/alpaca/preview/route'
 
 interface Props {
   recommendationId: string
@@ -42,6 +44,7 @@ export default function AlpacaExecuteButton({
   const [preview, setPreview] = useState<OrderPreviewItem[] | null>(null)
   const [shariahNotice, setShariahNotice] = useState<string | null>(null)
   const [isMarketOpen, setIsMarketOpen] = useState(true)
+  const [safety, setSafety] = useState<PreviewSafety | null>(null)
 
   if (!isLatest) return null
 
@@ -126,8 +129,14 @@ export default function AlpacaExecuteButton({
         setMode('idle')
         return
       }
-      const data = await res.json() as { preview: OrderPreviewItem[]; is_market_open: boolean; shariah_notice?: string | null }
+      const data = await res.json() as {
+        preview: OrderPreviewItem[]
+        is_market_open: boolean
+        shariah_notice?: string | null
+        safety?: PreviewSafety
+      }
       setPreview(data.preview)
+      setSafety(data.safety ?? null)
       setShariahNotice(data.shariah_notice ?? null)
       setIsMarketOpen(data.is_market_open)
       setMode('preview-ready')
@@ -152,7 +161,7 @@ export default function AlpacaExecuteButton({
         return
       }
       // 202 — the execution runs in the background; the results panel polls its live status.
-      toast('Execution started — order status updates below', 'success')
+      toast(isDryRun ? 'Dry run started — simulated orders appear below' : 'Execution started — order status updates below', 'success')
       setMode('done')
       router.refresh()
     } catch {
@@ -167,7 +176,8 @@ export default function AlpacaExecuteButton({
   }
 
   const allSkipped = (preview ?? []).length > 0 && (preview ?? []).every(item => item.skipped)
-  const hasActionable = (preview ?? []).some(item => !item.skipped)
+  const hasActionable = (preview ?? []).some(item => !item.skipped) && !isPreviewBlocked(safety)
+  const isDryRun = safety?.dry_run ?? true
   const isModalOpen = mode === 'preview-ready' || mode === 'submitting'
 
   return (
@@ -244,6 +254,9 @@ export default function AlpacaExecuteButton({
                   Execute Trades
                 </h2>
                 {isPaper && <span style={PAPER_BADGE_STYLE}>PAPER</span>}
+                {isDryRun && (
+                  <span className="ml-2 inline-block rounded bg-purple-600 px-2 py-0.5 font-mono text-xs font-bold text-white">DRY RUN</span>
+                )}
               </div>
               <button
                 onClick={handleCloseModal}
@@ -265,7 +278,7 @@ export default function AlpacaExecuteButton({
             </div>
 
             {/* Market hours warning */}
-            {!isMarketOpen && (
+            {!isMarketOpen && !isDryRun && (
               <div
                 style={{
                   background: '#fef9c3',
@@ -288,6 +301,7 @@ export default function AlpacaExecuteButton({
                 {shariahNotice}. Sells can still be placed.
               </p>
             )}
+            {safety && <PreviewSafetyNotice safety={safety} />}
             <AlpacaOrderPreview preview={preview ?? []} />
 
             {/* Footer */}
@@ -343,7 +357,7 @@ export default function AlpacaExecuteButton({
                   transition: 'background .12s',
                 }}
               >
-                {mode === 'submitting' ? 'Executing…' : 'Confirm & Execute'}
+                {mode === 'submitting' ? 'Executing…' : isDryRun ? 'Run dry run (no orders)' : 'Confirm & Execute'}
               </button>
             </div>
           </div>

@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
 import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
+import TradingStatusBanner from '@/components/portfolio/TradingStatusBanner'
+import { readSafetySettings } from '@/lib/riskLimits'
 import type { LivePortfolio } from '@/types/database'
 
 export const metadata = {
@@ -30,6 +32,14 @@ export default async function PortfolioPage() {
   await supabase
     .from('portfolio_settings')
     .upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+
+  // select('*') so the page works before the safety migration is applied (defaults: dry run on, not paused)
+  const { data: settingsRow } = await supabase
+    .from('portfolio_settings')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  const safety = readSafetySettings(settingsRow as Record<string, unknown> | null)
 
   const latestRecRes = await supabase
     .from('recommendations')
@@ -68,6 +78,7 @@ export default async function PortfolioPage() {
       <p style={{ color: 'var(--ink-3)', fontSize: 14, marginBottom: 32 }}>
         Your holdings and cash, read live from your Alpaca account.
       </p>
+      <TradingStatusBanner safety={safety} />
       <PortfolioOverview
         connected={creds !== null}
         portfolio={portfolio}

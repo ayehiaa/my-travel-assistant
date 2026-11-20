@@ -339,7 +339,7 @@ export async function fetchBuyingInputs(
   keyId: string,
   secret: string,
   isPaper: boolean
-): Promise<{ cash: number | null; non_marginable_buying_power: number | null }> {
+): Promise<{ cash: number | null; non_marginable_buying_power: number | null; equity: number | null }> {
   const base = getAlpacaBaseUrl(isPaper)
   const response = await fetch(`${base}/v2/account`, {
     headers: alpacaHeaders(keyId, secret),
@@ -347,13 +347,85 @@ export async function fetchBuyingInputs(
     cache: 'no-store',
   })
   if (!response.ok) throw new Error(`Alpaca account fetch failed: ${response.status}`)
-  const data = await response.json() as { cash?: string; non_marginable_buying_power?: string }
-  const num = (v: string | undefined): number | null => {
-    if (v === undefined) return null
-    const n = parseFloat(v)
-    return Number.isFinite(n) ? n : null
+  const data = await response.json() as { cash?: string; non_marginable_buying_power?: string; equity?: string }
+  return {
+    cash:                        parseOptionalNum(data.cash),
+    non_marginable_buying_power: parseOptionalNum(data.non_marginable_buying_power),
+    equity:                      parseOptionalNum(data.equity),
   }
-  return { cash: num(data.cash), non_marginable_buying_power: num(data.non_marginable_buying_power) }
+}
+
+function parseOptionalNum(v: string | number | null | undefined): number | null {
+  if (v === undefined || v === null) return null
+  const n = typeof v === 'number' ? v : parseFloat(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Equity snapshot for the loss stops and risk limits: equity, last_equity (previous close) and cash.
+ * Missing / unparseable values are null. Throws on non-2xx.
+ */
+export async function fetchEquitySnapshot(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ equity: number | null; last_equity: number | null; cash: number | null }> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/account`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca account fetch failed: ${response.status}`)
+  const data = await response.json() as { equity?: string; last_equity?: string; cash?: string }
+  return {
+    equity:      parseOptionalNum(data.equity),
+    last_equity: parseOptionalNum(data.last_equity),
+    cash:        parseOptionalNum(data.cash),
+  }
+}
+
+/**
+ * Daily equity points for the last week (GET /v2/account/portfolio/history?period=1W&timeframe=1D).
+ * Throws on non-2xx.
+ */
+export async function fetchWeeklyEquityHistory(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<Array<number | null>> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/account/portfolio/history?period=1W&timeframe=1D`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca portfolio history fetch failed: ${response.status}`)
+  const data = await response.json() as { equity?: Array<number | string | null> }
+  return Array.isArray(data.equity) ? data.equity.map(v => parseOptionalNum(v)) : []
+}
+
+/**
+ * Kill switch: cancel EVERY open order on the account (DELETE /v2/orders).
+ * Returns true when Alpaca accepted the request (207 multi-status counts as accepted). Never throws.
+ */
+export async function cancelAllOpenOrders(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<boolean> {
+  const base = getAlpacaBaseUrl(isPaper)
+  try {
+    const response = await fetch(`${base}/v2/orders`, {
+      method: 'DELETE',
+      headers: alpacaHeaders(keyId, secret),
+      signal: AbortSignal.timeout(10000),
+      cache: 'no-store',
+    })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 /**
