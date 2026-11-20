@@ -1,22 +1,29 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
-import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
-import TradingStatusBanner from '@/components/portfolio/TradingStatusBanner'
-import { readSafetySettings } from '@/lib/riskLimits'
-import AutopilotStatus from '@/components/portfolio/AutopilotStatus'
-import { readAutopilotSettings } from '@/lib/schedule'
-import { isAwaitingApproval, msUntilExpiry, readAutopilotInfo } from '@/lib/autopilot'
-import { executionBlocksNewRequest } from '@/lib/tradeExecution'
-import type { LivePortfolio } from '@/types/database'
+import HubTabs from '@/components/portfolio/hub/HubTabs'
+import OverviewTab from '@/components/portfolio/hub/OverviewTab'
+import RebalanceTab from '@/components/portfolio/hub/RebalanceTab'
+import ActivityTab from '@/components/portfolio/hub/ActivityTab'
+import SettingsTab from '@/components/portfolio/hub/SettingsTab'
+import { TabSkeleton } from '@/components/portfolio/hub/HubSkeletons'
+import { parseChartPeriod, parseHubTab, parsePage, HUB_TAB_LABELS } from '@/lib/portfolioHub'
+import { ACTIVITY_MAX_PAGES, parseActivityFilter } from '@/lib/activityTimeline'
 
 export const metadata = {
   title: 'Sojourn — Portfolio',
 }
 
-export default async function PortfolioPage() {
+/** Portfolio trading hub: /portfolio?tab=overview|rebalance|activity|settings (specs/025-portfolio-trading-hub). */
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const params = await searchParams
+
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.role !== 'premium_plus') redirect('/')
@@ -32,95 +39,41 @@ export default async function PortfolioPage() {
     return <PortfolioTosGate />
   }
 
-  // Ensure the settings row exists (risk profile, target return) — the analysis run reads it
+  // Ensure the settings row exists (risk profile, target return) — the analysis run and the settings tab read it
   await supabase
     .from('portfolio_settings')
     .upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true })
 
-  // select('*') so the page works before the safety migration is applied (defaults: dry run on, not paused)
-  const { data: settingsRow } = await supabase
-    .from('portfolio_settings')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  const safety = readSafetySettings(settingsRow as Record<string, unknown> | null)
-
-  const autopilotSettings = readAutopilotSettings(settingsRow as Record<string, unknown> | null)
-
-  // select('*') so autopilot data is read from the columns when migrated, else agent_outputs.autopilot
-  const latestRecRes = await supabase
-    .from('recommendations')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('status', 'complete')
-    .order('run_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // Pending approval card: the latest complete recommendation, if it is a scheduled run still awaiting approval
-  let pendingApproval: { recommendationId: string; expiresInMs: number } | null = null
-  if (latestRecRes.data) {
-    const info = readAutopilotInfo(latestRecRes.data as Record<string, unknown>)
-    const now = new Date()
-    if (info.trigger === 'schedule' && info.approval_status === 'pending') {
-      const { data: exec } = await supabase
-        .from('alpaca_executions')
-        .select('orders')
-        .eq('recommendation_id', latestRecRes.data.id)
-        .maybeSingle()
-      const blocking = exec !== null && executionBlocksNewRequest(exec.orders)
-      if (isAwaitingApproval(info, now, blocking)) {
-        pendingApproval = { recommendationId: latestRecRes.data.id as string, expiresInMs: msUntilExpiry(info, now) }
-      }
-    }
-  }
-
-  // The whole account is read live from Alpaca — nothing about holdings or cash is stored in the app
-  const creds = await loadAlpacaCredentials(user.id)
-  let portfolio: LivePortfolio | null = null
-  let liveError = false
-  if (creds) {
-    try {
-      portfolio = await fetchLivePortfolio(creds)
-    } catch {
-      liveError = true
-    }
-  }
+  const tab = parseHubTab(params.tab)
+  const period = parseChartPeriod(params.period)
+  const filter = parseActivityFilter(params.filter)
+  const page = parsePage(params.page, ACTIVITY_MAX_PAGES)
 
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
-      <h1
-        style={{
-          fontFamily: 'var(--display)',
-          fontWeight: 700,
-          fontSize: 32,
-          marginBottom: 8,
-          color: 'var(--ink)',
-        }}
-      >
-        Portfolio
-      </h1>
-      <p style={{ color: 'var(--ink-3)', fontSize: 14, marginBottom: 32 }}>
-        Your holdings and cash, read live from your Alpaca account.
-      </p>
-      <TradingStatusBanner safety={safety} />
-      <AutopilotStatus
-        mode={autopilotSettings.mode}
-        nextRunAt={autopilotSettings.next_run_at}
-        pending={pendingApproval}
-      />
-      <PortfolioOverview
-        connected={creds !== null}
-        portfolio={portfolio}
-        liveError={liveError}
-        latestRecommendation={latestRecRes.data
-          ? {
-              id:           latestRecRes.data.id as string,
-              run_at:       latestRecRes.data.run_at as string,
-              summary_text: (latestRecRes.data.summary_text as string | null) ?? null,
-            }
-          : null}
-      />
+    <main className="mx-auto max-w-[960px] px-4 pb-28 pt-6 md:px-6 md:pb-12 md:pt-10">
+      <div className="mb-4 flex items-end justify-between gap-3 md:mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--ink)] md:text-3xl" style={{ fontFamily: 'var(--display)' }}>
+            Portfolio
+          </h1>
+          <p className="mt-1 text-sm text-[var(--ink-3)]">
+            {tab === 'overview' && 'Your account, read live from Alpaca.'}
+            {tab === 'rebalance' && 'Review the latest analysis and act on it.'}
+            {tab === 'activity' && 'Everything that happened, newest first.'}
+            {tab === 'settings' && 'Targets, autopilot, safety, notifications and your Alpaca connection.'}
+          </p>
+        </div>
+      </div>
+
+      <HubTabs active={tab} />
+
+      <h2 className="sr-only">{HUB_TAB_LABELS[tab]}</h2>
+      <Suspense key={`${tab}:${tab === 'activity' ? `${filter}:${page}` : ''}`} fallback={<TabSkeleton tab={tab} />}>
+        {tab === 'overview' && <OverviewTab userId={user.id} period={period} />}
+        {tab === 'rebalance' && <RebalanceTab userId={user.id} />}
+        {tab === 'activity' && <ActivityTab userId={user.id} filter={filter} page={page} />}
+        {tab === 'settings' && <SettingsTab userId={user.id} email={user.email} />}
+      </Suspense>
     </main>
   )
 }

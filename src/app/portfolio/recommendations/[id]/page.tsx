@@ -1,15 +1,15 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import RecommendationDetail from '@/components/portfolio/RecommendationDetail'
+import RebalanceView from '@/components/portfolio/hub/RebalanceView'
 import { Recommendation } from '@/types/database'
 import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
-import ApprovalPanel from '@/components/portfolio/ApprovalPanel'
-import { effectiveApprovalStatus, msUntilExpiry, readAutopilotInfo } from '@/lib/autopilot'
 import { readSafetySettings } from '@/lib/riskLimits'
 
 export const metadata = { title: 'Sojourn — Portfolio Recommendation' }
 
+/** Deep-link / history view of one recommendation. Renders the same Rebalance components as the hub. */
 export default async function RecommendationDetailPage({
   params,
 }: {
@@ -22,6 +22,14 @@ export default async function RecommendationDetailPage({
   if (authUser.role !== 'premium_plus') redirect('/')
 
   const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('portfolio_tos_accepted_at')
+    .eq('user_id', authUser.id)
+    .maybeSingle()
+  if (!profile?.portfolio_tos_accepted_at) redirect('/portfolio')
+
   const { data: rec } = await supabase
     .from('recommendations')
     .select('*')
@@ -58,49 +66,29 @@ export default async function RecommendationDetailPage({
   ])
 
   const isLatest = latestRecResult.data?.id === id
-  const execution = executionResult.data ? normalizeExecution(executionResult.data) : null
-  const hasCredentials = !!credResult.data
-  const isPaper = credResult.data?.is_paper ?? true
-
-  // Autopilot (scheduled runs only): approval state is computed on read, expiry included.
-  const autopilot = readAutopilotInfo(rec as Record<string, unknown>)
-  const safety = readSafetySettings(settingsResult.data as Record<string, unknown> | null)
-  const now = new Date()
-  const hasBlockingExecution = executionResult.data !== null && executionBlocksNewRequest(executionResult.data.orders)
 
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
-      <h1
-        style={{
-          fontFamily: 'var(--display)',
-          fontWeight: 700,
-          fontSize: 32,
-          marginBottom: 32,
-          color: 'var(--ink)',
-        }}
-      >
+    <main className="mx-auto max-w-[960px] px-4 pb-12 pt-6 md:px-6 md:pt-10">
+      <Link href="/portfolio?tab=activity" className="text-sm font-semibold text-[var(--blue-700)]">
+        ← Portfolio activity
+      </Link>
+      <h1 className="mb-6 mt-2 text-2xl font-bold text-[var(--ink)] md:text-3xl" style={{ fontFamily: 'var(--display)' }}>
         Portfolio Recommendation
       </h1>
-      {autopilot.trigger === 'schedule' && (
-        <ApprovalPanel
-          recommendationId={id}
-          status={effectiveApprovalStatus(autopilot, now)}
-          initialRemainingMs={msUntilExpiry(autopilot, now)}
-          isLatest={isLatest}
-          hasBlockingExecution={hasBlockingExecution}
-          dryRun={safety.dry_run}
-          isPaper={isPaper}
-          tradingPaused={safety.trading_paused}
-          autoExecution={autopilot.auto_execution}
-        />
+      {isLatest && (
+        <p className="mb-4 text-sm text-[var(--ink-3)]">
+          This is your latest recommendation — it is also shown in{' '}
+          <Link href="/portfolio?tab=rebalance" className="font-semibold text-[var(--blue-700)] underline">Rebalance</Link>.
+        </p>
       )}
-      <RecommendationDetail
+      <RebalanceView
         recommendation={rec as Recommendation}
-        recommendationId={id}
         isLatest={isLatest}
-        hasCredentials={hasCredentials}
-        isPaper={isPaper}
-        execution={execution}
+        hasCredentials={!!credResult.data}
+        isPaper={credResult.data?.is_paper ?? true}
+        execution={executionResult.data ? normalizeExecution(executionResult.data) : null}
+        hasBlockingExecution={executionResult.data !== null && executionBlocksNewRequest(executionResult.data.orders)}
+        safety={readSafetySettings(settingsResult.data as Record<string, unknown> | null)}
       />
     </main>
   )

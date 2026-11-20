@@ -8,13 +8,13 @@ interface Props {
 /** Portfolio-page status: red banner while trading is paused, DRY RUN badge while dry run is on. */
 export default function TradingStatusBanner({ safety }: Props) {
   return (
-    <div className="mb-6 space-y-3">
+    <div className="space-y-3 empty:hidden">
       {safety.trading_paused && (
         <div className="rounded-lg border border-red-400 bg-red-600 px-4 py-3 text-white" role="alert">
           <p className="text-sm font-bold">Trading is paused — no orders will be placed.</p>
           {safety.paused_reason && <p className="mt-1 text-sm">Reason: {safety.paused_reason}</p>}
-          <Link href="/portfolio/settings" className="mt-1 inline-block text-sm font-semibold underline">
-            Review in Portfolio Settings
+          <Link href="/portfolio?tab=settings" className="mt-1 inline-block text-sm font-semibold underline">
+            Review in Settings
           </Link>
         </div>
       )}

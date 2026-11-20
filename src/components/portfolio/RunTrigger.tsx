@@ -6,9 +6,12 @@ import { useToast } from '@/context/ToastContext'
 interface Props {
   lastRunAt: string | null
   onRunStarted: (runId: string) => void
+  /** 'secondary' renders an outlined button (Rebalance tab). */
+  variant?: 'primary' | 'secondary'
+  label?: string
 }
 
-export default function RunTrigger({ lastRunAt, onRunStarted }: Props) {
+export default function RunTrigger({ lastRunAt, onRunStarted, variant = 'primary', label = 'Run Analysis' }: Props) {
   const toast = useToast()
 
   const cooldownEnd = lastRunAt ? new Date(lastRunAt).getTime() + 86400000 : 0
@@ -53,6 +56,25 @@ export default function RunTrigger({ lastRunAt, onRunStarted }: Props) {
   const isCoolingDown = secondsLeft > 0
   const isDisabled = isCoolingDown || running
 
+  const text = running
+    ? 'Starting…'
+    : isCoolingDown
+      ? `Available in ${h}h ${m}m`
+      : label
+
+  if (variant === 'secondary') {
+    return (
+      <button
+        type="button"
+        onClick={handleRun}
+        disabled={isDisabled}
+        className="rounded-lg border border-[var(--blue-700)] bg-white px-4 py-2 text-sm font-semibold text-[var(--blue-700)] hover:bg-[var(--blue-50)] disabled:cursor-not-allowed disabled:border-[var(--rule)] disabled:text-[var(--ink-4)] disabled:hover:bg-white"
+      >
+        {text}
+      </button>
+    )
+  }
+
   return (
     <button
       onClick={handleRun}
@@ -71,11 +93,7 @@ export default function RunTrigger({ lastRunAt, onRunStarted }: Props) {
         minWidth: 180,
       }}
     >
-      {running
-        ? 'Starting…'
-        : isCoolingDown
-          ? `Available in ${h}h ${m}m`
-          : 'Run Analysis'}
+      {text}
     </button>
   )
 }

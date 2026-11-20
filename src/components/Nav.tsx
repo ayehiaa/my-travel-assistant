@@ -38,8 +38,11 @@ export default function Nav() {
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
     ...(user.role === 'main' || user.role === 'premium' || user.role === 'premium_plus' ? [{ href: '/settings', label: 'Settings' }] : []),
-    ...(user.role === 'premium_plus' ? [{ href: '/portfolio', label: 'Portfolio' }, { href: '/portfolio/run', label: 'Run Analysis' }] : []),
+    ...(user.role === 'premium_plus' ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
   ]
+
+  // The Portfolio hub owns every /portfolio/* page (tabs, recommendation detail)
+  const isActive = (href: string) => pathname === href || (href === '/portfolio' && pathname.startsWith('/portfolio/'))
 
   const initials = user.displayName
     .split(' ')
@@ -84,7 +87,7 @@ export default function Nav() {
               key={href}
               href={href}
               className="rounded-full px-4 py-2 text-[13px] font-semibold transition-colors"
-              style={pathname === href
+              style={isActive(href)
                 ? { background: 'white', color: 'var(--blue-700)' }
                 : { color: 'rgba(255,255,255,.85)' }
               }
@@ -179,7 +182,7 @@ export default function Nav() {
               href={href}
               onClick={() => setMenuOpen(false)}
               className="block px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
-              style={pathname === href
+              style={isActive(href)
                 ? { background: 'rgba(255,255,255,.15)', color: 'white' }
                 : { color: 'rgba(255,255,255,.75)' }
               }

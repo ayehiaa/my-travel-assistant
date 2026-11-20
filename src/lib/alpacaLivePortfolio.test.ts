@@ -49,3 +49,36 @@ describe('buildLiveSnapshot', () => {
     expect(buildLiveSnapshot([], NaN, {}).cash_usd).toBe(0)
   })
 })
+
+describe('buildLiveSnapshot — P&L fields', () => {
+  it('copies unrealised P&L, avg entry and price when Alpaca returns them', () => {
+    const result = buildLiveSnapshot(
+      [{
+        symbol: 'MSFT', qty: '3', market_value: '1200',
+        avg_entry_price: '350.5', current_price: '400', cost_basis: '1051.5',
+        unrealized_pl: '148.5', unrealized_plpc: '0.1412',
+      }],
+      0,
+      {},
+    )
+    expect(result.holdings[0]).toEqual({
+      ticker: 'MSFT', company_name: 'MSFT', qty: 3, total_value_usd: 1200,
+      avg_entry_price: 350.5, current_price: 400, cost_basis: 1051.5, unrealized_pl: 148.5, unrealized_plpc: 0.1412,
+    })
+  })
+
+  it('leaves out missing, empty or unparseable P&L values', () => {
+    const result = buildLiveSnapshot(
+      [{ symbol: 'A', qty: '1', market_value: '10', unrealized_pl: '', unrealized_plpc: 'n/a', avg_entry_price: null }],
+      0,
+      {},
+    )
+    expect(Object.keys(result.holdings[0]).sort()).toEqual(['company_name', 'qty', 'ticker', 'total_value_usd'])
+  })
+
+  it('keeps negative P&L', () => {
+    const result = buildLiveSnapshot([{ symbol: 'A', qty: '1', market_value: '90', unrealized_pl: '-10', unrealized_plpc: '-0.1' }], 0, {})
+    expect(result.holdings[0].unrealized_pl).toBe(-10)
+    expect(result.holdings[0].unrealized_plpc).toBe(-0.1)
+  })
+})

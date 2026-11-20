@@ -73,6 +73,18 @@ export async function fetchPosition(
   return Number.isFinite(qty) ? qty : 0
 }
 
+/** Position fields the app reads (decimal strings, as Alpaca returns them). P&L fields may be missing. */
+export interface AlpacaPositionRow {
+  symbol: string
+  qty: string
+  market_value: string
+  avg_entry_price?: string | null
+  current_price?: string | null
+  cost_basis?: string | null
+  unrealized_pl?: string | null
+  unrealized_plpc?: string | null
+}
+
 /**
  * Fetch all open positions from Alpaca.
  * Returns an array of positions with symbol, qty (decimal string), and market_value (decimal string).
@@ -83,7 +95,7 @@ export async function fetchAllPositions(
   keyId: string,
   secret: string,
   isPaper: boolean
-): Promise<Array<{ symbol: string; qty: string; market_value: string }>> {
+): Promise<AlpacaPositionRow[]> {
   const base = getAlpacaBaseUrl(isPaper)
   const response = await fetch(
     `${base}/v2/positions`,
@@ -98,7 +110,7 @@ export async function fetchAllPositions(
     throw new Error(`Alpaca positions fetch failed: ${response.status}`)
   }
 
-  const data = await response.json() as Array<{ symbol: string; qty: string; market_value: string }>
+  const data = await response.json() as AlpacaPositionRow[]
   return data
 }
 
@@ -405,6 +417,48 @@ export async function fetchWeeklyEquityHistory(
   return Array.isArray(data.equity) ? data.equity.map(v => parseOptionalNum(v)) : []
 }
 
+export interface PortfolioHistory {
+  /** Unix seconds per point. */
+  timestamp: number[]
+  equity: Array<number | null>
+  /** Cumulative, deposit-adjusted return per point as a fraction (e.g. 0.012 = +1.2%). */
+  profit_loss_pct: Array<number | null>
+  base_value: number | null
+}
+
+/**
+ * Account value over time (GET /v2/account/portfolio/history). Read-only. Throws on non-2xx.
+ */
+export async function fetchPortfolioHistory(
+  period: '1W' | '1M' | '3M' | '1A',
+  timeframe: '1H' | '1D',
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<PortfolioHistory> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const params = new URLSearchParams({ period, timeframe })
+  if (timeframe === '1H') params.set('intraday_reporting', 'market_hours')
+  const response = await fetch(`${base}/v2/account/portfolio/history?${params.toString()}`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca portfolio history fetch failed: ${response.status}`)
+  const data = await response.json() as {
+    timestamp?: Array<number | string>
+    equity?: Array<number | string | null>
+    profit_loss_pct?: Array<number | string | null>
+    base_value?: number | string | null
+  }
+  return {
+    timestamp:       Array.isArray(data.timestamp) ? data.timestamp.map(v => Number(v)) : [],
+    equity:          Array.isArray(data.equity) ? data.equity.map(v => parseOptionalNum(v)) : [],
+    profit_loss_pct: Array.isArray(data.profit_loss_pct) ? data.profit_loss_pct.map(v => parseOptionalNum(v)) : [],
+    base_value:      parseOptionalNum(data.base_value),
+  }
+}
+
 /**
  * Kill switch: cancel EVERY open order on the account (DELETE /v2/orders).
  * Returns true when Alpaca accepted the request (207 multi-status counts as accepted). Never throws.
@@ -474,7 +528,7 @@ export async function fetchAccount(
   keyId: string,
   secret: string,
   isPaper: boolean
-): Promise<{ cash: number; equity: number }> {
+): Promise<{ cash: number; equity: number; last_equity: number | null }> {
   const base = getAlpacaBaseUrl(isPaper)
   const response = await fetch(`${base}/v2/account`, {
     headers: alpacaHeaders(keyId, secret),
@@ -486,8 +540,8 @@ export async function fetchAccount(
     throw new Error(`Alpaca account fetch failed: ${response.status}`)
   }
 
-  const data = await response.json() as { cash: string; equity: string }
-  return { cash: parseFloat(data.cash), equity: parseFloat(data.equity) }
+  const data = await response.json() as { cash: string; equity: string; last_equity?: string }
+  return { cash: parseFloat(data.cash), equity: parseFloat(data.equity), last_equity: parseOptionalNum(data.last_equity) }
 }
 
 /**
