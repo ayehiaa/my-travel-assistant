@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import RecommendationDetail from '@/components/portfolio/RecommendationDetail'
-import { AlpacaExecution, Recommendation } from '@/types/database'
+import { Recommendation } from '@/types/database'
+import { normalizeExecution } from '@/lib/tradeExecution'
 
 export const metadata = { title: 'Sojourn — Portfolio Recommendation' }
 
@@ -49,7 +50,7 @@ export default async function RecommendationDetailPage({
   ])
 
   const isLatest = latestRecResult.data?.id === id
-  const execution = (executionResult.data ?? null) as AlpacaExecution | null
+  const execution = executionResult.data ? normalizeExecution(executionResult.data) : null
   const hasCredentials = !!credResult.data
   const isPaper = credResult.data?.is_paper ?? true
 

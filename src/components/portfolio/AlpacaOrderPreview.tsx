@@ -1,7 +1,10 @@
-interface OrderPreviewItem {
+export interface OrderPreviewItem {
   ticker: string
   action: 'buy' | 'sell' | 'hold'
+  /** Shares for sells / whole-share buys; estimated shares for notional buys. */
   qty: number
+  /** USD amount for notional (fractional) buys. Absent/null → a share-qty order. */
+  notional?: number | null
   ask_price: number
   estimated_value: number
   skipped: boolean
@@ -12,41 +15,26 @@ interface Props {
   preview: OrderPreviewItem[]
 }
 
-const ACTION_CHIP_STYLES: Record<'buy' | 'sell' | 'hold', React.CSSProperties> = {
-  buy: {
-    background: '#dcfce7',
-    color: '#16a34a',
-    padding: '2px 8px',
-    borderRadius: 4,
-    fontWeight: 600,
-    fontSize: 12,
-    display: 'inline-block',
-    fontFamily: 'var(--sans)',
-  },
-  sell: {
-    background: '#fee2e2',
-    color: '#dc2626',
-    padding: '2px 8px',
-    borderRadius: 4,
-    fontWeight: 600,
-    fontSize: 12,
-    display: 'inline-block',
-    fontFamily: 'var(--sans)',
-  },
-  hold: {
-    background: '#f3f4f6',
-    color: '#6b7280',
-    padding: '2px 8px',
-    borderRadius: 4,
-    fontWeight: 600,
-    fontSize: 12,
-    display: 'inline-block',
-    fontFamily: 'var(--sans)',
-  },
+const ACTION_CHIP: Record<'buy' | 'sell' | 'hold', string> = {
+  buy:  'bg-green-100 text-green-700',
+  sell: 'bg-red-100 text-red-700',
+  hold: 'bg-gray-100 text-gray-500',
 }
 
-function formatUsd(value: number): string {
+export function formatUsd(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+export function formatQty(value: number): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(value)
+}
+
+/** Buys show a dollar amount (notional); sells show the share quantity. */
+function amountLabel(item: OrderPreviewItem): string {
+  if (typeof item.notional === 'number' && item.notional > 0) {
+    return `${formatUsd(item.notional)} (≈ ${formatQty(item.qty)} sh)`
+  }
+  return `${formatQty(item.qty)} sh`
 }
 
 export default function AlpacaOrderPreview({ preview }: Props) {
@@ -55,37 +43,28 @@ export default function AlpacaOrderPreview({ preview }: Props) {
 
   if (actionableItems.length === 0 || !hasActionable) {
     return (
-      <p style={{ color: 'var(--ink-3)', fontSize: 14, fontFamily: 'var(--sans)', margin: '16px 0' }}>
-        No actionable orders
-      </p>
+      <div className="my-4">
+        <p className="text-sm text-[var(--ink-3)]">No actionable orders</p>
+        {actionableItems.length > 0 && (
+          <ul className="mt-2 space-y-1 text-xs text-[var(--ink-3)]">
+            {actionableItems.map((item, idx) => (
+              <li key={`${item.ticker}-${idx}`}>
+                <span className="font-mono font-bold">{item.ticker}</span> {item.action.toUpperCase()} — {item.skip_reason ?? 'Skipped'}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     )
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: 14,
-          fontFamily: 'var(--sans)',
-        }}
-      >
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--rule)', textAlign: 'left' }}>
-            {['Ticker', 'Action', 'Qty', 'Ask Price', 'Est. Value'].map(col => (
-              <th
-                key={col}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--ink-3)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+          <tr className="border-b-2 border-[var(--rule)] text-left">
+            {['Ticker', 'Action', 'Amount', 'Ask Price', 'Est. Value'].map(col => (
+              <th key={col} className="whitespace-nowrap px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[var(--ink-3)]">
                 {col}
               </th>
             ))}
@@ -93,49 +72,34 @@ export default function AlpacaOrderPreview({ preview }: Props) {
         </thead>
         <tbody>
           {actionableItems.map((item, idx) => (
-            <tr
-              key={`${item.ticker}-${idx}`}
-              style={{
-                borderBottom: '1px solid var(--rule)',
-                opacity: item.skipped ? 0.4 : 1,
-              }}
-            >
-              <td style={{ padding: '12px 12px' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: 'var(--ink)',
-                  }}
-                >
-                  {item.ticker}
-                </span>
-              </td>
-              <td style={{ padding: '12px 12px' }}>
-                <span style={ACTION_CHIP_STYLES[item.action as 'buy' | 'sell']}>
+            <tr key={`${item.ticker}-${idx}`} className={`border-b border-[var(--rule)] ${item.skipped ? 'opacity-40' : ''}`}>
+              <td className="px-3 py-3 font-mono font-bold text-[var(--ink)]">{item.ticker}</td>
+              <td className="px-3 py-3">
+                <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${ACTION_CHIP[item.action]}`}>
                   {item.action.toUpperCase()}
                 </span>
               </td>
-              <td style={{ padding: '12px 12px', fontFamily: 'var(--mono)', color: 'var(--ink-2)' }}>
+              <td className="px-3 py-3 font-mono text-[var(--ink-2)]">
                 {item.skipped ? (
-                  <span style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: 'var(--sans)' }}>
-                    {item.skip_reason ?? 'Skipped'}
-                  </span>
+                  <span className="font-sans italic text-[var(--ink-3)]">{item.skip_reason ?? 'Skipped'}</span>
                 ) : (
-                  item.qty
+                  amountLabel(item)
                 )}
               </td>
-              <td style={{ padding: '12px 12px', fontFamily: 'var(--mono)', color: 'var(--ink-2)' }}>
-                {formatUsd(item.ask_price)}
+              <td className="px-3 py-3 font-mono text-[var(--ink-2)]">
+                {item.ask_price > 0 ? formatUsd(item.ask_price) : '—'}
               </td>
-              <td style={{ padding: '12px 12px', fontFamily: 'var(--mono)', color: 'var(--ink)' }}>
+              <td className="px-3 py-3 font-mono text-[var(--ink)]">
                 {item.skipped ? '—' : formatUsd(item.estimated_value)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      <p className="mt-3 text-xs text-[var(--ink-3)]">
+        Sells are placed first. Buys are dollar-amount (fractional) market orders, sized to your settled cash once the
+        sells have filled, and are only placed while the market is open.
+      </p>
     </div>
   )
 }
