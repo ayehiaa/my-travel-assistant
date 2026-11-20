@@ -3,17 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
-import AlpacaOrderPreview from './AlpacaOrderPreview'
-
-interface OrderPreviewItem {
-  ticker: string
-  action: 'buy' | 'sell'
-  qty: number
-  ask_price: number
-  estimated_value: number
-  skipped: boolean
-  skip_reason: string | null
-}
+import AlpacaOrderPreview, { type OrderPreviewItem } from './AlpacaOrderPreview'
 
 interface Props {
   recommendationId: string
@@ -80,7 +70,7 @@ export default function AlpacaExecuteButton({
             fontFamily: 'var(--sans)',
           }}
         >
-          Executed on {formattedExecutedAt}
+          Execution requested {formattedExecutedAt}
         </button>
         {isPaper && <span style={PAPER_BADGE_STYLE}>PAPER</span>}
       </div>
@@ -161,6 +151,8 @@ export default function AlpacaExecuteButton({
         setMode('preview-ready')
         return
       }
+      // 202 — the execution runs in the background; the results panel polls its live status.
+      toast('Execution started — order status updates below', 'success')
       setMode('done')
       router.refresh()
     } catch {
@@ -286,7 +278,7 @@ export default function AlpacaExecuteButton({
                   fontFamily: 'var(--sans)',
                 }}
               >
-                Markets are currently closed. Orders will queue for next market open.
+                Markets are currently closed. The execution will wait and place orders shortly after the next market open.
               </div>
             )}
 

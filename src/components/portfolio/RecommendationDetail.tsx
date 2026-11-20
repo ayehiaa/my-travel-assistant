@@ -1,4 +1,4 @@
-import { AlpacaExecution, Recommendation } from '@/types/database'
+import { NormalizedExecution, Recommendation } from '@/types/database'
 import ActionList from './ActionList'
 import AgentBreakdown from './AgentBreakdown'
 import AlpacaExecuteButton from './AlpacaExecuteButton'
@@ -12,7 +12,7 @@ interface Props {
   isLatest: boolean
   hasCredentials: boolean
   isPaper: boolean
-  execution: AlpacaExecution | null
+  execution: NormalizedExecution | null
 }
 
 const DISCLAIMER_TEXT =
@@ -83,7 +83,7 @@ export default function RecommendationDetail({
             executedAt={execution?.executed_at ?? null}
           />
           {execution !== null && (
-            <AlpacaResultsPanel execution={execution} />
+            <AlpacaResultsPanel key={execution.id} execution={execution} />
           )}
         </div>
         <ActionList actionList={recommendation.action_list ?? []} />

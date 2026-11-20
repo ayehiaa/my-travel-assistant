@@ -3,18 +3,16 @@ import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { decryptCredential } from '@/lib/alpacaCrypto'
-import { fetchQuotes, fetchPosition, submitOrder, isTradeableAsset } from '@/lib/alpacaClient'
-import { computeOrderQty } from '@/lib/alpacaOrderCalculator'
 import { logAudit } from '@/lib/auditLogger'
-import { getBuyBlockReason, readShariahScreening } from '@/lib/shariahRules'
-import type { ActionItem, AlpacaOrderResult } from '@/types/database'
+import { requestExecution } from '@/lib/tradeExecutionRequest'
 
 const ExecuteSchema = z.object({
   recommendation_id: z.string().uuid(),
 })
 
 // ── POST ──────────────────────────────────────────────────────────────────────
+// Queues the execution: creates the alpaca_executions row (status "pending"), sends
+// portfolio/execution.requested and returns 202. Orders are placed by src/inngest/executeTrades.ts.
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
@@ -35,11 +33,10 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
-  // Load recommendation (must belong to this user).
-  // select('*') so a missing shariah_screening column (migration not applied) cannot break the query.
+  // Load recommendation (must belong to this user)
   const { data: rec } = await supabase
     .from('recommendations')
-    .select('*')
+    .select('id')
     .eq('id', parsed.data.recommendation_id)
     .eq('user_id', user.id)
     .single()
@@ -48,7 +45,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Recommendation not found' }, { status: 400 })
   }
 
-  // Guard: no existing execution for this recommendation
+  // Fast-path guard: no existing execution for this recommendation.
+  // The UNIQUE (recommendation_id) constraint in requestExecution() is the race-proof guard.
   const { data: existing } = await supabase
     .from('alpaca_executions')
     .select('id')
@@ -60,11 +58,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Recommendation already executed' }, { status: 409 })
   }
 
-  // Load credentials via admin client
+  // Credentials must exist before queuing (the engine re-loads them itself)
   const admin = createAdminClient()
   const { data: cred } = await admin
     .from('alpaca_credentials')
-    .select('*')
+    .select('is_paper')
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -72,173 +70,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No Alpaca credentials connected' }, { status: 404 })
   }
 
-  const keyId = decryptCredential(cred.encrypted_key_id, cred.key_id_iv)
-  const secret = decryptCredential(cred.encrypted_secret, cred.secret_iv)
-
-  // Extract non-hold items from action_list
-  const actionList = (rec.action_list ?? []) as ActionItem[]
-  const allNonHoldItems = actionList.filter((item) => item.action !== 'hold')
-
-  // Shariah guard: never submit a BUY without a stored compliant verdict on this recommendation.
-  // Sells are always allowed (they move the account towards compliance).
-  const screening = readShariahScreening(rec)
-  const shariahBlocked: Array<{ item: ActionItem; reason: string }> = []
-  const nonHoldItems: ActionItem[] = []
-  for (const item of allNonHoldItems) {
-    const reason = item.action === 'buy' ? getBuyBlockReason(item.ticker, screening) : null
-    if (reason) shariahBlocked.push({ item, reason })
-    else nonHoldItems.push(item)
-  }
-
-  // Validate every ticker against Alpaca before touching the market
-  const tradeableChecks = await Promise.all(
-    nonHoldItems.map(async (item) => {
-      try {
-        const ok = await isTradeableAsset(item.ticker, keyId, secret, cred.is_paper)
-        return { item, tradeable: ok }
-      } catch {
-        return { item, tradeable: false }
-      }
-    })
-  )
-
-  const invalidItems = tradeableChecks.filter((c) => !c.tradeable).map((c) => c.item)
-  const validNonHoldItems = tradeableChecks.filter((c) => c.tradeable).map((c) => c.item)
-  const tickers = validNonHoldItems.map((item) => item.ticker)
-
-  // Fetch live quotes
-  let quotes: Record<string, number> = {}
-  try {
-    if (tickers.length > 0) quotes = await fetchQuotes(tickers, keyId, secret, cred.is_paper)
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch quotes from Alpaca' }, { status: 502 })
-  }
-
-  // Fetch positions for sell items
-  const sellItems = validNonHoldItems.filter((item) => item.action === 'sell')
-  const positionEntries = await Promise.all(
-    sellItems.map(async (item) => {
-      const qty = await fetchPosition(item.ticker, keyId, secret, cred.is_paper)
-      return [item.ticker, qty] as [string, number]
-    })
-  )
-  const positions = Object.fromEntries(positionEntries)
-
-  // Compute qty for every valid non-hold item and categorise
-  type CategorisedItem = {
-    item: ActionItem
-    qty: number
-    askPrice: number
-  }
-
-  const categorised: CategorisedItem[] = validNonHoldItems.map((item) => {
-    const askPrice = quotes[item.ticker] ?? 0
-    const positionQty = item.action === 'sell' ? (positions[item.ticker] ?? 0) : 0
-    const qty = computeOrderQty(item.delta_usd, askPrice, positionQty, item.action as 'buy' | 'sell')
-    return { item, qty, askPrice }
+  const result = await requestExecution({
+    userId:           user.id,
+    recommendationId: rec.id,
+    isPaper:          cred.is_paper,
   })
 
-  const skippedItems = categorised.filter((c) => c.qty === 0)
-  const submittableItems = categorised.filter((c) => c.qty > 0)
-  const submittableSells = submittableItems.filter((c) => c.item.action === 'sell')
-  const submittableBuys = submittableItems.filter((c) => c.item.action === 'buy')
-
-  // Submit sells sequentially first, then buys sequentially
-  type SubmittedResult = {
-    item: ActionItem
-    qty: number
-    askPrice: number
-    result: Awaited<ReturnType<typeof submitOrder>>
-  }
-
-  const submittedResults: SubmittedResult[] = []
-
-  for (const c of submittableSells) {
-    const result = await submitOrder(
-      { symbol: c.item.ticker, qty: c.qty, side: 'sell' },
-      keyId,
-      secret,
-      cred.is_paper
-    )
-    submittedResults.push({ item: c.item, qty: c.qty, askPrice: c.askPrice, result })
-  }
-
-  for (const c of submittableBuys) {
-    const result = await submitOrder(
-      { symbol: c.item.ticker, qty: c.qty, side: 'buy' },
-      keyId,
-      secret,
-      cred.is_paper
-    )
-    submittedResults.push({ item: c.item, qty: c.qty, askPrice: c.askPrice, result })
-  }
-
-  // Build the orders JSONB array — include ALL non-hold items (invalid + skipped + submitted)
-  const orders: AlpacaOrderResult[] = [
-    ...shariahBlocked.map(({ item, reason }) => ({
-      ticker:              item.ticker,
-      action:              'buy' as const,
-      qty:                 0,
-      price_at_execution:  0,
-      estimated_value:     0,
-      alpaca_order_id:     null,
-      status:              'skipped' as const,
-      error_message:       reason,
-    })),
-    ...invalidItems.map((item) => ({
-      ticker:              item.ticker,
-      action:              item.action as 'buy' | 'sell',
-      qty:                 0,
-      price_at_execution:  0,
-      estimated_value:     0,
-      alpaca_order_id:     null,
-      status:              'skipped' as const,
-      error_message:       `${item.ticker} is not a tradeable asset on Alpaca`,
-    })),
-    ...skippedItems.map((c) => ({
-      ticker:              c.item.ticker,
-      action:              c.item.action as 'buy' | 'sell',
-      qty:                 0,
-      price_at_execution:  c.askPrice,
-      estimated_value:     0,
-      alpaca_order_id:     null,
-      status:              'skipped' as const,
-      error_message:       null,
-    })),
-    ...submittedResults.map((s) => ({
-      ticker:              s.item.ticker,
-      action:              s.item.action as 'buy' | 'sell',
-      qty:                 s.qty,
-      price_at_execution:  s.askPrice,
-      estimated_value:     s.qty * s.askPrice,
-      alpaca_order_id:     s.result.alpaca_order_id,
-      status:              s.result.status,
-      error_message:       s.result.error_message,
-    })),
-  ]
-
-  // Insert execution record using admin client (no INSERT RLS policy on this table)
-  const { data: execution, error: insertError } = await admin
-    .from('alpaca_executions')
-    .insert({
-      recommendation_id: rec.id,
-      user_id:           user.id,
-      is_paper:          cred.is_paper,
-      orders,
-    })
-    .select()
-    .single()
-
-  if (insertError || !execution) {
+  if (!result.ok) {
+    if (result.reason === 'already_executed') {
+      return NextResponse.json({ error: 'Recommendation already executed' }, { status: 409 })
+    }
+    if (result.reason === 'event_failed') {
+      return NextResponse.json({ error: 'Could not start the execution — try again shortly' }, { status: 502 })
+    }
     return NextResponse.json({ error: 'Failed to save execution record' }, { status: 500 })
   }
 
   await logAudit({ performedBy: user.id, action: 'alpaca_executed', tripId: null })
 
-  return NextResponse.json({
-    execution_id: execution.id,
-    executed_at:  execution.executed_at,
-    is_paper:     execution.is_paper,
-    orders:       execution.orders,
-  })
+  return NextResponse.json(
+    {
+      execution_id: result.executionId,
+      executed_at:  result.executedAt,
+      is_paper:     cred.is_paper,
+      status:       'pending',
+    },
+    { status: 202 },
+  )
 }

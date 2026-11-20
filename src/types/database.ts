@@ -288,15 +288,62 @@ export interface AlpacaCredential {
   updated_at: string
 }
 
+/**
+ * Per-order lifecycle status. Legacy rows only use submitted | rejected | error | skipped.
+ * planned → submitted → partially_filled → filled | canceled | rejected | expired
+ */
+export type AlpacaOrderStatus =
+  | 'planned'
+  | 'submitted'
+  | 'partially_filled'
+  | 'filled'
+  | 'canceled'
+  | 'expired'
+  | 'rejected'
+  | 'error'
+  | 'skipped'
+
 export interface AlpacaOrderResult {
   ticker: string
   action: 'buy' | 'sell'
+  /** Share qty (sells, whole-share buys). 0 for notional buys until filled. */
   qty: number
   price_at_execution: number
   estimated_value: number
   alpaca_order_id: string | null
-  status: 'submitted' | 'rejected' | 'error' | 'skipped'
+  status: AlpacaOrderStatus
   error_message: string | null
+  // ── Engine v2 fields (optional — absent on rows created before the execution engine) ──
+  /** USD amount for notional (fractional) buys. */
+  notional?: number | null
+  client_order_id?: string | null
+  fractionable?: boolean
+  /** Raw Alpaca order status, e.g. "accepted", "filled". */
+  alpaca_status?: string | null
+  filled_qty?: number | null
+  filled_avg_price?: number | null
+  filled_at?: string | null
+  submitted_at?: string | null
+  updated_at?: string | null
+}
+
+export type ExecutionStatus =
+  | 'pending'
+  | 'waiting_for_market'
+  | 'executing'
+  | 'completed'
+  | 'completed_with_errors'
+  | 'failed'
+
+/** Shape stored in alpaca_executions.orders by the execution engine (legacy rows store a bare array). */
+export interface ExecutionEnvelope {
+  version: 2
+  status: ExecutionStatus
+  updated_at: string
+  error_message: string | null
+  /** When the engine is waiting for the market, the time it will wake up. */
+  wait_until?: string | null
+  orders: AlpacaOrderResult[]
 }
 
 export interface AlpacaExecution {
@@ -305,5 +352,20 @@ export interface AlpacaExecution {
   user_id: string
   executed_at: string
   is_paper: boolean
+  /** Legacy rows: a bare array. Engine rows: ExecutionEnvelope. Read via normalizeExecution(). */
+  orders: AlpacaOrderResult[] | ExecutionEnvelope
+}
+
+/** AlpacaExecution with the envelope unwrapped — what the UI and API consume. */
+export interface NormalizedExecution {
+  id: string
+  recommendation_id: string
+  user_id: string
+  executed_at: string
+  is_paper: boolean
+  status: ExecutionStatus
+  updated_at: string | null
+  error_message: string | null
+  wait_until: string | null
   orders: AlpacaOrderResult[]
 }

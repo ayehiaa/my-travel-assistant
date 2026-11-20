@@ -68,7 +68,9 @@ export async function fetchPosition(
   }
 
   const data = await response.json() as { qty: string }
-  return parseInt(data.qty, 10)
+  // parseFloat — Alpaca positions can be fractional
+  const qty = parseFloat(data.qty)
+  return Number.isFinite(qty) ? qty : 0
 }
 
 /**
@@ -125,13 +127,60 @@ export async function isTradeableAsset(
   return data.status === 'active' && data.tradable === true
 }
 
+/** The subset of an Alpaca order object the execution engine reads. */
+export interface AlpacaOrderSnapshot {
+  id: string
+  client_order_id: string
+  symbol: string
+  side: string
+  status: string
+  qty: string | null
+  notional: string | null
+  filled_qty: string | null
+  filled_avg_price: string | null
+  filled_at: string | null
+  submitted_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+function toSnapshot(data: Record<string, unknown>): AlpacaOrderSnapshot {
+  const str = (v: unknown): string | null => (typeof v === 'string' ? v : v == null ? null : String(v))
+  return {
+    id:               String(data.id ?? ''),
+    client_order_id:  String(data.client_order_id ?? ''),
+    symbol:           String(data.symbol ?? ''),
+    side:             String(data.side ?? ''),
+    status:           String(data.status ?? ''),
+    qty:              str(data.qty),
+    notional:         str(data.notional),
+    filled_qty:       str(data.filled_qty),
+    filled_avg_price: str(data.filled_avg_price),
+    filled_at:        str(data.filled_at),
+    submitted_at:     str(data.submitted_at),
+    created_at:       str(data.created_at),
+    updated_at:       str(data.updated_at),
+  }
+}
+
+/** Broker error text is safe to show (no credentials) but is truncated. */
+async function readBrokerMessage(response: Response): Promise<string | null> {
+  try {
+    const body = await response.json() as { message?: unknown }
+    return typeof body.message === 'string' ? body.message.slice(0, 200) : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Submit a market order to Alpaca.
+ * Submit a market DAY order to Alpaca, by share `qty` or by USD `notional` (fractional buys).
+ * `client_order_id` makes the submission idempotent at the broker.
  * NEVER throws — always returns the result shape so the caller can record
  * partial failures without aborting the whole execution.
  */
 export async function submitOrder(
-  params: { symbol: string; qty: number; side: 'buy' | 'sell' },
+  params: { symbol: string; side: 'buy' | 'sell'; qty?: number; notional?: number; client_order_id?: string },
   keyId: string,
   secret: string,
   isPaper: boolean
@@ -139,51 +188,210 @@ export async function submitOrder(
   alpaca_order_id: string | null
   status: 'submitted' | 'rejected' | 'error'
   error_message: string | null
+  http_status: number | null
+  order: AlpacaOrderSnapshot | null
 }> {
   try {
     const base = getAlpacaBaseUrl(isPaper)
+    const body: Record<string, string> = {
+      symbol:        params.symbol,
+      side:          params.side,
+      type:          'market',
+      time_in_force: 'day',
+    }
+    if (params.notional !== undefined) body.notional = params.notional.toFixed(2)
+    else body.qty = String(params.qty ?? 0)
+    if (params.client_order_id) body.client_order_id = params.client_order_id
+
     const response = await fetch(`${base}/v2/orders`, {
       method: 'POST',
       headers: alpacaHeaders(keyId, secret),
-      body: JSON.stringify({
-        symbol: params.symbol,
-        qty: String(params.qty),
-        side: params.side,
-        type: 'market',
-        time_in_force: 'day',
-      }),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+      cache: 'no-store',
     })
 
     if (response.status === 200 || response.status === 201) {
-      const data = await response.json() as { id: string }
-      return {
-        alpaca_order_id: data.id,
-        status: 'submitted',
-        error_message: null,
-      }
+      const data = await response.json() as Record<string, unknown>
+      const order = toSnapshot(data)
+      return { alpaca_order_id: order.id, status: 'submitted', error_message: null, http_status: response.status, order }
     }
 
     if (response.status >= 400 && response.status < 500) {
+      const message = await readBrokerMessage(response)
       return {
         alpaca_order_id: null,
         status: 'rejected',
-        error_message: 'Order rejected by broker',
+        error_message: message ? `Order rejected by broker: ${message}` : 'Order rejected by broker',
+        http_status: response.status,
+        order: null,
       }
     }
 
     // 5xx or unexpected status
-    return {
-      alpaca_order_id: null,
-      status: 'error',
-      error_message: 'Alpaca unreachable',
-    }
+    return { alpaca_order_id: null, status: 'error', error_message: 'Alpaca unreachable', http_status: response.status, order: null }
   } catch {
-    return {
-      alpaca_order_id: null,
-      status: 'error',
-      error_message: 'Alpaca unreachable',
-    }
+    return { alpaca_order_id: null, status: 'error', error_message: 'Alpaca unreachable', http_status: null, order: null }
   }
+}
+
+/** GET /v2/orders/{id}. Throws on non-2xx. */
+export async function fetchOrder(
+  orderId: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<AlpacaOrderSnapshot> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/orders/${encodeURIComponent(orderId)}`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca order fetch failed: ${response.status}`)
+  return toSnapshot(await response.json() as Record<string, unknown>)
+}
+
+/** GET /v2/orders:by_client_order_id. Returns null when no such order exists (404). Throws on other errors. */
+export async function fetchOrderByClientId(
+  clientOrderId: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<AlpacaOrderSnapshot | null> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(
+    `${base}/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`,
+    { headers: alpacaHeaders(keyId, secret), signal: AbortSignal.timeout(10000), cache: 'no-store' }
+  )
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`Alpaca order lookup failed: ${response.status}`)
+  return toSnapshot(await response.json() as Record<string, unknown>)
+}
+
+/** DELETE /v2/orders/{id}. Returns true when the cancel was accepted (204) or the order is already final (422). */
+export async function cancelOrder(
+  orderId: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<boolean> {
+  const base = getAlpacaBaseUrl(isPaper)
+  try {
+    const response = await fetch(`${base}/v2/orders/${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+      headers: alpacaHeaders(keyId, secret),
+      signal: AbortSignal.timeout(10000),
+      cache: 'no-store',
+    })
+    return response.ok || response.status === 422
+  } catch {
+    return false
+  }
+}
+
+/** Alpaca market clock. Throws on non-2xx. */
+export async function fetchClock(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ timestamp: string; is_open: boolean; next_open: string; next_close: string }> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/clock`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca clock fetch failed: ${response.status}`)
+  const data = await response.json() as { timestamp: string; is_open: boolean; next_open: string; next_close: string }
+  return { timestamp: data.timestamp, is_open: data.is_open === true, next_open: data.next_open, next_close: data.next_close }
+}
+
+/**
+ * Asset tradability + fractionability. Returns null for any 4xx (unknown symbol); throws on 5xx.
+ */
+export async function fetchAsset(
+  ticker: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ tradable: boolean; fractionable: boolean } | null> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/assets/${encodeURIComponent(ticker)}`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+  if (response.status >= 400 && response.status < 500) return null
+  if (!response.ok) throw new Error(`Alpaca asset lookup failed: ${response.status}`)
+  const data = await response.json() as { status?: string; tradable?: boolean; fractionable?: boolean }
+  return {
+    tradable:     data.status === 'active' && data.tradable === true,
+    fractionable: data.fractionable === true,
+  }
+}
+
+/**
+ * Cash-account buying inputs. Never returns margin buying_power.
+ * Throws on non-2xx.
+ */
+export async function fetchBuyingInputs(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ cash: number | null; non_marginable_buying_power: number | null }> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/account`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca account fetch failed: ${response.status}`)
+  const data = await response.json() as { cash?: string; non_marginable_buying_power?: string }
+  const num = (v: string | undefined): number | null => {
+    if (v === undefined) return null
+    const n = parseFloat(v)
+    return Number.isFinite(n) ? n : null
+  }
+  return { cash: num(data.cash), non_marginable_buying_power: num(data.non_marginable_buying_power) }
+}
+
+/**
+ * Symbols (from `symbols`) the account BOUGHT since `afterIso` — any buy order that filled (fully or partly)
+ * or is still working. Used to avoid good-faith violations (selling before the purchase has settled).
+ * Throws on non-2xx so the caller can decide (the engine treats a failure as "skip the sells").
+ */
+export async function fetchRecentBuySymbols(
+  symbols: string[],
+  afterIso: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<string[]> {
+  if (symbols.length === 0) return []
+  const base = getAlpacaBaseUrl(isPaper)
+  const params = new URLSearchParams({
+    status:    'all',
+    after:     afterIso,
+    symbols:   symbols.join(','),
+    limit:     '500',
+    direction: 'desc',
+  })
+  const response = await fetch(`${base}/v2/orders?${params.toString()}`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca orders list failed: ${response.status}`)
+  const data = await response.json() as Array<{ symbol?: string; side?: string; status?: string; filled_qty?: string }>
+  const bought = new Set<string>()
+  for (const o of data) {
+    if (o.side !== 'buy' || !o.symbol) continue
+    const filled = parseFloat(o.filled_qty ?? '0')
+    const dead = o.status === 'canceled' || o.status === 'expired' || o.status === 'rejected'
+    if ((Number.isFinite(filled) && filled > 0) || !dead) bought.add(o.symbol)
+  }
+  return [...bought]
 }
 
 /**
