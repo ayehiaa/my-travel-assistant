@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/019-shariah-screening/spec.md` (Shariah screening + individual common stocks only; enforced in code)
+Active feature spec: `specs/020-order-execution-engine/spec.md` (Inngest order-execution engine: notional fractional buys, market-hours wait, sells-then-buys, fill tracking, idempotent client order ids)
 <!-- SPECKIT END -->
