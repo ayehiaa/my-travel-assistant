@@ -1,16 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
-import type { AgentOutput } from '@/types/database'
+import type { AgentRunResult } from '@/inngest/agents/types'
+import { callClaude } from '@/lib/aiCall'
+import { parseAgentResponse } from '@/lib/aiResponse'
 import type { PriceHistory } from '@/inngest/dataSources/polygon'
 import type { TickerDetailsMap } from '@/inngest/dataSources/polygon'
 import { withIslamicMandate } from '@/lib/islamicMandate'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
-
-const AgentOutputSchema = z.object({
-  analysis:   z.string(),
-  confidence: z.enum(['low', 'medium', 'high']),
-  stance:     z.enum(['bullish', 'bearish', 'neutral']),
-})
 
 export interface SectorAnalysisAgentInput {
   risk_profile:      string
@@ -37,7 +31,7 @@ const SYSTEM_PROMPT =
 
 export async function runSectorAnalysisAgent(
   input: SectorAnalysisAgentInput,
-): Promise<AgentOutput> {
+): Promise<AgentRunResult> {
   // Group tickers by sic_description
   const sectorMap: Record<string, string[]> = {}
   for (const ticker of input.holdings_tickers) {
@@ -78,22 +72,12 @@ export async function runSectorAnalysisAgent(
   const userContent =
     `Sector composition of portfolio holdings:\n\n${sectorContext}${portfolioContext}`
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 800,
-    system:     withIslamicMandate(SYSTEM_PROMPT),
-    messages:   [{ role: 'user', content: userContent }],
+  const { text, stopReason, usage } = await callClaude({
+    role:   'agent',
+    name:   'sector_analysis',
+    system: withIslamicMandate(SYSTEM_PROMPT),
+    user:   userContent,
   })
 
-  const block = response.content[0]
-  const text = block.type === 'text' ? block.text : ''
-
-  try {
-    const result = AgentOutputSchema.safeParse(JSON.parse(text))
-    return result.success ? result.data : { analysis: text, confidence: 'low', stance: 'neutral' }
-  } catch {
-    return { analysis: text, confidence: 'low', stance: 'neutral' }
-  }
+  return { output: parseAgentResponse(text, stopReason), usage }
 }

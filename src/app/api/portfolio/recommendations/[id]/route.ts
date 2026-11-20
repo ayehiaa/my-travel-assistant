@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { readRunUsage } from '@/lib/aiCost'
 
 export async function GET(
   _request: NextRequest,
@@ -25,5 +26,6 @@ export async function GET(
     .single()
 
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ recommendation: data })
+  // run_usage: token usage + cost of the run (null for runs recorded before usage logging)
+  return NextResponse.json({ recommendation: data, run_usage: readRunUsage(data) })
 }

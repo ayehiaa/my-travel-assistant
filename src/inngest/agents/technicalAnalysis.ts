@@ -1,15 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
-import type { AgentOutput } from '@/types/database'
+import type { AgentRunResult } from '@/inngest/agents/types'
+import { callClaude } from '@/lib/aiCall'
+import { parseAgentResponse } from '@/lib/aiResponse'
 import type { PriceHistory } from '@/inngest/dataSources/polygon'
 import { withIslamicMandate } from '@/lib/islamicMandate'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
-
-const AgentOutputSchema = z.object({
-  analysis:   z.string(),
-  confidence: z.enum(['low', 'medium', 'high']),
-  stance:     z.enum(['bullish', 'bearish', 'neutral']),
-})
 
 export interface TechnicalAnalysisAgentInput {
   risk_profile:      string
@@ -36,7 +30,7 @@ const SYSTEM_PROMPT =
 
 export async function runTechnicalAnalysisAgent(
   input: TechnicalAnalysisAgentInput,
-): Promise<AgentOutput> {
+): Promise<AgentRunResult> {
   const tickersWithData = input.holdings_tickers.filter(
     ticker => (input.priceData[ticker]?.length ?? 0) > 0,
   )
@@ -62,22 +56,12 @@ export async function runTechnicalAnalysisAgent(
   const userContent =
     `30-day OHLCV price data for portfolio holdings:\n${priceContext}${portfolioContext}`
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: 800,
-    system:     withIslamicMandate(SYSTEM_PROMPT),
-    messages:   [{ role: 'user', content: userContent }],
+  const { text, stopReason, usage } = await callClaude({
+    role:   'agent',
+    name:   'technical_analysis',
+    system: withIslamicMandate(SYSTEM_PROMPT),
+    user:   userContent,
   })
 
-  const block = response.content[0]
-  const text = block.type === 'text' ? block.text : ''
-
-  try {
-    const result = AgentOutputSchema.safeParse(JSON.parse(text))
-    return result.success ? result.data : { analysis: text, confidence: 'low', stance: 'neutral' }
-  } catch {
-    return { analysis: text, confidence: 'low', stance: 'neutral' }
-  }
+  return { output: parseAgentResponse(text, stopReason), usage }
 }

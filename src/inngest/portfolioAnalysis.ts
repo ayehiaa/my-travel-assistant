@@ -9,8 +9,10 @@ import { runFundamentalsAgent } from '@/inngest/agents/fundamentals'
 import { fetchPriceHistory, fetchTickerDetails, checkTickersExist, fetchLatestFinancials, type PriceHistory, type TickerDetailsMap, type FinancialsMap } from '@/inngest/dataSources/polygon'
 import { runTechnicalAnalysisAgent } from '@/inngest/agents/technicalAnalysis'
 import { runSectorAnalysisAgent } from '@/inngest/agents/sectorAnalysis'
-import { runSynthesizer, type SynthesizerOutput } from '@/inngest/synthesizer'
-import { runShariahReviewer, type ReviewerTickerInput, type ReviewerVerdictMap } from '@/inngest/shariahReviewer'
+import { runSynthesizer, type SynthesizerRunResult } from '@/inngest/synthesizer'
+import { runShariahReviewer, type ReviewerTickerInput, type ReviewerRunResult } from '@/inngest/shariahReviewer'
+import type { AgentRunResult } from '@/inngest/agents/types'
+import { summarizeRunUsage } from '@/lib/aiCost'
 import { removeTickers } from '@/lib/allocationUtils'
 import {
   computePolygonRatios,
@@ -165,8 +167,8 @@ export const portfolioAnalysis = inngest.createFunction(
     })
 
     // Step 4: Run all agents in parallel
-    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput, technicalOutput, sectorOutput] = await Promise.all([
-      step.run('run-macroeconomics', async (): Promise<AgentOutput> => {
+    const agentResults = await Promise.all([
+      step.run('run-macroeconomics', async (): Promise<AgentRunResult> => {
         try {
           return await runMacroeconomicsAgent({
             risk_profile:      settings.risk_profile,
@@ -195,7 +197,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-fed-rates', async (): Promise<AgentOutput> => {
+      step.run('run-fed-rates', async (): Promise<AgentRunResult> => {
         try {
           return await runFedRatesAgent({
             risk_profile:      settings.risk_profile,
@@ -224,7 +226,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-geopolitics', async (): Promise<AgentOutput> => {
+      step.run('run-geopolitics', async (): Promise<AgentRunResult> => {
         try {
           return await runGeopoliticsAgent({
             risk_profile:      settings.risk_profile,
@@ -253,7 +255,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-sentiment', async (): Promise<AgentOutput> => {
+      step.run('run-sentiment', async (): Promise<AgentRunResult> => {
         try {
           return await runSentimentAgent({
             risk_profile:      settings.risk_profile,
@@ -282,7 +284,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-fundamentals', async (): Promise<AgentOutput> => {
+      step.run('run-fundamentals', async (): Promise<AgentRunResult> => {
         try {
           return await runFundamentalsAgent({
             risk_profile:      settings.risk_profile,
@@ -311,7 +313,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-technical-analysis', async (): Promise<AgentOutput> => {
+      step.run('run-technical-analysis', async (): Promise<AgentRunResult> => {
         try {
           return await runTechnicalAnalysisAgent({
             risk_profile:      settings.risk_profile,
@@ -341,7 +343,7 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
 
-      step.run('run-sector-analysis', async (): Promise<AgentOutput> => {
+      step.run('run-sector-analysis', async (): Promise<AgentRunResult> => {
         try {
           return await runSectorAnalysisAgent({
             risk_profile:      settings.risk_profile,
@@ -372,6 +374,10 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       }),
     ])
+    const [macroOutput, fedRatesOutput, geopoliticsOutput, sentimentOutput, fundamentalsOutput, technicalOutput, sectorOutput] =
+      agentResults.map(r => r.output)
+    // Each step returned its usage with its output, so usage survives retries (memoised step results).
+    const agentUsage = agentResults.map(r => r.usage)
 
     // Step 5: Store outputs
     await step.run('store-outputs', async (): Promise<void> => {
@@ -442,7 +448,7 @@ export const portfolioAnalysis = inngest.createFunction(
 
     // Step 7: Synthesize agent outputs into a proposed allocation.
     // Each later stage is its own step so a retry never re-runs the synthesizer.
-    const synthResult = await step.run('synthesize', async (): Promise<SynthesizerOutput> => {
+    const { result: synthResult, usage: synthUsage } = await step.run('synthesize', async (): Promise<SynthesizerRunResult> => {
       try {
         const returnMetrics = computePortfolioReturnMetrics(
           snapshot.holdings,
@@ -514,7 +520,7 @@ export const portfolioAnalysis = inngest.createFunction(
     })
 
     // Step 10: Separate, strict AI business-activity review of every ticker
-    const reviewerVerdicts = await step.run('shariah-review', async (): Promise<ReviewerVerdictMap> => {
+    const { verdicts: reviewerVerdicts, usage: reviewerUsage } = await step.run('shariah-review', async (): Promise<ReviewerRunResult> => {
       try {
         return await runShariahReviewer(reviewerInputs)
       } catch (err) {
@@ -527,6 +533,8 @@ export const portfolioAnalysis = inngest.createFunction(
     await step.run('screen-and-save', async (): Promise<void> => {
       const admin = createAdminClient()
       const now = new Date().toISOString()
+      // Token usage + cost of every Claude call in this run (stored in agent_outputs.usage — no migration needed)
+      const usage = summarizeRunUsage([...agentUsage, synthUsage, reviewerUsage])
 
       const screenings = reviewerInputs.map(input => decideTickerVerdict({
         ticker:          input.ticker,
@@ -552,7 +560,7 @@ export const portfolioAnalysis = inngest.createFunction(
         )
         await admin
           .from('recommendations')
-          .update({ agent_outputs: { ...agentOutputs, shariah_review: failed }, updated_at: now })
+          .update({ agent_outputs: { ...agentOutputs, shariah_review: failed, usage }, updated_at: now })
           .eq('id', run_id)
         await markRunError(err)
         throw err
@@ -572,7 +580,7 @@ export const portfolioAnalysis = inngest.createFunction(
           summary_text:      synthResult.summary_text,
           conflict_notes:    synthResult.conflict_notes,
           // Compact copy that survives even when the shariah_screening migration is not applied
-          agent_outputs:     { ...agentOutputs, shariah_review: screening },
+          agent_outputs:     { ...agentOutputs, shariah_review: screening, usage },
           status:            'complete',
           updated_at:        now,
         })

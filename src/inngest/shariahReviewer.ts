@@ -1,8 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { ISLAMIC_MANDATE } from '@/lib/islamicMandate'
 import { SHARIAH_RATIO_LIMIT_PCT, type ReviewerTickerVerdict } from '@/lib/shariahRules'
 import type { RatioKey, ScreeningRatio } from '@/types/shariah'
+import { callClaude } from '@/lib/aiCall'
+import { assertCompleteResponse } from '@/lib/aiResponse'
+import type { AiCallUsage } from '@/lib/aiCost'
 
 /** Real market data given to the reviewer for one ticker. */
 export interface ReviewerTickerInput {
@@ -19,6 +21,12 @@ export interface ReviewerTickerInput {
 }
 
 export type ReviewerVerdictMap = Record<string, ReviewerTickerVerdict | null>
+
+export interface ReviewerRunResult {
+  verdicts: ReviewerVerdictMap
+  /** null when there was nothing to review (no Claude call made). */
+  usage: AiCallUsage | null
+}
 
 const SYSTEM_PROMPT =
   'You are a strict Shariah compliance screener for equity investments, applying AAOIFI-style standards. ' +
@@ -145,19 +153,17 @@ export function parseReviewerResponse(raw: string, requestedTickers: string[]): 
  * Separate Anthropic call that judges every proposed and held ticker on business activity.
  * Its verdict is only one gate: the final decision is made in code (decideTickerVerdict).
  */
-export async function runShariahReviewer(tickers: ReviewerTickerInput[]): Promise<ReviewerVerdictMap> {
-  if (tickers.length === 0) return {}
+export async function runShariahReviewer(tickers: ReviewerTickerInput[]): Promise<ReviewerRunResult> {
+  if (tickers.length === 0) return { verdicts: {}, usage: null }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const response = await client.messages.create({
-    model:      'claude-sonnet-4-6',
-    max_tokens: Math.min(8000, 600 + tickers.length * 250),
-    system:     SYSTEM_PROMPT,
-    messages:   [{ role: 'user', content: buildReviewerUserPrompt(tickers) }],
+  const { text, stopReason, usage } = await callClaude({
+    role:   'shariah_reviewer',
+    name:   'shariah_reviewer',
+    system: SYSTEM_PROMPT,
+    user:   buildReviewerUserPrompt(tickers),
   })
 
-  const raw = response.content
-    .map(block => (block.type === 'text' ? block.text : ''))
-    .join('')
-  return parseReviewerResponse(raw, tickers.map(t => t.ticker))
+  // Fail closed: a refusal or truncated review throws (step retries, then the run fails) — it never passes a ticker.
+  assertCompleteResponse(stopReason, 'Shariah reviewer')
+  return { verdicts: parseReviewerResponse(text, tickers.map(t => t.ticker)), usage }
 }
