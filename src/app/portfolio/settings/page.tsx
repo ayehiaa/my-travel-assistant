@@ -8,6 +8,9 @@ import RiskSafetyCard from '@/components/portfolio/RiskSafetyCard'
 import { readSafetySettings } from '@/lib/riskLimits'
 import AutopilotCard from '@/components/portfolio/AutopilotCard'
 import { readAutopilotSettings } from '@/lib/schedule'
+import NotificationsCard from '@/components/portfolio/NotificationsCard'
+import { readNotificationPrefs } from '@/lib/notifications/prefs'
+import { readEmailConfig } from '@/lib/notifications/config'
 
 export const metadata = { title: 'Sojourn — Portfolio Settings' }
 
@@ -92,6 +95,12 @@ export default async function PortfolioSettingsPage() {
         tradingPaused={safety.trading_paused}
       />
       <RiskSafetyCard initial={safety} />
+      <NotificationsCard
+        initial={readNotificationPrefs(settingsRecord)}
+        emailConfigured={readEmailConfig(process.env).ok}
+        migrationApplied={settingsRecord !== null && 'notification_prefs' in settingsRecord}
+        email={user.email}
+      />
       <div className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-gray-900">Islamic screening</span>

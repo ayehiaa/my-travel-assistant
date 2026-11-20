@@ -5,6 +5,7 @@ import { logAudit } from '@/lib/auditLogger'
 import { loadAlpacaCredentials } from '@/lib/alpacaLivePortfolio'
 import { cancelAllOpenOrders } from '@/lib/alpacaClient'
 import { MIGRATION_MISSING_WARNING, cancelInFlightExecutions, setTradingPause } from '@/lib/tradingSafety'
+import { emitNotification } from '@/lib/notifications/emit'
 
 const PauseSchema = z.object({
   reason: z.string().trim().max(200).optional(),
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
     tripId:        null,
     changedFields: { trading_paused: { before: null, after: true }, paused_reason: { before: null, after: reason } },
   })
+
+  // Best-effort email (never throws, never blocks the kill switch).
+  const pausedAt = new Date().toISOString()
+  await emitNotification(user.id, 'trading_paused', `${user.id}-${pausedAt}`, { reason, source: 'manual', paused_at: pausedAt })
 
   const warnings: string[] = []
   if (!persisted) warnings.push(`${MIGRATION_MISSING_WARNING} Open orders and in-flight executions were still cancelled, but new executions are not blocked.`)

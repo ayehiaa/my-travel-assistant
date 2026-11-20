@@ -32,6 +32,7 @@ export type AuditAction =
   | 'recommendation_approved'
   | 'recommendation_rejected'
   | 'autopilot_mode_changed'
+  | 'notification_test_sent'
 
 export interface UserRoleRecord {
   user_id: string

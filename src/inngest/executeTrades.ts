@@ -34,6 +34,7 @@ import {
   type TradingCredentials,
 } from '@/lib/tradeExecution'
 import { EXECUTION_COMPLETED_EVENT, EXECUTION_REQUESTED_EVENT } from '@/lib/tradeExecutionRequest'
+import { notificationEvent } from '@/lib/notifications/emit'
 import type { ActionItem, AlpacaOrderResult, ExecutionEnvelope, ExecutionStatus } from '@/types/database'
 
 /**
@@ -181,7 +182,7 @@ export const executeTrades = inngest.createFunction(
       const original = (event.data as { event?: { data?: unknown } } | undefined)?.event?.data
       const parsed = EventDataSchema.safeParse(original)
       if (!parsed.success) return
-      const { execution_id, user_id } = parsed.data
+      const { execution_id, user_id, recommendation_id } = parsed.data
       const admin = createAdminClient()
       const { data: row } = await admin
         .from('alpaca_executions')
@@ -201,6 +202,15 @@ export const executeTrades = inngest.createFunction(
         .update({ orders: buildEnvelope('failed', orders, new Date().toISOString(), { error_message: message, dry_run: current.dry_run }) })
         .eq('id', execution_id)
         .eq('user_id', user_id)
+      // Best-effort: lets the notification function email the failure. Never throws.
+      try {
+        await inngest.send({
+          name: EXECUTION_COMPLETED_EVENT,
+          data: { execution_id, user_id, recommendation_id, status: 'failed' },
+        })
+      } catch {
+        // Ignored — notifications are best-effort.
+      }
     },
   },
   async ({ event, step }) => {
@@ -274,6 +284,14 @@ export const executeTrades = inngest.createFunction(
         name: EXECUTION_COMPLETED_EVENT,
         data: { execution_id, user_id, recommendation_id, status: 'cancelled' },
       })
+      if (engagePause) {
+        // Automatic loss stop engaged the pause → trading_paused email (deduped per execution; delivered separately).
+        await step.sendEvent('emit-paused-notification', notificationEvent(user_id, 'trading_paused', `loss-stop-${execution_id}`, {
+          reason,
+          source:    'loss_stop',
+          paused_at: new Date().toISOString(),
+        }))
+      }
       return { execution_id, status: 'cancelled' as const }
     }
 
@@ -294,7 +312,13 @@ export const executeTrades = inngest.createFunction(
         return d
       })
       if (decision.action === 'proceed') break
-      if (decision.action === 'give_up') return { execution_id, status: 'failed' }
+      if (decision.action === 'give_up') {
+        await step.sendEvent('emit-gave-up', {
+          name: EXECUTION_COMPLETED_EVENT,
+          data: { execution_id, user_id, recommendation_id, status: 'failed' },
+        })
+        return { execution_id, status: 'failed' }
+      }
       await step.sleepUntil(`wait-for-market-${i}`, decision.until)
     }
 
