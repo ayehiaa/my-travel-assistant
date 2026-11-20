@@ -22,17 +22,31 @@ import {
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { getStarterUniverse } from '@/lib/starterUniverse'
+import { readAutopilotSettings } from '@/lib/schedule'
+import { buildScheduledRunInfo } from '@/lib/autopilot'
+import { saveAutopilotInfo } from '@/lib/autopilotStore'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot, TargetAllocationItem } from '@/types/database'
 
 const EventDataSchema = z.object({
   run_id:  z.string().uuid(),
   user_id: z.string().uuid(),
+  /** 'schedule' for runs started by src/inngest/scheduledRuns.ts; absent (older events) → manual. */
+  trigger: z.enum(['manual', 'schedule']).optional().default('manual'),
 })
 
 function sanitizeErrorMessage(err: unknown): string {
   const raw = (err instanceof Error ? err.message : String(err)).slice(0, 500)
   const keys = [process.env.FRED_API_KEY, process.env.ANTHROPIC_API_KEY, process.env.NEWS_API_KEY, process.env.POLYGON_API_KEY].filter(Boolean) as string[]
   return keys.reduce((msg, key) => msg.split(key).join('[REDACTED]'), raw)
+}
+
+async function loadSettingsRow(userId: string): Promise<Record<string, unknown> | null> {
+  const { data } = await createAdminClient()
+    .from('portfolio_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data as Record<string, unknown> | null
 }
 
 interface FetchPortfolioResult {
@@ -43,13 +57,19 @@ interface FetchPortfolioResult {
 }
 
 export const portfolioAnalysis = inngest.createFunction(
-  { id: 'portfolio-analysis', triggers: [{ event: 'portfolio/analysis.requested' }] },
+  {
+    id:          'portfolio-analysis',
+    triggers:    [{ event: 'portfolio/analysis.requested' }],
+    // One analysis per run row, and never two analyses for the same user at once (manual + scheduled).
+    idempotency: 'event.data.run_id',
+    concurrency: { key: 'event.data.user_id', limit: 1 },
+  },
   async ({ event, step }) => {
     const parseResult = EventDataSchema.safeParse(event.data)
     if (!parseResult.success) {
       throw new Error('Invalid event payload: expected run_id and user_id as UUIDs')
     }
-    const { run_id, user_id } = parseResult.data
+    const { run_id, user_id, trigger } = parseResult.data
 
     // Step 1: Fetch portfolio data
     const { settings, tickers, isNewPortfolio, snapshot } = await step.run(
@@ -570,9 +590,21 @@ export const portfolioAnalysis = inngest.createFunction(
       }
     })
 
+    // Scheduled runs: record the trigger + autopilot mode (approval → pending for 24 h). Never fails the run.
+    if (trigger === 'schedule') {
+      await step.run('mark-autopilot', async (): Promise<void> => {
+        try {
+          const mode = readAutopilotSettings(await loadSettingsRow(user_id)).mode
+          await saveAutopilotInfo(run_id, user_id, buildScheduledRunInfo(mode, new Date()))
+        } catch {
+          // Ignored — without the marker the run simply behaves like a manual one (no approval, no auto-execution).
+        }
+      })
+    }
+
     await step.sendEvent('emit-completed', {
       name: 'portfolio/run.completed',
-      data: { run_id, user_id },
+      data: { run_id, user_id, trigger },
     })
   },
 )

@@ -6,6 +6,10 @@ import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
 import PortfolioOverview from '@/components/portfolio/PortfolioOverview'
 import TradingStatusBanner from '@/components/portfolio/TradingStatusBanner'
 import { readSafetySettings } from '@/lib/riskLimits'
+import AutopilotStatus from '@/components/portfolio/AutopilotStatus'
+import { readAutopilotSettings } from '@/lib/schedule'
+import { isAwaitingApproval, msUntilExpiry, readAutopilotInfo } from '@/lib/autopilot'
+import { executionBlocksNewRequest } from '@/lib/tradeExecution'
 import type { LivePortfolio } from '@/types/database'
 
 export const metadata = {
@@ -41,14 +45,35 @@ export default async function PortfolioPage() {
     .maybeSingle()
   const safety = readSafetySettings(settingsRow as Record<string, unknown> | null)
 
+  const autopilotSettings = readAutopilotSettings(settingsRow as Record<string, unknown> | null)
+
+  // select('*') so autopilot data is read from the columns when migrated, else agent_outputs.autopilot
   const latestRecRes = await supabase
     .from('recommendations')
-    .select('id, run_at, summary_text')
+    .select('*')
     .eq('user_id', user.id)
     .eq('status', 'complete')
     .order('run_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+
+  // Pending approval card: the latest complete recommendation, if it is a scheduled run still awaiting approval
+  let pendingApproval: { recommendationId: string; expiresInMs: number } | null = null
+  if (latestRecRes.data) {
+    const info = readAutopilotInfo(latestRecRes.data as Record<string, unknown>)
+    const now = new Date()
+    if (info.trigger === 'schedule' && info.approval_status === 'pending') {
+      const { data: exec } = await supabase
+        .from('alpaca_executions')
+        .select('orders')
+        .eq('recommendation_id', latestRecRes.data.id)
+        .maybeSingle()
+      const blocking = exec !== null && executionBlocksNewRequest(exec.orders)
+      if (isAwaitingApproval(info, now, blocking)) {
+        pendingApproval = { recommendationId: latestRecRes.data.id as string, expiresInMs: msUntilExpiry(info, now) }
+      }
+    }
+  }
 
   // The whole account is read live from Alpaca — nothing about holdings or cash is stored in the app
   const creds = await loadAlpacaCredentials(user.id)
@@ -79,11 +104,22 @@ export default async function PortfolioPage() {
         Your holdings and cash, read live from your Alpaca account.
       </p>
       <TradingStatusBanner safety={safety} />
+      <AutopilotStatus
+        mode={autopilotSettings.mode}
+        nextRunAt={autopilotSettings.next_run_at}
+        pending={pendingApproval}
+      />
       <PortfolioOverview
         connected={creds !== null}
         portfolio={portfolio}
         liveError={liveError}
-        latestRecommendation={latestRecRes.data ?? null}
+        latestRecommendation={latestRecRes.data
+          ? {
+              id:           latestRecRes.data.id as string,
+              run_at:       latestRecRes.data.run_at as string,
+              summary_text: (latestRecRes.data.summary_text as string | null) ?? null,
+            }
+          : null}
       />
     </main>
   )

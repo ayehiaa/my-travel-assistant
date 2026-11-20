@@ -553,3 +553,25 @@ export async function applyAccountSafeguards(
     max_margin_multiplier: String(data.max_margin_multiplier ?? ''),
   }
 }
+
+/**
+ * Raw Alpaca market calendar entries for [start, end] (YYYY-MM-DD). A weekend or exchange holiday has no entry.
+ * Throws on non-2xx. Read-only — see isTradingDayFromCalendar in src/lib/schedule.ts.
+ */
+export async function fetchMarketCalendar(
+  keyId: string,
+  secret: string,
+  isPaper: boolean,
+  start: string,
+  end: string,
+): Promise<unknown> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const params = new URLSearchParams({ start, end })
+  const response = await fetch(`${base}/v2/calendar?${params.toString()}`, {
+    headers: alpacaHeaders(keyId, secret),
+    signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Alpaca calendar fetch failed: ${response.status}`)
+  return response.json()
+}

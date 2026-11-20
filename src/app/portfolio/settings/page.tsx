@@ -6,6 +6,8 @@ import PortfolioSettingsForm from '@/components/portfolio/PortfolioSettingsForm'
 import AlpacaCredentialsForm from '@/components/portfolio/AlpacaCredentialsForm'
 import RiskSafetyCard from '@/components/portfolio/RiskSafetyCard'
 import { readSafetySettings } from '@/lib/riskLimits'
+import AutopilotCard from '@/components/portfolio/AutopilotCard'
+import { readAutopilotSettings } from '@/lib/schedule'
 
 export const metadata = { title: 'Sojourn — Portfolio Settings' }
 
@@ -64,6 +66,9 @@ export default async function PortfolioSettingsPage() {
     updated_at: new Date().toISOString(),
   }
 
+  const settingsRecord = settings as unknown as Record<string, unknown> | null
+  const safety = readSafetySettings(settingsRecord)
+
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
       <h1
@@ -81,7 +86,12 @@ export default async function PortfolioSettingsPage() {
         Configure your risk preferences and analysis schedule.
       </p>
       <PortfolioSettingsForm initialSettings={settings ?? defaultSettings} />
-      <RiskSafetyCard initial={readSafetySettings(settings as unknown as Record<string, unknown> | null)} />
+      <AutopilotCard
+        initial={readAutopilotSettings(settingsRecord)}
+        dryRun={safety.dry_run}
+        tradingPaused={safety.trading_paused}
+      />
+      <RiskSafetyCard initial={safety} />
       <div className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-gray-900">Islamic screening</span>

@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/021-risk-limits-kill-switch/spec.md` (hard risk limits, kill switch / trading pause, dry-run mode — every execution passes through `applyRiskLimits`)
+Active feature spec: `specs/022-scheduler-autopilot/spec.md` (scheduled runs on NYSE trading days at 10:30 ET + Autopilot off/approval/auto; off by default)
 <!-- SPECKIT END -->

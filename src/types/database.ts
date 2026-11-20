@@ -29,6 +29,9 @@ export type AuditAction =
   | 'trading_paused'
   | 'trading_resumed'
   | 'risk_limits_updated'
+  | 'recommendation_approved'
+  | 'recommendation_rejected'
+  | 'autopilot_mode_changed'
 
 export interface UserRoleRecord {
   user_id: string
@@ -210,7 +213,8 @@ export interface PortfolioSettings {
   target_return_pct: number
   target_horizon: TargetHorizon
   risk_profile: RiskProfile
-  run_interval_days: 7 | 14 | 30
+  /** 1 (daily) needs migration 20261120d; read via parseRunInterval(). */
+  run_interval_days: 1 | 7 | 14 | 30
   last_run_at: string | null
   next_run_at: string | null
   last_synced_at: string | null
@@ -222,6 +226,8 @@ export interface PortfolioSettings {
   paused_reason?: string | null
   paused_at?: string | null
   dry_run?: boolean
+  // ── Autopilot (migration 20261120d). Absent until applied — read via readAutopilotSettings(). ──
+  autopilot_mode?: 'off' | 'approval' | 'auto'
 }
 
 export type RunStatus = 'running' | 'complete' | 'error'
@@ -281,6 +287,11 @@ export interface Recommendation {
   portfolio_snapshot: PortfolioSnapshot | null
   /** Absent until migration 20261120_shariah_screening is applied; see readShariahScreening(). */
   shariah_screening?: ShariahScreeningResult | null
+  /** Autopilot columns (migration 20261120d) — read via readAutopilotInfo(); fallback agent_outputs.autopilot. */
+  run_trigger?: 'manual' | 'schedule' | null
+  approval_status?: 'pending' | 'approved' | 'rejected' | 'expired' | null
+  approval_expires_at?: string | null
+  approval_decided_at?: string | null
   error_message: string | null
   created_at: string
   updated_at: string

@@ -3,7 +3,10 @@ import { getAuthUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import RecommendationDetail from '@/components/portfolio/RecommendationDetail'
 import { Recommendation } from '@/types/database'
-import { normalizeExecution } from '@/lib/tradeExecution'
+import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
+import ApprovalPanel from '@/components/portfolio/ApprovalPanel'
+import { effectiveApprovalStatus, msUntilExpiry, readAutopilotInfo } from '@/lib/autopilot'
+import { readSafetySettings } from '@/lib/riskLimits'
 
 export const metadata = { title: 'Sojourn — Portfolio Recommendation' }
 
@@ -28,7 +31,7 @@ export default async function RecommendationDetailPage({
 
   if (!rec) redirect('/portfolio')
 
-  const [latestRecResult, executionResult, credResult] = await Promise.all([
+  const [latestRecResult, executionResult, credResult, settingsResult] = await Promise.all([
     supabase
       .from('recommendations')
       .select('id')
@@ -47,12 +50,23 @@ export default async function RecommendationDetailPage({
       .select('is_paper')
       .eq('user_id', authUser.id)
       .maybeSingle(),
+    supabase
+      .from('portfolio_settings')
+      .select('*')
+      .eq('user_id', authUser.id)
+      .maybeSingle(),
   ])
 
   const isLatest = latestRecResult.data?.id === id
   const execution = executionResult.data ? normalizeExecution(executionResult.data) : null
   const hasCredentials = !!credResult.data
   const isPaper = credResult.data?.is_paper ?? true
+
+  // Autopilot (scheduled runs only): approval state is computed on read, expiry included.
+  const autopilot = readAutopilotInfo(rec as Record<string, unknown>)
+  const safety = readSafetySettings(settingsResult.data as Record<string, unknown> | null)
+  const now = new Date()
+  const hasBlockingExecution = executionResult.data !== null && executionBlocksNewRequest(executionResult.data.orders)
 
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
@@ -67,6 +81,19 @@ export default async function RecommendationDetailPage({
       >
         Portfolio Recommendation
       </h1>
+      {autopilot.trigger === 'schedule' && (
+        <ApprovalPanel
+          recommendationId={id}
+          status={effectiveApprovalStatus(autopilot, now)}
+          initialRemainingMs={msUntilExpiry(autopilot, now)}
+          isLatest={isLatest}
+          hasBlockingExecution={hasBlockingExecution}
+          dryRun={safety.dry_run}
+          isPaper={isPaper}
+          tradingPaused={safety.trading_paused}
+          autoExecution={autopilot.auto_execution}
+        />
+      )}
       <RecommendationDetail
         recommendation={rec as Recommendation}
         recommendationId={id}
