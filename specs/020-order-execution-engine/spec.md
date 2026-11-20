@@ -92,3 +92,19 @@ As an owner I click Confirm & Execute and immediately get a confirmation; the tr
 
 ## Out of scope
 - Risk limits (phase 3), autopilot scheduling (phase 4), limit-order collars, extended-hours trading.
+
+## Good-faith-violation risk (cash account) — notes
+
+In a cash account, proceeds of a sale are usable for buys immediately but settle T+1. Buying with unsettled proceeds
+is allowed; a **good-faith violation** occurs if the security bought with those unsettled funds is then sold before
+the funds settle. Mitigation implemented: before planning any SELL the engine lists the account's orders since the
+start of the day two business days ago (`settlementLookbackStart`) for the sell symbols and skips (with a reason)
+any symbol that has a filled, partially filled or still-working BUY in that window. If that lookup fails, sells are
+skipped (conservative). Buys are sized from `min(cash, non_marginable_buying_power)`, never margin buying power.
+
+## Verification
+
+- `npm test`: 23 files / 287 tests pass (45 new in `src/lib/tradeExecution.test.ts`)
+- `npm run lint`: 0 errors (1 pre-existing warning: unused `isPaper` in `fetchQuotes`)
+- `npm run build`: passes
+- Not exercised against Alpaca (no credentials in the build environment; never place real orders from here).
