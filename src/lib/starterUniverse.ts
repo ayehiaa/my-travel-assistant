@@ -1,20 +1,19 @@
 import type { RiskProfile } from '@/types/database'
 
 /**
- * Candidate instruments researched when an account has cash but no positions.
- * The synthesizer may pick from these or propose other valid US tickers; these only
- * give the per-ticker agents (fundamentals, technicals, sectors, sentiment) something
- * concrete to analyse.
+ * Candidate stocks researched when an account has cash but no positions.
+ * Individual common stocks only (no ETFs, funds, bonds or preferreds), chosen to lean
+ * Shariah-compliant: no banks, insurers, alcohol, tobacco, gambling or defence companies,
+ * and no ADRs (which fail the code-level "CS" stocks-only check).
+ * Being listed here is NOT a compliance verdict — every ticker is still screened in code
+ * and by the Shariah reviewer on every run.
  */
-const CORE = ['VTI', 'VOO', 'VXUS']
-
 const BY_RISK: Record<RiskProfile, string[]> = {
-  conservative: ['BND', 'AGG', 'SCHD', 'VIG', 'XLV', 'XLP', 'MSFT'],
-  moderate:     ['QQQ', 'SCHD', 'BND', 'XLV', 'MSFT', 'AAPL', 'GOOGL'],
-  aggressive:   ['QQQ', 'SMH', 'XLK', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META'],
+  conservative: ['MSFT', 'AAPL', 'JNJ', 'PG', 'ABT', 'MRK', 'CL', 'LIN', 'KO'],
+  moderate:     ['MSFT', 'AAPL', 'GOOGL', 'LLY', 'ABT', 'TXN', 'CSCO', 'ADBE', 'LIN', 'NKE'],
+  aggressive:   ['NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMD', 'AVGO', 'TSLA', 'CRWD', 'NOW', 'ADBE', 'META'],
 }
 
 export function getStarterUniverse(riskProfile: RiskProfile): string[] {
-  const extra = BY_RISK[riskProfile] ?? BY_RISK.moderate
-  return Array.from(new Set([...CORE, ...extra]))
+  return Array.from(new Set(BY_RISK[riskProfile] ?? BY_RISK.moderate))
 }

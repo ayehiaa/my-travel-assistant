@@ -238,3 +238,38 @@ export async function fetchAssetNames(
   )
   return Object.fromEntries(entries.filter((e): e is [string, string] => e !== null))
 }
+
+/** Account configuration that disables short selling and margin (cash account behaviour). */
+export const SAFE_ACCOUNT_CONFIGURATION = {
+  no_shorting:           true,
+  max_margin_multiplier: '1',
+} as const
+
+/**
+ * Apply SAFE_ACCOUNT_CONFIGURATION via PATCH /v2/account/configurations.
+ * Returns the resulting settings. Throws on non-2xx (message carries only the status code).
+ */
+export async function applyAccountSafeguards(
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<{ no_shorting: boolean; max_margin_multiplier: string }> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const response = await fetch(`${base}/v2/account/configurations`, {
+    method: 'PATCH',
+    headers: alpacaHeaders(keyId, secret),
+    body: JSON.stringify(SAFE_ACCOUNT_CONFIGURATION),
+    signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Alpaca account configuration update failed: ${response.status}`)
+  }
+
+  const data = await response.json() as { no_shorting?: boolean; max_margin_multiplier?: string }
+  return {
+    no_shorting:           data.no_shorting === true,
+    max_margin_multiplier: String(data.max_margin_multiplier ?? ''),
+  }
+}

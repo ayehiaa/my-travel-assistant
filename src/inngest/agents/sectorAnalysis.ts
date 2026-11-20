@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { AgentOutput } from '@/types/database'
 import type { PriceHistory } from '@/inngest/dataSources/polygon'
 import type { TickerDetailsMap } from '@/inngest/dataSources/polygon'
+import { withIslamicMandate } from '@/lib/islamicMandate'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 const AgentOutputSchema = z.object({
@@ -82,7 +83,7 @@ export async function runSectorAnalysisAgent(
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 800,
-    system:     SYSTEM_PROMPT,
+    system:     withIslamicMandate(SYSTEM_PROMPT),
     messages:   [{ role: 'user', content: userContent }],
   })
 

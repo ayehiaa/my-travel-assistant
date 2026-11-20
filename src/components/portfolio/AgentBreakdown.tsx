@@ -85,7 +85,10 @@ export default function AgentBreakdown({ agentOutputs }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {Object.keys(AGENT_DISPLAY_NAMES).map(agentKey => {
         const displayName = AGENT_DISPLAY_NAMES[agentKey]
-        const output = agentOutputs[agentKey]
+        // agent_outputs also holds non-agent keys (e.g. shariah_review); only render well-formed agent outputs.
+        const candidate = agentOutputs[agentKey] as AgentOutput | undefined
+        const output = candidate && typeof candidate.analysis === 'string' && typeof candidate.stance === 'string'
+          && typeof candidate.confidence === 'string' ? candidate : undefined
 
         return (
           <details

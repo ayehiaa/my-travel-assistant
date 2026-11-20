@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
 import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
+import { withIslamicMandate } from '@/lib/islamicMandate'
+import { MAX_STOCK_WEIGHT_PCT } from '@/lib/shariahRules'
 
 export interface SynthesizerParams {
   agentOutputs:    Record<string, AgentOutput>
@@ -50,8 +52,9 @@ const OUTPUT_HEADER =
   '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n'
 
 const TICKER_RULES =
-  '  1. Use only real, valid US-traded ticker symbols (e.g. "XLF", "QQQ", "MSFT", "VOO").\n' +
-  '  2. Never invent tickers or use sector labels as tickers (e.g. "Financials_ETF" is invalid; "XLF" is correct).\n'
+  '  1. Use only real, valid US-traded ticker symbols of individual common stocks (e.g. "MSFT", "AAPL"). ' +
+  'Never use ETFs, funds, bonds or preferred shares.\n' +
+  '  2. Never invent tickers or use sector labels as tickers (e.g. "Tech_Stocks" is invalid).\n'
 
 function buildNewPortfolioPrompt(
   settings:         PortfolioSettings,
@@ -66,11 +69,11 @@ function buildNewPortfolioPrompt(
     '--- NEW PORTFOLIO ---\n' +
     'The account holds no positions yet. You are BUILDING a first portfolio from cash, not rebalancing one.\n' +
     `Cash available to invest: $${snapshot.cash_usd.toFixed(2)}\n` +
-    `Candidate instruments the agents researched: ${candidateTickers.join(', ')}\n\n` +
+    `Candidate stocks the agents researched: ${candidateTickers.join(', ')}\n\n` +
     'Construction rules:\n' +
-    '  - Allocate across 4–8 positions sized for the risk profile; avoid putting more than 40% in any single stock ' +
-    '(broad-market ETFs may be larger).\n' +
-    '  - Prefer the researched candidates, but you may use other valid US tickers if the agent analysis supports it.\n' +
+    `  - Allocate across 6–10 individual Shariah-compliant common stocks sized for the risk profile; no single stock may exceed ${MAX_STOCK_WEIGHT_PCT}%.\n` +
+    '  - No ETFs, funds, bonds or preferred shares — diversify across sectors with individual stocks instead.\n' +
+    '  - Prefer the researched candidates, but you may use other valid US-listed common stocks if the agent analysis supports it.\n' +
     '  - Orders are whole shares, so very small positions may not be executable for small accounts.\n' +
     '  - There is no performance history yet: do not describe a performance gap; explain how the allocation is ' +
     'positioned to reach the target return.\n\n' +
@@ -122,7 +125,8 @@ function buildSystemPrompt(
         'Reduce or eliminate positions whose recent momentum is too weak to contribute to the target.\n\n'
       : `  The portfolio is ahead of its target. Assess whether to maintain positioning or reduce risk ` +
         'to lock in gains while preserving the ability to stay on target.\n\n') +
-    'You may recommend new stocks or ETFs not currently in the portfolio if they would help close the gap. ' +
+    'You may recommend new individual Shariah-compliant common stocks not currently in the portfolio if they would help close the gap. ' +
+    `No single stock may exceed ${MAX_STOCK_WEIGHT_PCT}% of the portfolio. Holdings that are ETFs, funds, bonds or otherwise non-compliant should be given 0%.\n` +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
     TICKER_RULES +
     '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
@@ -161,9 +165,9 @@ function buildUserPrompt(
 export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerOutput> {
   const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers } = params
 
-  const systemPrompt = isNewPortfolio
+  const systemPrompt = withIslamicMandate(isNewPortfolio
     ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [])
-    : buildSystemPrompt(settings, snapshot, returnMetrics)
+    : buildSystemPrompt(settings, snapshot, returnMetrics))
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 

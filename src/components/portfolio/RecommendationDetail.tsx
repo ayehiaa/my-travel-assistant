@@ -3,6 +3,8 @@ import ActionList from './ActionList'
 import AgentBreakdown from './AgentBreakdown'
 import AlpacaExecuteButton from './AlpacaExecuteButton'
 import AlpacaResultsPanel from './AlpacaResultsPanel'
+import ShariahScreeningPanel from './ShariahScreeningPanel'
+import { readShariahScreening } from '@/lib/shariahRules'
 
 interface Props {
   recommendation: Recommendation
@@ -85,6 +87,22 @@ export default function RecommendationDetail({
           )}
         </div>
         <ActionList actionList={recommendation.action_list ?? []} />
+      </section>
+
+      {/* Shariah screening — column first, then agent_outputs.shariah_review */}
+      <section className="mb-8">
+        <h2
+          style={{
+            fontFamily: 'var(--display)',
+            fontWeight: 700,
+            fontSize: 20,
+            color: 'var(--ink)',
+            marginBottom: 16,
+          }}
+        >
+          Shariah screening
+        </h2>
+        <ShariahScreeningPanel screening={readShariahScreening(recommendation)} />
       </section>
 
       {/* Agent Analysis */}

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { AgentOutput } from '@/types/database'
 import { fetchFredData } from '@/inngest/dataSources/fred'
+import { withIslamicMandate } from '@/lib/islamicMandate'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 const AgentOutputSchema = z.object({
@@ -49,7 +50,7 @@ export async function runMacroeconomicsAgent(input: MacroAgentInput): Promise<Ag
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 800,
-    system:     SYSTEM_PROMPT,
+    system:     withIslamicMandate(SYSTEM_PROMPT),
     messages:   [{ role: 'user', content: userContent }],
   })
 

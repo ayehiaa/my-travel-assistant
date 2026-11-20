@@ -6,7 +6,7 @@ export function describeTickers(tickers: string[], isNewPortfolio?: boolean): st
   if (isNewPortfolio) {
     return (
       'New portfolio: the account holds only cash and no positions yet. ' +
-      `Candidate instruments under consideration: ${tickers.join(', ')}. ` +
+      `Candidate stocks under consideration: ${tickers.join(', ')}. ` +
       'Assess them as potential first purchases, not existing positions.'
     )
   }

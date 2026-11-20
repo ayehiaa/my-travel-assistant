@@ -1,3 +1,5 @@
+import type { CompanyFinancials } from '@/types/shariah'
+
 export interface Candle {
   date:   string
   open:   number
@@ -67,6 +69,10 @@ export interface TickerDetail {
   name:             string
   sic_description:  string | null
   primary_exchange: string | null
+  /** Polygon security type, e.g. "CS" (common stock), "ETF", "PFD", "ADRC". */
+  type:             string | null
+  sic_code:         string | null
+  market_cap:       number | null
 }
 
 export type TickerDetailsMap = Record<string, TickerDetail>
@@ -75,8 +81,30 @@ interface PolygonTickerDetailResponse {
   results?: {
     ticker:           string
     name:             string
-    sic_description:  string | null
-    primary_exchange: string | null
+    sic_description?: string | null
+    primary_exchange?: string | null
+    type?:            string | null
+    sic_code?:        string | null
+    market_cap?:      number | null
+  }
+}
+
+function emptyDetail(ticker: string): TickerDetail {
+  return { ticker, name: ticker, sic_description: null, primary_exchange: null, type: null, sic_code: null, market_cap: null }
+}
+
+/** Map a Polygon ticker-details payload to a TickerDetail. Pure; exported for tests. */
+export function parseTickerDetail(ticker: string, json: PolygonTickerDetailResponse | null | undefined): TickerDetail {
+  const r = json?.results
+  if (!r) return emptyDetail(ticker)
+  return {
+    ticker:           r.ticker ?? ticker,
+    name:             r.name ?? ticker,
+    sic_description:  r.sic_description ?? null,
+    primary_exchange: r.primary_exchange ?? null,
+    type:             typeof r.type === 'string' ? r.type : null,
+    sic_code:         r.sic_code != null ? String(r.sic_code) : null,
+    market_cap:       typeof r.market_cap === 'number' && Number.isFinite(r.market_cap) ? r.market_cap : null,
   }
 }
 
@@ -133,25 +161,94 @@ export async function fetchTickerDetails(tickers: string[]): Promise<TickerDetai
     try {
       const res = await fetch(url)
       if (!res.ok) {
-        result[ticker] = { ticker, name: ticker, sic_description: null, primary_exchange: null }
+        result[ticker] = emptyDetail(ticker)
         continue
       }
 
       const json = await res.json() as PolygonTickerDetailResponse
-      if (!json.results) {
-        result[ticker] = { ticker, name: ticker, sic_description: null, primary_exchange: null }
-        continue
-      }
-
-      result[ticker] = {
-        ticker:           json.results.ticker,
-        name:             json.results.name,
-        sic_description:  json.results.sic_description ?? null,
-        primary_exchange: json.results.primary_exchange ?? null,
-      }
+      result[ticker] = parseTickerDetail(ticker, json)
     } catch {
       // IMPORTANT: Do not log `url` or error here — the URL contains POLYGON_API_KEY in plaintext.
-      result[ticker] = { ticker, name: ticker, sic_description: null, primary_exchange: null }
+      result[ticker] = emptyDetail(ticker)
+    }
+  }
+
+  return result
+}
+
+// ── Financials (AAOIFI ratio screen) ─────────────────────────────────────────
+
+type PolygonFinancialSection = Record<string, { value?: unknown } | undefined>
+
+interface PolygonFinancialsResponse {
+  results?: Array<{
+    end_date?: string
+    financials?: {
+      balance_sheet?:    PolygonFinancialSection
+      income_statement?: PolygonFinancialSection
+    }
+  }>
+}
+
+function pick(section: PolygonFinancialSection | undefined, keys: string[]): number | null {
+  if (!section) return null
+  for (const key of keys) {
+    const v = section[key]?.value
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+  }
+  return null
+}
+
+/** Map Polygon's /vX/reference/financials payload to CompanyFinancials. Pure; exported for tests. */
+export function parseFinancialsResponse(json: PolygonFinancialsResponse | null | undefined): CompanyFinancials | null {
+  const latest = json?.results?.[0]
+  const bs = latest?.financials?.balance_sheet
+  const is = latest?.financials?.income_statement
+  if (!bs && !is) return null
+  return {
+    period_end:             latest?.end_date ?? null,
+    total_liabilities:      pick(bs, ['liabilities']),
+    long_term_debt:         pick(bs, ['long_term_debt', 'noncurrent_debt', 'long_term_debt_noncurrent']),
+    current_debt:           pick(bs, ['current_debt', 'short_term_debt', 'long_term_debt_current', 'short_term_borrowings']),
+    current_assets:         pick(bs, ['current_assets']),
+    cash:                   pick(bs, ['cash', 'cash_and_cash_equivalents', 'cash_and_equivalents']),
+    short_term_investments: pick(bs, ['short_term_investments', 'marketable_securities_current']),
+    accounts_receivable:    pick(bs, ['accounts_receivable', 'accounts_receivable_net', 'receivables']),
+    revenues:               pick(is, ['revenues', 'revenue']),
+  }
+}
+
+export type FinancialsMap = Record<string, CompanyFinancials | null>
+
+/**
+ * Fetch the latest reported financials for each ticker. Never throws: a ticker whose financials are
+ * unavailable (plan tier, 4xx/5xx, no filings) maps to null. Returns {} without POLYGON_API_KEY.
+ */
+export async function fetchLatestFinancials(tickers: string[]): Promise<FinancialsMap> {
+  if (tickers.length === 0) return {}
+  if (!process.env.POLYGON_API_KEY) return {}
+
+  const key    = process.env.POLYGON_API_KEY
+  const result: FinancialsMap = {}
+
+  for (let i = 0; i < tickers.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 200))
+
+    const ticker = tickers[i]
+    const url =
+      `https://api.polygon.io/vX/reference/financials?ticker=${encodeURIComponent(ticker)}` +
+      `&limit=1&order=desc&sort=filing_date&apiKey=${key}`
+
+    try {
+      const res = await fetch(url)
+      if (!res.ok) {
+        result[ticker] = null
+        continue
+      }
+      result[ticker] = parseFinancialsResponse(await res.json() as PolygonFinancialsResponse)
+    } catch {
+      // IMPORTANT: Do not log `url` or error here — the URL contains POLYGON_API_KEY in plaintext.
+      result[ticker] = null
     }
   }
 

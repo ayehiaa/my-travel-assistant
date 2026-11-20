@@ -1,3 +1,5 @@
+import type { ShariahScreeningResult } from '@/types/shariah'
+
 export type UserRole = 'main' | 'assistant' | 'premium' | 'premium_plus'
 
 export type UserRoleStatus = 'active' | 'deactivated'
@@ -23,6 +25,7 @@ export type AuditAction =
   | 'alpaca_credentials_disconnected'
   | 'alpaca_executed'
   | 'alpaca_synced'
+  | 'alpaca_safeguards_applied'
 
 export interface UserRoleRecord {
   user_id: string
@@ -252,6 +255,8 @@ export interface ActionItem {
   current_usd: number
   target_usd: number
   delta_usd: number
+  /** Why this action was forced, e.g. a holding sold because it failed Shariah screening. */
+  note?: string
 }
 
 export interface Recommendation {
@@ -265,6 +270,8 @@ export interface Recommendation {
   conflict_notes: string | null
   agent_outputs: Record<string, AgentOutput> | null
   portfolio_snapshot: PortfolioSnapshot | null
+  /** Absent until migration 20261120_shariah_screening is applied; see readShariahScreening(). */
+  shariah_screening?: ShariahScreeningResult | null
   error_message: string | null
   created_at: string
   updated_at: string

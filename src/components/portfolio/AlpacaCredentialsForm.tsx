@@ -56,6 +56,8 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
   const [keyId, setKeyId] = useState('')
   const [secretKey, setSecretKey] = useState('')
   const [saving, setSaving] = useState(false)
+  const [safeguarding, setSafeguarding] = useState(false)
+  const [safeguarded, setSafeguarded] = useState(false)
 
   const canConnect = keyId.trim() !== '' && secretKey.trim() !== '' && !saving
 
@@ -101,6 +103,27 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
     }
   }
 
+  async function handleSafeguards() {
+    setSafeguarding(true)
+    try {
+      const res = await fetch('/api/portfolio/alpaca/account-safeguards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ no_shorting: true, max_margin_multiplier: '1' }),
+      })
+      if (!res.ok) {
+        toast('Failed to update Alpaca account settings', 'error')
+        return
+      }
+      setSafeguarded(true)
+      toast('Margin and shorting disabled on your Alpaca account', 'success')
+    } catch {
+      toast('Failed to update Alpaca account settings', 'error')
+    } finally {
+      setSafeguarding(false)
+    }
+  }
+
   if (connected) {
     return (
       <div style={cardStyle}>
@@ -141,6 +164,20 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
         >
           {saving ? 'Disconnecting…' : 'Disconnect'}
         </button>
+        <div className="mt-6 border-t border-gray-200 pt-5">
+          <p className="mb-3 text-sm text-gray-600">
+            Islamic mandate: no margin (borrowing) and no short selling. This sets your Alpaca account to a maximum
+            margin multiplier of 1 and blocks shorting at the broker.
+          </p>
+          <button
+            type="button"
+            onClick={handleSafeguards}
+            disabled={safeguarding || safeguarded}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+          >
+            {safeguarded ? 'Margin & shorting disabled' : safeguarding ? 'Updating…' : 'Disable margin & shorting'}
+          </button>
+        </div>
       </div>
     )
   }
