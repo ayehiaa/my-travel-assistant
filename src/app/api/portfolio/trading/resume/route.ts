@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { logAudit } from '@/lib/auditLogger'
 import { MIGRATION_MISSING_WARNING, loadSafetySettings, setTradingPause } from '@/lib/tradingSafety'
 import { RESUME_CONFIRM_TEXT } from '@/lib/riskLimits'
+import { emitNotification } from '@/lib/notifications/emit'
 
 const ResumeSchema = z.object({
   confirm_text: z.literal(RESUME_CONFIRM_TEXT),
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
       paused_reason:  { before: before.paused_reason, after: null },
     },
   })
+
+  const resumedAt = new Date().toISOString()
+  await emitNotification(user.id, 'trading_resumed', `${user.id}-${resumedAt}`, { resumed_at: resumedAt })
 
   return NextResponse.json({ paused: false, warning: null })
 }

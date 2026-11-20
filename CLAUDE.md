@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/022-scheduler-autopilot/spec.md` (scheduled runs on NYSE trading days at 10:30 ET + Autopilot off/approval/auto; off by default)
+Active feature spec: `specs/023-trading-notifications/spec.md` (email notifications via Resend for runs, approvals, executions, pause/resume, Shariah divest and a Friday weekly summary; per-type preferences)
 <!-- SPECKIT END -->
