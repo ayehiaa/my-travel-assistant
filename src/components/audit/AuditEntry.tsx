@@ -22,6 +22,9 @@ const ACTION_PILLS = {
   trading_paused:             { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Trading paused' },
   trading_resumed:            { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Trading resumed' },
   risk_limits_updated:        { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Risk settings' },
+  recommendation_approved:    { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Approved' },
+  recommendation_rejected:    { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Rejected' },
+  autopilot_mode_changed:     { bg: 'var(--lavender-soft)', color: 'var(--lavender)', label: 'Autopilot' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -72,6 +75,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'trading_paused' || action === 'trading_resumed' || action === 'risk_limits_updated') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Risk &amp; safety</span>
+  }
+  if (action === 'recommendation_approved' || action === 'recommendation_rejected' || action === 'autopilot_mode_changed') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Autopilot</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Account</span>

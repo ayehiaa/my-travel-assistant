@@ -1,101 +1,34 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
-import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
-import { inngest } from '@/inngest/client'
-
-const AGENT_NAMES = [
-  'macroeconomics',
-  'fed_rates',
-  'geopolitics',
-  'sentiment',
-  'fundamentals',
-  'technical_analysis',
-  'sector_analysis',
-] as const
+import { startAnalysisRun } from '@/lib/startAnalysisRun'
 
 export async function POST() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const supabase = await createClient()
+  // Shared with the scheduler (src/inngest/scheduledRuns.ts): credentials, live value, cooldown, rows, event.
+  const result = await startAnalysisRun({ userId: user.id, trigger: 'manual' })
 
-  // The portfolio is read live from Alpaca — require a connected account with funds or positions
-  const creds = await loadAlpacaCredentials(user.id)
-  if (!creds) return NextResponse.json({ error: 'Connect your Alpaca account first' }, { status: 400 })
-
-  let live
-  try {
-    live = await fetchLivePortfolio(creds)
-  } catch {
-    return NextResponse.json({ error: 'Could not reach Alpaca — try again shortly' }, { status: 502 })
-  }
-  if (live.total_value_usd <= 0) {
-    return NextResponse.json({ error: 'Your Alpaca account has no funds or positions' }, { status: 400 })
-  }
-
-  // Check cooldown
-  const { data: settingsRow, error: settingsError } = await supabase
-    .from('portfolio_settings')
-    .select('last_run_at')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (settingsError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-
-  if (settingsRow?.last_run_at) {
-    const lastRun = new Date(settingsRow.last_run_at)
-    const secondsElapsed = (Date.now() - lastRun.getTime()) / 1000
-    const COOLDOWN_SECONDS = 24 * 60 * 60
-
-    if (secondsElapsed < COOLDOWN_SECONDS) {
-      const retry_after_seconds = Math.ceil(COOLDOWN_SECONDS - secondsElapsed)
-      return NextResponse.json({ error: 'Cooldown active', retry_after_seconds }, { status: 429 })
+  if (!result.ok) {
+    switch (result.reason) {
+      case 'no_credentials':
+        return NextResponse.json({ error: 'Connect your Alpaca account first' }, { status: 400 })
+      case 'alpaca_unreachable':
+        return NextResponse.json({ error: 'Could not reach Alpaca — try again shortly' }, { status: 502 })
+      case 'no_funds':
+        return NextResponse.json({ error: 'Your Alpaca account has no funds or positions' }, { status: 400 })
+      case 'cooldown':
+        return NextResponse.json({ error: 'Cooldown active', retry_after_seconds: result.retryAfterSeconds }, { status: 429 })
+      case 'event_failed':
+        return NextResponse.json({ error: 'Could not start the analysis — try again shortly' }, { status: 502 })
+      default:
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
   }
 
-  const admin = createAdminClient()
-
-  // Insert recommendations row
-  const { data: recRow, error: recError } = await admin
-    .from('recommendations')
-    .insert({ user_id: user.id, status: 'running' })
-    .select('id')
-    .single()
-
-  if (recError || !recRow) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-
-  const run_id: string = recRow.id
-
-  // Bulk-insert run_progress rows
-  const progressRows = AGENT_NAMES.map(name => ({
-    run_id,
-    agent_name: name,
-    status:     'pending',
-  }))
-
-  const { error: progressError } = await admin
-    .from('run_progress')
-    .insert(progressRows)
-
-  if (progressError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-
-  // Update last_run_at
-  const { error: updateError } = await admin
-    .from('portfolio_settings')
-    .update({ last_run_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-
-  if (updateError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-
-  // Fire Inngest event
-  await inngest.send({ name: 'portfolio/analysis.requested', data: { run_id, user_id: user.id } })
-
-  // Audit log
   await logAudit({ performedBy: user.id, action: 'run_triggered', tripId: null })
 
-  return NextResponse.json({ run_id }, { status: 202 })
+  return NextResponse.json({ run_id: result.runId }, { status: 202 })
 }

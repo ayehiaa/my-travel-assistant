@@ -51,9 +51,6 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
     initialSettings.target_horizon ?? 'annual'
   )
   const [riskProfile, setRiskProfile] = useState<RiskProfile>(initialSettings.risk_profile)
-  const [runIntervalDays, setRunIntervalDays] = useState<7 | 14 | 30>(
-    initialSettings.run_interval_days
-  )
   const [saving, setSaving] = useState(false)
 
   const parsedReturn = parseFloat(targetReturnStr)
@@ -69,7 +66,6 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
           target_return_pct: parsedReturn,
           target_horizon: targetHorizon,
           risk_profile: riskProfile,
-          run_interval_days: runIntervalDays,
         }),
       })
 
@@ -138,20 +134,7 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
           </select>
         </div>
 
-        {/* Analysis Schedule */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={labelStyle}>Analysis Schedule</label>
-          <select
-            value={runIntervalDays}
-            style={{ ...inputStyle, cursor: 'pointer' }}
-            onChange={e => setRunIntervalDays(Number(e.target.value) as 7 | 14 | 30)}
-            {...focusHandlers}
-          >
-            <option value={7}>Weekly</option>
-            <option value={14}>Fortnightly</option>
-            <option value={30}>Monthly</option>
-          </select>
-        </div>
+        {/* Analysis schedule lives in the Autopilot card (AutopilotCard) */}
 
         {/* Save button */}
         <button
