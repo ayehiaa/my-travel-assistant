@@ -11,6 +11,8 @@ interface AgentStatus {
 
 interface Props {
   runId: string
+  /** Called once when the run completes (the hub refreshes the Rebalance tab in place). */
+  onComplete?: () => void
 }
 
 const AGENT_NAMES: Record<string, string> = {
@@ -73,11 +75,17 @@ function getStatusStyle(status: string): React.CSSProperties {
   }
 }
 
-export default function RunProgress({ runId }: Props) {
+export default function RunProgress({ runId, onComplete }: Props) {
   const toast = useToast()
   const [agents, setAgents] = useState<AgentStatus[]>([])
   const [overallStatus, setOverallStatus] = useState<string>('running')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const onCompleteRef = useRef(onComplete)
+  const completedRef = useRef(false)
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
 
   useEffect(() => {
     async function fetchProgress() {
@@ -95,6 +103,10 @@ export default function RunProgress({ runId }: Props) {
           if (intervalRef.current !== null) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
+          }
+          if (data.status === 'complete' && !completedRef.current) {
+            completedRef.current = true
+            onCompleteRef.current?.()
           }
         }
       } catch {

@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/024-model-upgrade-usage-logging/spec.md` (portfolio-analysis Claude calls on `claude-sonnet-5-5` via `src/lib/aiModels.ts`; per-run token usage + cost in `agent_outputs.usage`, shown as "Run cost")
+Active feature spec: `specs/025-portfolio-trading-hub/spec.md` (one tabbed Portfolio hub: Overview / Rebalance / Activity / Settings)
 <!-- SPECKIT END -->

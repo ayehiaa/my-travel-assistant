@@ -100,7 +100,7 @@ export default function AlpacaExecuteButton({
           Execute trades
         </button>
         <a
-          href="/portfolio/settings"
+          href="/portfolio?tab=settings"
           style={{
             fontSize: 13,
             color: 'var(--blue-700)',

@@ -196,6 +196,13 @@ export interface LiveHolding {
   company_name: string
   qty: number
   total_value_usd: number
+  /** Alpaca position P&L fields — absent when Alpaca did not return a parseable value. */
+  avg_entry_price?: number
+  current_price?: number
+  cost_basis?: number
+  unrealized_pl?: number
+  /** Fraction, e.g. 0.0523 = +5.23%. */
+  unrealized_plpc?: number
 }
 
 export interface LivePortfolio {
@@ -204,6 +211,9 @@ export interface LivePortfolio {
   total_value_usd: number
   is_paper: boolean
   fetched_at: string
+  /** Alpaca account equity and previous-close equity (for today's change); null when unavailable. */
+  equity_usd?: number | null
+  last_equity_usd?: number | null
 }
 
 export type TargetHorizon = 'monthly' | 'annual'

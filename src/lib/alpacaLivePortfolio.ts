@@ -13,11 +13,30 @@ interface RawPosition {
   symbol: string
   qty: string
   market_value: string
+  avg_entry_price?: string | null
+  current_price?: string | null
+  cost_basis?: string | null
+  unrealized_pl?: string | null
+  unrealized_plpc?: string | null
+}
+
+const PNL_FIELDS = ['avg_entry_price', 'current_price', 'cost_basis', 'unrealized_pl', 'unrealized_plpc'] as const
+
+/** Copy the P&L fields Alpaca returned as parseable numbers (missing / unparseable ones are left out). */
+function pnlFields(pos: RawPosition): Partial<Pick<LiveHolding, (typeof PNL_FIELDS)[number]>> {
+  const out: Partial<Pick<LiveHolding, (typeof PNL_FIELDS)[number]>> = {}
+  for (const key of PNL_FIELDS) {
+    const raw = pos[key]
+    if (raw === undefined || raw === null || raw === '') continue
+    const n = parseFloat(raw)
+    if (Number.isFinite(n)) out[key] = n
+  }
+  return out
 }
 
 /**
  * Pure: turn raw Alpaca positions + cash into the app's live portfolio shape.
- * Skips zero/negative market values (short positions, unsettled rows).
+ * Skips zero/negative market values (short positions, unsettled rows). P&L fields are copied when present.
  * Holdings are sorted by value, largest first.
  */
 export function buildLiveSnapshot(
@@ -35,6 +54,7 @@ export function buildLiveSnapshot(
       company_name:    names[pos.symbol] ?? pos.symbol,
       qty:             Number.isFinite(qty) ? qty : 0,
       total_value_usd: value,
+      ...pnlFields(pos),
     })
   }
   holdings.sort((a, b) => b.total_value_usd - a.total_value_usd)
@@ -84,7 +104,9 @@ export async function fetchLivePortfolio(creds: AlpacaCredentials): Promise<Live
 
   return {
     ...buildLiveSnapshot(positions, account.cash, names),
-    is_paper:   creds.isPaper,
-    fetched_at: new Date().toISOString(),
+    is_paper:        creds.isPaper,
+    fetched_at:      new Date().toISOString(),
+    equity_usd:      Number.isFinite(account.equity) ? account.equity : null,
+    last_equity_usd: account.last_equity,
   }
 }
