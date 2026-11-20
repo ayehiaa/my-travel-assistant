@@ -13,6 +13,10 @@ import {
   floorTo,
   fnv1aHex,
   isOrderOpen,
+  executionBlocksNewRequest,
+  haltOrders,
+  isTerminalExecutionStatus,
+  markSimulated,
   normalizeExecution,
   parseStoredOrders,
   planOrders,
@@ -36,8 +40,8 @@ function compliant(ticker: string): TickerScreening {
       cash_and_securities: { value_pct: 1, status: 'pass', source: 'polygon', basis: 'exact' },
       receivables:         { value_pct: 1, status: 'pass', source: 'polygon', basis: 'exact' },
     },
-    ratio_source: 'polygon',
-  } as TickerScreening
+    ratio_source: 'polygon', is_holding: false, excluded: false, screened_at: '2026-11-20T00:00:00Z',
+  }
 }
 
 const screening: ShariahScreeningResult = {
@@ -382,8 +386,16 @@ describe('parseStoredOrders / normalizeExecution', () => {
     const env = buildEnvelope('waiting_for_market', [], '2026-11-20T00:00:00Z', { wait_until: '2026-11-23T14:35:00Z' })
     expect(parseStoredOrders(env)).toEqual({
       status: 'waiting_for_market', updated_at: '2026-11-20T00:00:00Z', error_message: null,
-      wait_until: '2026-11-23T14:35:00Z', orders: [],
+      wait_until: '2026-11-23T14:35:00Z', dry_run: false, orders: [],
     })
+  })
+
+  it('reads dry-run and cancelled envelopes', () => {
+    const o = order({ status: 'simulated' })
+    const dry = parseStoredOrders(buildEnvelope('dry_run_completed', [o], 'now', { dry_run: true }))
+    expect(dry).toMatchObject({ status: 'dry_run_completed', dry_run: true, orders: [o] })
+    expect(parseStoredOrders(buildEnvelope('cancelled', [], 'now', { error_message: 'paused' })))
+      .toMatchObject({ status: 'cancelled', dry_run: false, error_message: 'paused' })
   })
 
   it('keeps extra v2 order fields', () => {
@@ -401,5 +413,32 @@ describe('parseStoredOrders / normalizeExecution', () => {
       orders: buildEnvelope('executing', legacy, 'now'),
     })
     expect(n).toMatchObject({ id: 'e', status: 'executing', is_paper: true, orders: legacy })
+  })
+})
+
+describe('dry run / halt helpers', () => {
+  it('markSimulated only touches planned orders', () => {
+    const out = markSimulated([order({ status: 'planned' }), order({ status: 'skipped' })], 'now')
+    expect(out.map(o => o.status)).toEqual(['simulated', 'skipped'])
+  })
+  it('haltOrders skips planned orders and keeps submitted ones', () => {
+    const out = haltOrders([order({ status: 'planned', qty: 3 }), order({ status: 'filled', qty: 2 })], 'trading paused', 'now')
+    expect(out[0]).toMatchObject({ status: 'skipped', qty: 0, error_message: 'Not submitted — trading paused' })
+    expect(out[1]).toMatchObject({ status: 'filled', qty: 2 })
+  })
+  it('cancelled and dry_run_completed are terminal', () => {
+    expect(isTerminalExecutionStatus('cancelled')).toBe(true)
+    expect(isTerminalExecutionStatus('dry_run_completed')).toBe(true)
+    expect(isTerminalExecutionStatus('executing')).toBe(false)
+  })
+})
+
+describe('executionBlocksNewRequest', () => {
+  it('only a finished dry run can be replaced', () => {
+    expect(executionBlocksNewRequest(buildEnvelope('dry_run_completed', [], 'now', { dry_run: true }))).toBe(false)
+    expect(executionBlocksNewRequest(buildEnvelope('pending', [], 'now', { dry_run: true }))).toBe(true)
+    expect(executionBlocksNewRequest(buildEnvelope('completed', [], 'now'))).toBe(true)
+    expect(executionBlocksNewRequest(buildEnvelope('cancelled', [], 'now'))).toBe(true)
+    expect(executionBlocksNewRequest([])).toBe(true)
   })
 })

@@ -12,20 +12,23 @@ import {
   submitOrder,
 } from '@/lib/alpacaClient'
 import { getBuyBlockReason, readShariahScreening } from '@/lib/shariahRules'
+import { bufferedBuyingCapacity } from '@/lib/riskLimits'
+import { checkLossStops, loadSafetySettings, setTradingPause } from '@/lib/tradingSafety'
 import {
   ORDER_POLL_INTERVAL,
   ORDER_POLL_INTERVAL_MS,
   ORDER_POLL_TIMEOUT_MS,
   applyOrderSnapshot,
   buildEnvelope,
+  buildRiskCheckedPlan,
   computeBuyingCapacity,
   decideMarketWait,
   deriveExecutionStatus,
+  haltOrders,
   isOrderOpen,
   isTerminalExecutionStatus,
-  loadPlanInputs,
+  markSimulated,
   parseStoredOrders,
-  planOrders,
   scaleBuysToCapacity,
   type MarketWaitDecision,
   type TradingCredentials,
@@ -36,8 +39,14 @@ import type { ActionItem, AlpacaOrderResult, ExecutionEnvelope, ExecutionStatus 
 /**
  * Order execution engine. Triggered by portfolio/execution.requested { execution_id, user_id, recommendation_id }.
  *
- * check market (sleep until open) → plan → submit SELLs → poll until terminal (≤30m, cancel stale)
- * → size BUYs to settled cash → submit BUYs (Shariah re-check) → poll (≤30m, cancel stale) → finish.
+ * load (+ safety settings) → check market (sleep until open; skipped in dry run) → plan (risk limits)
+ * → [dry run: record orders as simulated → dry_run_completed]
+ * → safety check (pause, cancelled row, loss stops) → submit SELLs (halt check per order) → poll (≤30m, cancel stale)
+ * → safety check → size BUYs to settled cash minus the cash buffer → submit BUYs (halt + Shariah re-check)
+ * → poll (≤30m, cancel stale) → finish.
+ *
+ * A halt (kill switch, cancelled row, loss stop) cancels this execution's open orders, skips everything not yet
+ * submitted and ends the run as "cancelled"; a breached loss stop also engages the trading pause.
  *
  * Safety:
  * - every order carries a deterministic client_order_id and is looked up before submission (retry-safe)
@@ -61,14 +70,48 @@ async function loadCreds(userId: string): Promise<TradingCredentials> {
   return creds
 }
 
+/**
+ * Save the envelope. Conditional: never overwrites a row the kill switch already marked "cancelled"
+ * (only a "cancelled" write may touch such a row), so a paused execution cannot be revived by a late write.
+ */
 async function persist(executionId: string, userId: string, envelope: ExecutionEnvelope): Promise<void> {
   const admin = createAdminClient()
-  const { error } = await admin
+  let query = admin
     .from('alpaca_executions')
     .update({ orders: envelope })
     .eq('id', executionId)
     .eq('user_id', userId)
+  if (envelope.status !== 'cancelled') query = query.neq('orders->>status', 'cancelled')
+  const { error } = await query
   if (error) throw new Error('Failed to save execution state')
+}
+
+/** Why this execution must stop now (row cancelled by the kill switch, or trading paused), or null. */
+async function readHaltReason(executionId: string, userId: string): Promise<string | null> {
+  const admin = createAdminClient()
+  const [{ data: row }, safety] = await Promise.all([
+    admin.from('alpaca_executions').select('orders').eq('id', executionId).eq('user_id', userId).maybeSingle(),
+    loadSafetySettings(userId),
+  ])
+  if (row && parseStoredOrders(row.orders).status === 'cancelled') return 'the execution was cancelled'
+  if (safety.trading_paused) return `trading is paused${safety.paused_reason ? ` (${safety.paused_reason})` : ''}`
+  return null
+}
+
+interface SafetyDecision {
+  halt: string | null
+  engagePause: boolean
+}
+
+/** Kill switch + loss stops. A breached stop asks the caller to engage the pause; a data outage only halts. */
+async function runSafetyCheck(executionId: string, userId: string): Promise<SafetyDecision> {
+  const halt = await readHaltReason(executionId, userId)
+  if (halt) return { halt, engagePause: false }
+  const safety = await loadSafetySettings(userId)
+  const creds = await loadCreds(userId)
+  const loss = await checkLossStops(creds, safety.limits)
+  if (loss.blocked) return { halt: loss.reason ?? 'a loss stop is active', engagePause: loss.triggered !== null }
+  return { halt: null, engagePause: false }
 }
 
 function replaceOrder(orders: AlpacaOrderResult[], updated: AlpacaOrderResult): AlpacaOrderResult[] {
@@ -155,7 +198,7 @@ export const executeTrades = inngest.createFunction(
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 200)
       await admin
         .from('alpaca_executions')
-        .update({ orders: buildEnvelope('failed', orders, new Date().toISOString(), { error_message: message }) })
+        .update({ orders: buildEnvelope('failed', orders, new Date().toISOString(), { error_message: message, dry_run: current.dry_run }) })
         .eq('id', execution_id)
         .eq('user_id', user_id)
     },
@@ -166,11 +209,14 @@ export const executeTrades = inngest.createFunction(
       throw new NonRetriableError('Invalid event payload: expected execution_id, user_id, recommendation_id')
     }
     const { execution_id, user_id, recommendation_id } = parsedEvent.data
-    const save = (status: ExecutionStatus, orders: AlpacaOrderResult[], extra?: { error_message?: string | null; wait_until?: string | null }) =>
-      persist(execution_id, user_id, buildEnvelope(status, orders, new Date().toISOString(), extra))
 
     // ── 1. Load + validate the execution row ──────────────────────────────────
-    const ctx = await step.run('load-execution', async (): Promise<{ finished: boolean; requestedAt: string }> => {
+    const ctx = await step.run('load-execution', async (): Promise<{
+      finished: boolean
+      requestedAt: string
+      dryRun: boolean
+      pausedReason: string | null
+    }> => {
       const admin = createAdminClient()
       const { data: row } = await admin
         .from('alpaca_executions')
@@ -182,14 +228,61 @@ export const executeTrades = inngest.createFunction(
         throw new NonRetriableError('Execution does not match the requesting user / recommendation')
       }
       const current = parseStoredOrders(row.orders)
-      return { finished: isTerminalExecutionStatus(current.status), requestedAt: String(row.executed_at) }
+      const safety = await loadSafetySettings(user_id)
+      return {
+        finished:     isTerminalExecutionStatus(current.status),
+        requestedAt:  String(row.executed_at),
+        // Dry run if it was requested as one OR the setting is on now — whichever is more conservative.
+        dryRun:       current.dry_run || safety.dry_run,
+        pausedReason: safety.trading_paused ? (safety.paused_reason ?? 'Paused') : null,
+      }
     })
     if (ctx.finished) return { execution_id, status: 'already_finished' }
 
+    const dryRun = ctx.dryRun
+    const save = (status: ExecutionStatus, orders: AlpacaOrderResult[], extra?: { error_message?: string | null; wait_until?: string | null }) =>
+      persist(execution_id, user_id, buildEnvelope(status, orders, new Date().toISOString(), { ...extra, dry_run: dryRun }))
+
+    let orders: AlpacaOrderResult[] = []
+
+    // Halt: cancel this execution's open orders, skip the rest, optionally engage the pause, end as "cancelled".
+    const stop = async (reason: string, engagePause: boolean) => {
+      const snapshot = orders
+      await step.run('halt', async (): Promise<void> => {
+        if (engagePause) await setTradingPause(user_id, true, reason)
+        const nowIso = new Date().toISOString()
+        let next = snapshot
+        if (snapshot.some(o => isOrderOpen(o) && o.alpaca_order_id)) {
+          const creds = await loadCreds(user_id)
+          next = await Promise.all(snapshot.map(async (o) => {
+            if (!isOrderOpen(o) || !o.alpaca_order_id) return o
+            await cancelOrder(o.alpaca_order_id, creds.keyId, creds.secret, creds.isPaper)
+            let latest = o
+            try {
+              latest = applyOrderSnapshot(o, await fetchOrder(o.alpaca_order_id, creds.keyId, creds.secret, creds.isPaper), nowIso)
+            } catch {
+              // keep last known state
+            }
+            return isOrderOpen(latest)
+              ? { ...latest, status: 'canceled' as const, error_message: latest.error_message ?? `Cancel requested — ${reason}`, updated_at: nowIso }
+              : latest
+          }))
+        }
+        await save('cancelled', haltOrders(next, reason, nowIso), { error_message: `Cancelled — ${reason}` })
+      })
+      await step.sendEvent('emit-cancelled', {
+        name: EXECUTION_COMPLETED_EVENT,
+        data: { execution_id, user_id, recommendation_id, status: 'cancelled' },
+      })
+      return { execution_id, status: 'cancelled' as const }
+    }
+
+    if (ctx.pausedReason) return stop(`trading is paused (${ctx.pausedReason})`, false)
+
     const waitStartedMs = Number.isFinite(Date.parse(ctx.requestedAt)) ? Date.parse(ctx.requestedAt) : Date.now()
 
-    // ── 2. Wait for the regular session ───────────────────────────────────────
-    for (let i = 0; ; i++) {
+    // ── 2. Wait for the regular session (a dry run plans immediately) ────────
+    for (let i = 0; !dryRun; i++) {
       const decision = await step.run(`check-market-${i}`, async (): Promise<MarketWaitDecision> => {
         const creds = await loadCreds(user_id)
         const clock = await fetchClock(creds.keyId, creds.secret, creds.isPaper)
@@ -206,7 +299,7 @@ export const executeTrades = inngest.createFunction(
     }
 
     // ── 3. Plan ────────────────────────────────────────────────────────────────
-    let orders = await step.run('plan-orders', async (): Promise<AlpacaOrderResult[]> => {
+    orders = await step.run('plan-orders', async (): Promise<AlpacaOrderResult[]> => {
       const creds = await loadCreds(user_id)
       const admin = createAdminClient()
       // select('*') so a missing optional column (e.g. shariah_screening) cannot break the query
@@ -219,17 +312,37 @@ export const executeTrades = inngest.createFunction(
       if (!rec) throw new NonRetriableError('Recommendation not found')
       const items = ((rec.action_list ?? []) as ActionItem[]).filter(i => i.action !== 'hold')
       const screening = readShariahScreening(rec)
-      const inputs = await loadPlanInputs(creds, items, screening)
-      const planned = planOrders({ executionId: execution_id, items, screening, ...inputs })
-      await save('executing', planned)
-      return planned
+      const safety = await loadSafetySettings(user_id)
+      // Shared planner: Shariah guard, settlement, sizing, then the hard risk limits.
+      const plan = await buildRiskCheckedPlan(creds, { executionId: execution_id, items, screening, limits: safety.limits })
+      await save('executing', plan.orders)
+      return plan.orders
     }) as AlpacaOrderResult[]
 
+    // ── Dry run: everything above ran for real; nothing is submitted ─────────
+    if (dryRun) {
+      const check = await step.run('safety-check-dry-run', () => runSafetyCheck(execution_id, user_id))
+      if (check.halt) return stop(check.halt, check.engagePause)
+      const simulated = orders
+      await step.run('finish-dry-run', async (): Promise<void> => {
+        await save('dry_run_completed', markSimulated(simulated, new Date().toISOString()))
+      })
+      await step.sendEvent('emit-completed', {
+        name: EXECUTION_COMPLETED_EVENT,
+        data: { execution_id, user_id, recommendation_id, status: 'dry_run_completed' },
+      })
+      return { execution_id, status: 'dry_run_completed' }
+    }
+
     // ── Helpers bound to this run ────────────────────────────────────────────
-    const submitSide = async (side: 'buy' | 'sell') => {
+    /** Submit every planned order of one side. Returns a halt reason when the kill switch fired mid-way. */
+    const submitSide = async (side: 'buy' | 'sell'): Promise<string | null> => {
       for (const order of orders.filter(o => o.action === side && o.status === 'planned')) {
         const snapshot = orders
-        const updated = await step.run(`submit-${side}-${order.ticker}`, async (): Promise<AlpacaOrderResult> => {
+        const res = await step.run(`submit-${side}-${order.ticker}`, async (): Promise<{ order: AlpacaOrderResult; halt: string | null }> => {
+          // Kill switch — checked between every order.
+          const halt = await readHaltReason(execution_id, user_id)
+          if (halt) return { order, halt }
           if (side === 'buy') {
             // Shariah guard — re-checked against the stored screening immediately before every BUY.
             const admin = createAdminClient()
@@ -239,16 +352,18 @@ export const executeTrades = inngest.createFunction(
             if (block) {
               const skippedOrder: AlpacaOrderResult = { ...order, qty: 0, notional: null, estimated_value: 0, status: 'skipped', error_message: block }
               await save('executing', replaceOrder(snapshot, skippedOrder))
-              return skippedOrder
+              return { order: skippedOrder, halt: null }
             }
           }
           const creds = await loadCreds(user_id)
           const result = await submitIdempotent(creds, order)
           await save('executing', replaceOrder(snapshot, result))
-          return result
-        }) as AlpacaOrderResult
-        orders = replaceOrder(orders, updated)
+          return { order: result, halt: null }
+        }) as { order: AlpacaOrderResult; halt: string | null }
+        if (res.halt) return res.halt
+        orders = replaceOrder(orders, res.order)
       }
+      return null
     }
 
     const pollSide = async (side: 'buy' | 'sell') => {
@@ -298,11 +413,18 @@ export const executeTrades = inngest.createFunction(
     }
 
     // ── 4. SELLs first, wait for them to finish ──────────────────────────────
-    await submitSide('sell')
+    if (orders.some(o => o.action === 'sell' && o.status === 'planned')) {
+      const check = await step.run('safety-check-sells', () => runSafetyCheck(execution_id, user_id))
+      if (check.halt) return stop(check.halt, check.engagePause)
+      const halt = await submitSide('sell')
+      if (halt) return stop(halt, false)
+    }
     await pollSide('sell')
 
-    // ── 5. Size BUYs to settled cash (never margin) ─────────────────────────
+    // ── 5. Size BUYs to settled cash minus the cash buffer (never margin) ───
     if (orders.some(o => o.action === 'buy' && o.status === 'planned')) {
+      const check = await step.run('safety-check-buys', () => runSafetyCheck(execution_id, user_id))
+      if (check.halt) return stop(check.halt, check.engagePause)
       const snapshot = orders
       orders = await step.run('size-buys', async (): Promise<AlpacaOrderResult[]> => {
         const creds = await loadCreds(user_id)
@@ -314,7 +436,9 @@ export const executeTrades = inngest.createFunction(
             : o))
         } else {
           const account = await fetchBuyingInputs(creds.keyId, creds.secret, creds.isPaper)
-          next = scaleBuysToCapacity(snapshot, computeBuyingCapacity(account))
+          const safety = await loadSafetySettings(user_id)
+          const capacity = bufferedBuyingCapacity(computeBuyingCapacity(account), account.cash, account.equity, safety.limits)
+          next = scaleBuysToCapacity(snapshot, capacity)
         }
         await save('executing', next)
         return next
@@ -322,7 +446,8 @@ export const executeTrades = inngest.createFunction(
     }
 
     // ── 6. BUYs ───────────────────────────────────────────────────────────────
-    await submitSide('buy')
+    const buyHalt = await submitSide('buy')
+    if (buyHalt) return stop(buyHalt, false)
     await pollSide('buy')
 
     // ── 7. Finish ─────────────────────────────────────────────────────────────

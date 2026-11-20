@@ -1,7 +1,17 @@
 import { z } from 'zod'
 import { getBuyBlockReason } from '@/lib/shariahRules'
 import {
+  applyRiskLimits,
+  forcedSellTickers,
+  type RiskAccount,
+  type RiskAdjustment,
+  type RiskLimits,
+  type RiskSummary,
+} from '@/lib/riskLimits'
+import {
+  fetchAllPositions,
   fetchAsset,
+  fetchEquitySnapshot,
   fetchPosition,
   fetchQuotes,
   fetchRecentBuySymbols,
@@ -336,7 +346,9 @@ export function scaleBuysToCapacity(orders: AlpacaOrderResult[], capacity: numbe
 
 // ── Execution status ─────────────────────────────────────────────────────────
 
-export const TERMINAL_EXECUTION_STATUSES: ExecutionStatus[] = ['completed', 'completed_with_errors', 'failed']
+export const TERMINAL_EXECUTION_STATUSES: ExecutionStatus[] = [
+  'completed', 'completed_with_errors', 'failed', 'cancelled', 'dry_run_completed',
+]
 
 export function isTerminalExecutionStatus(status: ExecutionStatus): boolean {
   return TERMINAL_EXECUTION_STATUSES.includes(status)
@@ -360,7 +372,7 @@ export function buildEnvelope(
   status: ExecutionStatus,
   orders: AlpacaOrderResult[],
   nowIso: string,
-  extra: { error_message?: string | null; wait_until?: string | null } = {},
+  extra: { error_message?: string | null; wait_until?: string | null; dry_run?: boolean } = {},
 ): ExecutionEnvelope {
   return {
     version:       2,
@@ -368,8 +380,21 @@ export function buildEnvelope(
     updated_at:    nowIso,
     error_message: extra.error_message ?? null,
     wait_until:    extra.wait_until ?? null,
+    ...(extra.dry_run ? { dry_run: true } : {}),
     orders,
   }
+}
+
+/** Dry run: every still-planned order is recorded as "simulated" (never submitted). */
+export function markSimulated(orders: AlpacaOrderResult[], nowIso: string): AlpacaOrderResult[] {
+  return orders.map(o => (o.status === 'planned' ? { ...o, status: 'simulated' as const, updated_at: nowIso } : o))
+}
+
+/** Halt: every not-yet-submitted order becomes skipped with the halt reason. Submitted orders are kept as-is. */
+export function haltOrders(orders: AlpacaOrderResult[], reason: string, nowIso: string): AlpacaOrderResult[] {
+  return orders.map(o => (o.status === 'planned'
+    ? { ...o, qty: 0, notional: null, estimated_value: 0, status: 'skipped' as const, error_message: `Not submitted — ${reason}`, updated_at: nowIso }
+    : o))
 }
 
 const OrderResultSchema = z.object({
@@ -379,16 +404,20 @@ const OrderResultSchema = z.object({
   price_at_execution: z.number(),
   estimated_value:    z.number(),
   alpaca_order_id:    z.string().nullable(),
-  status:             z.enum(['planned', 'submitted', 'partially_filled', 'filled', 'canceled', 'expired', 'rejected', 'error', 'skipped']),
+  status:             z.enum(['planned', 'submitted', 'partially_filled', 'filled', 'canceled', 'expired', 'rejected', 'error', 'skipped', 'simulated']),
   error_message:      z.string().nullable(),
 }).passthrough()
 
 const EnvelopeSchema = z.object({
   version:       z.literal(2),
-  status:        z.enum(['pending', 'waiting_for_market', 'executing', 'completed', 'completed_with_errors', 'failed']),
+  status:        z.enum([
+    'pending', 'waiting_for_market', 'executing', 'completed', 'completed_with_errors', 'failed',
+    'cancelled', 'dry_run_completed',
+  ]),
   updated_at:    z.string(),
   error_message: z.string().nullable().optional(),
   wait_until:    z.string().nullable().optional(),
+  dry_run:       z.boolean().optional(),
   orders:        z.array(OrderResultSchema),
 })
 
@@ -398,6 +427,7 @@ export function parseStoredOrders(stored: unknown): {
   updated_at: string | null
   error_message: string | null
   wait_until: string | null
+  dry_run: boolean
   orders: AlpacaOrderResult[]
 } {
   if (Array.isArray(stored)) {
@@ -406,7 +436,7 @@ export function parseStoredOrders(stored: unknown): {
       .filter(r => r.success)
       .map(r => r.data as AlpacaOrderResult)
     // Legacy synchronous executions were finished when the row was written.
-    return { status: 'completed', updated_at: null, error_message: null, wait_until: null, orders }
+    return { status: 'completed', updated_at: null, error_message: null, wait_until: null, dry_run: false, orders }
   }
   const env = EnvelopeSchema.safeParse(stored)
   if (env.success) {
@@ -415,10 +445,19 @@ export function parseStoredOrders(stored: unknown): {
       updated_at:    env.data.updated_at,
       error_message: env.data.error_message ?? null,
       wait_until:    env.data.wait_until ?? null,
+      dry_run:       env.data.dry_run === true || env.data.status === 'dry_run_completed',
       orders:        env.data.orders as AlpacaOrderResult[],
     }
   }
-  return { status: 'failed', updated_at: null, error_message: 'Unreadable execution record', wait_until: null, orders: [] }
+  return { status: 'failed', updated_at: null, error_message: 'Unreadable execution record', wait_until: null, dry_run: false, orders: [] }
+}
+
+/**
+ * True when an existing execution row blocks a new request. Only a finished DRY RUN (nothing was ever submitted)
+ * may be replaced; every real execution keeps blocking (409).
+ */
+export function executionBlocksNewRequest(storedOrders: unknown): boolean {
+  return parseStoredOrders(storedOrders).status !== 'dry_run_completed'
 }
 
 export function normalizeExecution(row: {
@@ -491,4 +530,46 @@ export async function loadPlanInputs(
   }
 
   return { assets, quotes, positions, recentBuys }
+}
+
+/** Live account inputs for the risk limits: equity, cash and the market value of every position. Throws on failure. */
+export async function loadRiskAccount(creds: TradingCredentials): Promise<RiskAccount> {
+  const [snapshot, positions] = await Promise.all([
+    fetchEquitySnapshot(creds.keyId, creds.secret, creds.isPaper),
+    fetchAllPositions(creds.keyId, creds.secret, creds.isPaper),
+  ])
+  const values: Record<string, number> = {}
+  for (const p of positions) {
+    const v = parseFloat(p.market_value)
+    if (Number.isFinite(v) && v > 0) values[p.symbol] = (values[p.symbol] ?? 0) + v
+  }
+  return { equity: snapshot.equity ?? 0, cash: snapshot.cash ?? 0, positions: values }
+}
+
+export interface RiskCheckedPlan {
+  orders: AlpacaOrderResult[]
+  adjustments: RiskAdjustment[]
+  summary: RiskSummary
+}
+
+/**
+ * THE shared planner used by the preview route and the execution engine: Alpaca inputs → planOrders (Shariah guard,
+ * settlement, sizing) → applyRiskLimits. What the preview shows is exactly what the engine enforces.
+ * Throws when Alpaca inputs cannot be loaded.
+ */
+export async function buildRiskCheckedPlan(
+  creds: TradingCredentials,
+  params: { executionId: string; items: ActionItem[]; screening: ShariahScreeningResult | null; limits: RiskLimits },
+  now: Date = new Date(),
+): Promise<RiskCheckedPlan> {
+  const [inputs, account] = await Promise.all([
+    loadPlanInputs(creds, params.items, params.screening, now),
+    loadRiskAccount(creds),
+  ])
+  const planned = planOrders({ executionId: params.executionId, items: params.items, screening: params.screening, ...inputs })
+  return applyRiskLimits(
+    { orders: planned, items: params.items, forcedSellTickers: forcedSellTickers(params.items, params.screening) },
+    account,
+    params.limits,
+  )
 }

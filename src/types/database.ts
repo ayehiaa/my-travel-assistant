@@ -26,6 +26,9 @@ export type AuditAction =
   | 'alpaca_executed'
   | 'alpaca_synced'
   | 'alpaca_safeguards_applied'
+  | 'trading_paused'
+  | 'trading_resumed'
+  | 'risk_limits_updated'
 
 export interface UserRoleRecord {
   user_id: string
@@ -213,6 +216,12 @@ export interface PortfolioSettings {
   last_synced_at: string | null
   created_at: string
   updated_at: string
+  // ── Safety columns (migration 20261120c). Absent until applied — read via readSafetySettings(). ──
+  risk_limits?: unknown
+  trading_paused?: boolean
+  paused_reason?: string | null
+  paused_at?: string | null
+  dry_run?: boolean
 }
 
 export type RunStatus = 'running' | 'complete' | 'error'
@@ -302,6 +311,8 @@ export type AlpacaOrderStatus =
   | 'rejected'
   | 'error'
   | 'skipped'
+  /** Dry run: planned but intentionally never submitted. */
+  | 'simulated'
 
 export interface AlpacaOrderResult {
   ticker: string
@@ -325,6 +336,8 @@ export interface AlpacaOrderResult {
   filled_at?: string | null
   submitted_at?: string | null
   updated_at?: string | null
+  /** Why the risk limits trimmed this order (blocked orders carry the reason in error_message). */
+  risk_note?: string | null
 }
 
 export type ExecutionStatus =
@@ -334,6 +347,10 @@ export type ExecutionStatus =
   | 'completed'
   | 'completed_with_errors'
   | 'failed'
+  /** Stopped by the kill switch, a loss stop or a failed safety check. */
+  | 'cancelled'
+  /** Dry run: fully planned, nothing submitted. */
+  | 'dry_run_completed'
 
 /** Shape stored in alpaca_executions.orders by the execution engine (legacy rows store a bare array). */
 export interface ExecutionEnvelope {
@@ -343,6 +360,8 @@ export interface ExecutionEnvelope {
   error_message: string | null
   /** When the engine is waiting for the market, the time it will wake up. */
   wait_until?: string | null
+  /** True when the execution runs in dry-run mode (no orders are submitted). */
+  dry_run?: boolean
   orders: AlpacaOrderResult[]
 }
 
@@ -367,5 +386,6 @@ export interface NormalizedExecution {
   updated_at: string | null
   error_message: string | null
   wait_until: string | null
+  dry_run: boolean
   orders: AlpacaOrderResult[]
 }

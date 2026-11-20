@@ -19,6 +19,9 @@ const ACTION_PILLS = {
   portfolio_settings_updated: { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Portfolio settings' },
   alpaca_synced:              { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Alpaca synced' },
   alpaca_safeguards_applied:  { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Margin & shorting off' },
+  trading_paused:             { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Trading paused' },
+  trading_resumed:            { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Trading resumed' },
+  risk_limits_updated:        { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Risk settings' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -66,6 +69,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'alpaca_safeguards_applied') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Alpaca account</span>
+  }
+  if (action === 'trading_paused' || action === 'trading_resumed' || action === 'risk_limits_updated') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Risk &amp; safety</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Account</span>

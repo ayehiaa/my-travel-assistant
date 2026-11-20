@@ -9,7 +9,7 @@ interface Props {
 }
 
 const POLL_INTERVAL_MS = 4000
-const TERMINAL: ExecutionStatus[] = ['completed', 'completed_with_errors', 'failed']
+const TERMINAL: ExecutionStatus[] = ['completed', 'completed_with_errors', 'failed', 'cancelled', 'dry_run_completed']
 
 const ORDER_CHIP: Record<AlpacaOrderStatus, { label: string; className: string }> = {
   planned:          { label: 'Queued',           className: 'bg-gray-100 text-gray-600' },
@@ -21,6 +21,7 @@ const ORDER_CHIP: Record<AlpacaOrderStatus, { label: string; className: string }
   rejected:         { label: 'Rejected',         className: 'bg-red-100 text-red-700' },
   error:            { label: 'Error',            className: 'bg-amber-100 text-amber-700' },
   skipped:          { label: 'Skipped',          className: 'bg-gray-100 text-gray-500' },
+  simulated:        { label: 'Simulated',        className: 'bg-purple-100 text-purple-700' },
 }
 
 const EXECUTION_LABEL: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -30,6 +31,8 @@ const EXECUTION_LABEL: Record<ExecutionStatus, { label: string; className: strin
   completed:             { label: 'Completed',               className: 'bg-green-100 text-green-700' },
   completed_with_errors: { label: 'Completed with errors',   className: 'bg-amber-100 text-amber-800' },
   failed:                { label: 'Failed',                  className: 'bg-red-100 text-red-700' },
+  cancelled:             { label: 'Cancelled',               className: 'bg-red-100 text-red-700' },
+  dry_run_completed:     { label: 'Dry run complete',        className: 'bg-purple-100 text-purple-700' },
 }
 
 function formatDateTime(iso: string): string {
@@ -74,6 +77,9 @@ export default function AlpacaResultsPanel({ execution: initial }: Props) {
           {execution.is_paper && (
             <span className="inline-block rounded bg-blue-100 px-2 py-0.5 font-mono text-xs font-bold text-blue-700">PAPER</span>
           )}
+          {execution.dry_run && (
+            <span className="inline-block rounded bg-purple-600 px-2 py-0.5 font-mono text-xs font-bold text-white">DRY RUN</span>
+          )}
           <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${statusChip.className}`}>
             {statusChip.label}
           </span>
@@ -82,6 +88,12 @@ export default function AlpacaResultsPanel({ execution: initial }: Props) {
         <span className="text-[13px] text-[var(--ink-3)]">{formattedDate}</span>
       </div>
 
+      {execution.dry_run && (
+        <p className="mb-4 rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-sm text-purple-900">
+          Dry run — the full plan (Shariah guard, settlement check, risk limits) was computed but no orders were sent to
+          Alpaca. Turn dry run off in Portfolio Settings to trade for real.
+        </p>
+      )}
       {execution.status === 'waiting_for_market' && (
         <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           The market is closed. Orders will be placed shortly after the next open
@@ -130,6 +142,9 @@ export default function AlpacaResultsPanel({ execution: initial }: Props) {
                       <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${chip.className}`}>{chip.label}</span>
                       {order.error_message && (
                         <p className="mt-1 max-w-xs text-xs italic text-[var(--ink-3)]">{order.error_message}</p>
+                      )}
+                      {order.risk_note && (
+                        <p className="mt-1 max-w-xs text-xs text-amber-700">{order.risk_note}</p>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-[var(--ink-2)]">{filled}</td>

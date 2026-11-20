@@ -79,7 +79,7 @@ export default function RecommendationDetail({
             hasCredentials={hasCredentials}
             isPaper={isPaper}
             isLatest={isLatest}
-            alreadyExecuted={execution !== null}
+            alreadyExecuted={execution !== null && execution.status !== 'dry_run_completed'}
             executedAt={execution?.executed_at ?? null}
           />
           {execution !== null && (

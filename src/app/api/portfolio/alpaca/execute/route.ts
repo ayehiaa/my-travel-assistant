@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
 import { requestExecution } from '@/lib/tradeExecutionRequest'
+import { executionBlocksNewRequest } from '@/lib/tradeExecution'
 
 const ExecuteSchema = z.object({
   recommendation_id: z.string().uuid(),
@@ -47,14 +48,15 @@ export async function POST(request: NextRequest) {
 
   // Fast-path guard: no existing execution for this recommendation.
   // The UNIQUE (recommendation_id) constraint in requestExecution() is the race-proof guard.
+  // A finished dry run is the only row that may be replaced (requestExecution deletes it conditionally).
   const { data: existing } = await supabase
     .from('alpaca_executions')
-    .select('id')
+    .select('id, orders')
     .eq('recommendation_id', rec.id)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (existing !== null) {
+  if (existing !== null && executionBlocksNewRequest(existing.orders)) {
     return NextResponse.json({ error: 'Recommendation already executed' }, { status: 409 })
   }
 
@@ -79,6 +81,9 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     if (result.reason === 'already_executed') {
       return NextResponse.json({ error: 'Recommendation already executed' }, { status: 409 })
+    }
+    if (result.reason === 'trading_paused') {
+      return NextResponse.json({ error: 'Trading is paused — resume it in Portfolio Settings first' }, { status: 423 })
     }
     if (result.reason === 'event_failed') {
       return NextResponse.json({ error: 'Could not start the execution — try again shortly' }, { status: 502 })
