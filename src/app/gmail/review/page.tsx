@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { limitsFor } from '@/lib/access'
@@ -8,6 +9,8 @@ export const metadata = { title: 'Sojourn — Gmail Import' }
 export default async function GmailReviewPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+  // Gmail import is hidden for now (src/lib/features.ts) — send anyone who lands here back to the dashboard.
+  if (!GMAIL_IMPORT_ENABLED) redirect('/')
   if (!limitsFor(user.access).gmailImport) redirect('/?error=gmail_premium_only')
 
   return (

@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
@@ -9,6 +10,8 @@ import { encryptToken } from '@/lib/gmailCrypto'
 export async function GET(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+  // Gmail import is hidden for now (src/lib/features.ts) — send anyone who lands here back to the dashboard.
+  if (!GMAIL_IMPORT_ENABLED) redirect('/')
   if (!limitsFor(user.access).gmailImport) redirect('/?error=gmail_forbidden')
 
   const { searchParams } = request.nextUrl

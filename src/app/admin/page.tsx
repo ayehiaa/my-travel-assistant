@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { loadAdminUsers } from '@/lib/adminUsersServer'
@@ -31,7 +32,7 @@ export default async function AdminPage() {
         </h1>
         <p className="mt-2 text-sm text-[var(--ink-2)]">
           Plans: <strong>Free</strong> (beta limits — 10 trips, 10 expenses, 1 assistant) or <strong>Plus</strong>{' '}
-          (unlimited + Gmail import). Add-on: <strong>Portfolio (beta)</strong>. Assistants inherit the plan of the
+          (unlimited{GMAIL_IMPORT_ENABLED ? ' + Gmail import' : ''}). Add-on: <strong>Portfolio (beta)</strong>. Assistants inherit the plan of the
           account they are linked to and never get Portfolio.
         </p>
         {migrationPending && (

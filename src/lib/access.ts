@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { z } from 'zod'
 
 /**
@@ -46,7 +47,12 @@ export interface Access extends AccessFields {
 
 export const PLAN_INFO: Record<Plan, { label: string; description: string }> = {
   free: { label: 'Free (beta limits)', description: 'Up to 10 trips, 10 expenses and 1 assistant.' },
-  plus: { label: 'Plus', description: 'Unlimited trips, expenses and assistants, plus Gmail trip import.' },
+  plus: {
+    label: 'Plus',
+    description: GMAIL_IMPORT_ENABLED
+      ? 'Unlimited trips, expenses and assistants, plus Gmail trip import.'
+      : 'Unlimited trips, expenses and assistants.',
+  },
 }
 
 export const FEATURE_INFO: Record<FeatureKey, { label: string; description: string }> = {
@@ -174,7 +180,8 @@ export interface PlanLimits {
 }
 
 export const FREE_LIMITS: PlanLimits = { maxTrips: 10, maxExpenses: 10, maxAssistants: 1, gmailImport: false }
-export const PLUS_LIMITS: PlanLimits = { maxTrips: null, maxExpenses: null, maxAssistants: null, gmailImport: true }
+// Gmail import is also gated by the app-wide switch (hidden for now — see src/lib/features.ts).
+export const PLUS_LIMITS: PlanLimits = { maxTrips: null, maxExpenses: null, maxAssistants: null, gmailImport: GMAIL_IMPORT_ENABLED }
 
 export function limitsFor(access: Pick<Access, 'effectivePlan'>): PlanLimits {
   return isPlus(access) ? { ...PLUS_LIMITS } : { ...FREE_LIMITS }

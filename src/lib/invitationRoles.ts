@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { z } from 'zod'
 import {
   FEATURE_INFO,
@@ -85,7 +86,7 @@ export function invitationAccessLabel(access: InvitationAccess): string {
 export function invitationFeatureBullets(access: InvitationAccess): string[] {
   const bullets = [
     access.plan === 'plus'
-      ? 'Travel planning on the Plus plan: unlimited trips, expenses and assistants, plus Gmail trip import'
+      ? `Travel planning on the Plus plan: unlimited trips, expenses and assistants${GMAIL_IMPORT_ENABLED ? ', plus Gmail trip import' : ''}`
       : 'Travel planning on the Free plan (beta limits): up to 10 trips, 10 expenses and 1 assistant',
   ]
   if (normalizeFeatures(access.features).includes('portfolio')) {
