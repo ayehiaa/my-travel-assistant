@@ -55,7 +55,12 @@
   /* Spacing */
   --gap: 18px;
 
-  /* Font stacks — vars injected by next/font */
+  /* Self-hosted variable fonts (@fontsource-variable/*, imported in layout.tsx) */
+  --font-bricolage: 'Bricolage Grotesque Variable';
+  --font-jakarta:   'Plus Jakarta Sans Variable';
+  --font-jetbrains: 'JetBrains Mono Variable';
+
+  /* Font stacks */
   --display: var(--font-bricolage), 'Plus Jakarta Sans', system-ui, sans-serif;
   --sans:    var(--font-jakarta),   system-ui, sans-serif;
   --mono:    var(--font-jetbrains), ui-monospace, monospace;
