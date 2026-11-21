@@ -1,14 +1,15 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { limitsFor } from '@/lib/access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { encryptToken } from '@/lib/gmailCrypto'
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (!isPremiumOrAbove(user.role)) redirect('/?error=gmail_forbidden')
+  if (!limitsFor(user.access).gmailImport) redirect('/?error=gmail_forbidden')
 
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')

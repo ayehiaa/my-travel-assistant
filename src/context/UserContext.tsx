@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, ReactNode } from 'react'
-import { UserRole } from '@/types/database'
+import type { Access } from '@/lib/access'
 
 export interface LinkedAccount {
   id: string
@@ -11,7 +11,8 @@ export interface LinkedAccount {
 export interface UserContextValue {
   id: string
   email: string
-  role: UserRole
+  /** Account type, plan, add-ons, admin flag (specs/027-plans-addons-admin). */
+  access: Access
   displayName: string
   activeMainAccountId: string
   linkedMainAccounts: LinkedAccount[]

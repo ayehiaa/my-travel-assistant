@@ -1,12 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { UserRole } from '@/types/database'
 
 interface Props {
   firstName: string
   ownerFirstName: string
-  role: UserRole
+  isAssistant: boolean
   daysUsed: number
   daysMax: number
   referenceDate: string | null
@@ -14,8 +13,7 @@ interface Props {
   onImportFromGmail?: () => void
 }
 
-export default function DashboardHero({ firstName, ownerFirstName, role, daysUsed, daysMax, referenceDate, onLogPastTrip, onImportFromGmail }: Props) {
-  const isAssistant = role === 'assistant'
+export default function DashboardHero({ firstName, ownerFirstName, isAssistant, daysUsed, daysMax, referenceDate, onLogPastTrip, onImportFromGmail }: Props) {
   const pct = Math.min(100, (daysUsed / daysMax) * 100)
   const remaining = daysMax - daysUsed
 

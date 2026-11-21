@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeExecution } from '@/lib/tradeExecution'
 
@@ -15,7 +16,7 @@ export async function GET(
 ) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(user.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const parsed = ParamsSchema.safeParse(await params)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid execution id' }, { status: 400 })

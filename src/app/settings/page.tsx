@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import Link from 'next/link'
+import { getAuthUser } from '@/lib/auth'
+import { FEATURE_INFO, PLAN_INFO, isAtLimit, isMember, limitsFor } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { UserRoleRecord } from '@/types/database'
 import { daysOutsideUKInWindow } from '@/lib/daysCalculator'
 import AssistantsManager from '@/components/settings/AssistantsManager'
 import ReferenceDateSettings from '@/components/settings/ReferenceDateSettings'
-import CustomerInviteManager from '@/components/settings/CustomerInviteManager'
 
 export const metadata = {
   title: 'Settings — Sojourn',
@@ -19,11 +20,12 @@ function initials(name: string) {
 export default async function SettingsPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role !== 'main' && !isPremiumOrAbove(user.role)) redirect('/')
+  if (!isMember(user.access)) redirect('/')
 
   const supabase = await createClient()
   const admin = createAdminClient()
-  const isPremium = isPremiumOrAbove(user.role)
+  const { access } = user
+  const isPlusPlan = access.plan === 'plus'
 
   // Expire any pending links past their expires_at before rendering (main only)
   const now = new Date().toISOString()
@@ -63,10 +65,10 @@ export default async function SettingsPage() {
     expiresAt: l.expires_at,
   }))
 
-  if (!isPremium) {
-    atAssistantLimit =
-      (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length >= 1
-  }
+  atAssistantLimit = isAtLimit(
+    limitsFor(access).maxAssistants,
+    (links ?? []).filter(l => l.status === 'pending' || l.status === 'active').length,
+  )
 
   const { data: roleRow } = await supabase
     .from('user_roles')
@@ -131,12 +133,12 @@ export default async function SettingsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Your account</h3>
             <span style={{
-              background: isPremium ? '#fef9c3' : 'var(--blue-100)',
-              color: isPremium ? '#713f12' : 'var(--blue-700)',
+              background: isPlusPlan ? '#fef9c3' : 'var(--blue-100)',
+              color: isPlusPlan ? '#713f12' : 'var(--blue-700)',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '4px 10px', borderRadius: 999,
             }}>
-              {isPremium ? 'Premium account' : 'Main account'}
+              {isPlusPlan ? 'Plus plan' : 'Free plan'}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -162,6 +164,25 @@ export default async function SettingsPage() {
               Edit profile
             </button>
           </div>
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-[var(--rule-soft)] pt-4 text-sm">
+            <dt className="font-semibold text-[var(--ink-3)]">Plan</dt>
+            <dd className="m-0 text-[var(--ink)]">
+              <strong>{PLAN_INFO[access.plan].label}</strong>
+              <span className="block text-xs text-[var(--ink-3)]">{PLAN_INFO[access.plan].description}</span>
+            </dd>
+            <dt className="font-semibold text-[var(--ink-3)]">Add-ons</dt>
+            <dd className="m-0 text-[var(--ink)]">
+              {access.features.length === 0
+                ? <span className="text-[var(--ink-3)]">None</span>
+                : access.features.map(f => <strong key={f} className="block">{FEATURE_INFO[f].label}</strong>)}
+            </dd>
+            {access.isAdmin && (
+              <>
+                <dt className="font-semibold text-[var(--ink-3)]">Admin</dt>
+                <dd className="m-0"><Link href="/admin" className="font-semibold text-[var(--blue-700)] underline">Manage users &amp; invitations</Link></dd>
+              </>
+            )}
+          </dl>
         </section>
 
         {/* Reference date */}
@@ -186,19 +207,6 @@ export default async function SettingsPage() {
               Assistants can plan, edit, and view all your trips on your behalf. Every change they make is logged in the audit trail.
             </p>
             <AssistantsManager initial={initial} atAssistantLimit={atAssistantLimit} />
-          </section>
-        )}
-
-        {/* Customer invitations — premium accounts only */}
-        {isPremium && (
-          <section style={{ gridColumn: 'span 2', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: 'var(--r-lg)', padding: '22px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 18, margin: 0, color: 'var(--ink)' }}>Customer invitations</h3>
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 18px' }}>
-              Invite customers to create their Sojourn account. Each invitation link is valid for 3 days.
-            </p>
-            <CustomerInviteManager />
           </section>
         )}
 

@@ -1,4 +1,5 @@
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { isAssistant, isAtLimit, limitsFor } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import DashboardClient from '@/components/dashboard/DashboardClient'
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
       .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
     supabase
       .from('user_roles')
-      .select('reference_date, display_name, role')
+      .select('reference_date, display_name')
       .eq('user_id', activeMainAccountId)
       .single(),
     supabase
@@ -103,7 +104,7 @@ export default async function DashboardPage() {
         refEnd,
       ), 0)
   }
-  const atTripLimit = !(roleRow?.role && isPremiumOrAbove(roleRow.role)) && enriched.length >= 10
+  const atTripLimit = isAtLimit(limitsFor(user.access).maxTrips, enriched.length)
 
   const expensesByTripId = ((rawExpenses ?? []) as ExpenseWithCategory[]).reduce<Record<string, ExpenseWithCategory[]>>((acc, e) => {
     if (!e.trip_id) return acc
@@ -115,7 +116,7 @@ export default async function DashboardPage() {
   const canDelete = true
 
   let ownerFirstName = firstName
-  if (user.role === 'assistant') {
+  if (isAssistant(user.access)) {
     const ownerDisplayName = roleRow && 'display_name' in roleRow ? (roleRow as { display_name?: string }).display_name : undefined
     if (ownerDisplayName) ownerFirstName = ownerDisplayName.split(' ')[0]
   }
@@ -124,7 +125,8 @@ export default async function DashboardPage() {
     <DashboardClient
       firstName={firstName}
       ownerFirstName={ownerFirstName}
-      role={user.role}
+      isAssistant={isAssistant(user.access)}
+      canImportGmail={limitsFor(user.access).gmailImport}
       daysUsed={annualDaysAbroad}
       annualMax={annualMax}
       referenceDate={referenceDate}

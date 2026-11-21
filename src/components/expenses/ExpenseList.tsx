@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
+import { ExpenseWithCategory, ExpenseCategory, TripWithUsers } from '@/types/database'
 import { GbpRates } from '@/lib/currencyConverter'
 import { computeExpenseSummary } from '@/lib/expenseSummary'
 import ExpenseCard from './ExpenseCard'
@@ -14,13 +14,14 @@ interface Props {
   categories: ExpenseCategory[]
   trips: TripWithUsers[]
   canDelete: boolean
-  ownerRole: UserRole
+  /** Expense limit of the account's plan (null = unlimited, Plus). */
+  expenseLimit: number | null
   expenseCount: number
   initialTripId?: string
   rateMap: GbpRates
 }
 
-export default function ExpenseList({ initialExpenses, categories, trips, canDelete, ownerRole, expenseCount, initialTripId, rateMap }: Props) {
+export default function ExpenseList({ initialExpenses, categories, trips, canDelete, expenseLimit, expenseCount, initialTripId, rateMap }: Props) {
   const router = useRouter()
   const [expenses, setExpenses] = useState<ExpenseWithCategory[]>(initialExpenses)
   const [showAddModal, setShowAddModal] = useState(!!initialTripId)
@@ -31,8 +32,8 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
   const [dateTo, setDateTo] = useState('')
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
-  const isAtLimit = ownerRole === 'main' && expenseCount >= 10
-  const isNearLimit = ownerRole === 'main' && (expenseCount === 8 || expenseCount === 9) && !bannerDismissed
+  const isAtLimit = expenseLimit !== null && expenseCount >= expenseLimit
+  const isNearLimit = expenseLimit !== null && !isAtLimit && expenseCount >= expenseLimit - 2 && !bannerDismissed
 
   const filteredExpenses = expenses.filter(e => {
     if (activeTab === 'pending' && e.reclaimed) return false
@@ -91,7 +92,7 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
           gap: 12,
         }}>
           <span style={{ fontSize: 13, color: 'var(--blue-900)', fontWeight: 500 }}>
-            You have {expenseCount}/10 expenses. Upgrade to Premium for unlimited expenses.
+            You have {expenseCount}/{expenseLimit} expenses. The Plus plan has unlimited expenses.
           </span>
           <button
             onClick={() => setBannerDismissed(true)}
@@ -197,7 +198,7 @@ export default function ExpenseList({ initialExpenses, categories, trips, canDel
         <button
           onClick={() => { setEditingExpense(null); setShowAddModal(true) }}
           disabled={isAtLimit}
-          title={isAtLimit ? 'Upgrade to Premium to add more expenses' : undefined}
+          title={isAtLimit ? 'Free plan limit reached — the Plus plan has unlimited expenses' : undefined}
           style={{
             padding: '10px 20px',
             borderRadius: 'var(--r)',

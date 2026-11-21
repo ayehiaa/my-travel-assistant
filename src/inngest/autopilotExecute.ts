@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { userHasPortfolio } from '@/lib/accessServer'
 import { logAudit } from '@/lib/auditLogger'
 import { requestExecution } from '@/lib/tradeExecutionRequest'
 import { executionBlocksNewRequest } from '@/lib/tradeExecution'
@@ -73,8 +74,7 @@ export const autopilotExecute = inngest.createFunction(
         return outcome
       }
 
-      const { data: role } = await admin.from('user_roles').select('role').eq('user_id', user_id).maybeSingle()
-      if (role?.role !== 'premium_plus') return record({ status: 'skipped', reason: 'Not a Premium Plus account' })
+      if (!(await userHasPortfolio(user_id, admin))) return record({ status: 'skipped', reason: 'Portfolio access is not enabled for this account' })
 
       if ((await latestCompleteRecommendationId(user_id)) !== run_id) {
         return record({ status: 'skipped', reason: 'A newer recommendation exists' })

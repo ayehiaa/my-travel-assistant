@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { randomUUID } from 'node:crypto'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { limitsFor } from '@/lib/access'
 
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isPremiumOrAbove(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!limitsFor(user.access).gmailImport) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const state = randomUUID()
   const cookieStore = await cookies()

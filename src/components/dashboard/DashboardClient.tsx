@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TripWithUsers, UserRole, ExpenseWithCategory } from '@/types/database'
+import { TripWithUsers, ExpenseWithCategory } from '@/types/database'
 import { useToast } from '@/context/ToastContext'
 import DashboardHero from './DashboardHero'
 import UpcomingTrips from './UpcomingTrips'
@@ -11,7 +11,9 @@ import AddPastTripModal from './AddPastTripModal'
 interface Props {
   firstName: string
   ownerFirstName: string
-  role: UserRole
+  isAssistant: boolean
+  /** Plus plan (or an assistant of a Plus member) — Gmail trip import. */
+  canImportGmail: boolean
   daysUsed: number
   annualMax: number
   referenceDate: string | null
@@ -23,7 +25,7 @@ interface Props {
 }
 
 export default function DashboardClient({
-  firstName, ownerFirstName, role, daysUsed, annualMax, referenceDate,
+  firstName, ownerFirstName, isAssistant, canImportGmail, daysUsed, annualMax, referenceDate,
   upcoming, past, canDelete, atTripLimit, expensesByTripId,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
@@ -46,12 +48,12 @@ export default function DashboardClient({
       <DashboardHero
         firstName={firstName}
         ownerFirstName={ownerFirstName}
-        role={role}
+        isAssistant={isAssistant}
         daysUsed={daysUsed}
         daysMax={annualMax}
         referenceDate={referenceDate}
         onLogPastTrip={() => setShowModal(true)}
-        onImportFromGmail={(role === 'premium' || role === 'premium_plus') ? handleImportFromGmail : undefined}
+        onImportFromGmail={canImportGmail ? handleImportFromGmail : undefined}
       />
 
       {atTripLimit && (

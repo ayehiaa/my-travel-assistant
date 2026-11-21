@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant, isAtLimit, limitsFor } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
@@ -57,19 +58,13 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
-  const [{ count }, { data: ownerRoleRow }] = await Promise.all([
-    supabase
-      .from('expenses')
-      .select('*', { count: 'exact', head: true })
-      .eq('owner_id', activeMainAccountId),
-    supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', activeMainAccountId)
-      .single(),
-  ])
+  // Free plan expense limit (assistants follow the linked member's plan)
+  const { count } = await supabase
+    .from('expenses')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', activeMainAccountId)
 
-  if (ownerRoleRow?.role === 'main' && (count ?? 0) >= 10) {
+  if (isAtLimit(limitsFor(user.access).maxExpenses, count ?? 0)) {
     return NextResponse.json({ error: 'EXPENSE_LIMIT_REACHED' }, { status: 403 })
   }
 
@@ -91,7 +86,7 @@ export async function POST(request: NextRequest) {
     action:       'expense_created',
     tripId:       null,
     tripSnapshot: null,
-    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf:   isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json(data, { status: 201 })

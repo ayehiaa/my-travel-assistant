@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
@@ -19,14 +20,14 @@ const IdSchema = z.string().uuid()
 
 /**
  * Server only. Shared body of POST /api/portfolio/recommendations/[id]/approve and /reject.
- * Auth → 401, premium_plus → 403, Zod id → 400, ownership → 404, state machine (checkApprovalDecision) → 409/423.
+ * Auth → 401, Portfolio add-on → 403, Zod id → 400, ownership → 404, state machine (checkApprovalDecision) → 409/423.
  * Approve re-checks expiry, latest, existing execution and the trading pause, then calls requestExecution() — which
  * applies fresh quotes, risk limits, loss stops, the Shariah buy guard and dry run in the execution engine.
  */
 export async function handleApprovalDecision(rawId: string, decision: ApprovalDecision): Promise<NextResponse> {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(user.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const idParse = IdSchema.safeParse(rawId)
   if (!idParse.success) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })

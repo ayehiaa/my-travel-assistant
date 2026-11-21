@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/context/UserContext'
+import { accessBadge, hasFeature, isAssistant, isMember } from '@/lib/access'
 
 export default function Nav() {
   const user = useUser()
@@ -37,12 +38,13 @@ export default function Nav() {
     { href: '/search',   label: 'Plan a trip' },
     { href: '/timeline', label: 'Timeline'   },
     { href: '/audit',    label: 'Audit log'  },
-    ...(user.role === 'main' || user.role === 'premium' || user.role === 'premium_plus' ? [{ href: '/settings', label: 'Settings' }] : []),
-    ...(user.role === 'premium_plus' ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
+    ...(isMember(user.access) ? [{ href: '/settings', label: 'Settings' }] : []),
+    ...(hasFeature(user.access, 'portfolio') ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
+    ...(user.access.isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ]
 
   // The Portfolio hub owns every /portfolio/* page (tabs, recommendation detail)
-  const isActive = (href: string) => pathname === href || (href === '/portfolio' && pathname.startsWith('/portfolio/'))
+  const isActive = (href: string) => pathname === href || ((href === '/portfolio' || href === '/admin') && pathname.startsWith(`${href}/`))
 
   const initials = user.displayName
     .split(' ')
@@ -51,7 +53,7 @@ export default function Nav() {
     .toUpperCase()
     .slice(0, 2)
 
-  const viewingAccount = user.role === 'assistant'
+  const viewingAccount = isAssistant(user.access)
     ? (user.linkedMainAccounts.find(a => a.id === user.activeMainAccountId) ?? user.linkedMainAccounts[0])
     : null
 
@@ -99,7 +101,7 @@ export default function Nav() {
 
         {/* Right side */}
         <div className="hidden md:flex items-center gap-4 shrink-0">
-          {user.role === 'assistant' && user.linkedMainAccounts.length > 0 ? (
+          {isAssistant(user.access) && user.linkedMainAccounts.length > 0 ? (
             <div className="flex items-center gap-2">
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7 }}>
                 Viewing
@@ -129,7 +131,7 @@ export default function Nav() {
             </div>
           ) : (
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>
-              {firstName} · {user.role === 'premium_plus' ? 'Premium+' : user.role === 'premium' ? 'Premium' : 'Main'}
+              {firstName} · {accessBadge(user.access)}
             </span>
           )}
 
@@ -191,7 +193,7 @@ export default function Nav() {
             </Link>
           ))}
 
-          {user.role === 'assistant' && user.linkedMainAccounts.length > 0 && (
+          {isAssistant(user.access) && user.linkedMainAccounts.length > 0 && (
             <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.1)' }}>
               <p className="text-[10px] uppercase tracking-widest px-3 mb-1" style={{ opacity: 0.5 }}>Viewing account</p>
               {user.linkedMainAccounts.map(a => (
@@ -212,7 +214,7 @@ export default function Nav() {
 
           <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,.1)' }}>
             <p className="text-[11px] px-3 mb-1" style={{ opacity: 0.5 }}>
-              {user.role === 'assistant' ? `${user.displayName} (assistant)` : `${user.displayName} · ${user.role === 'premium_plus' ? 'Premium+' : user.role === 'premium' ? 'Premium' : 'Main'}`}
+              {isAssistant(user.access) ? `${user.displayName} (assistant)` : `${user.displayName} · ${accessBadge(user.access)}`}
             </p>
             <button
               onClick={handleSignOut}

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { filterPortfolioUsers, userHasPortfolio } from '@/lib/accessServer'
 import { loadAlpacaCredentials } from '@/lib/alpacaLivePortfolio'
 import { fetchMarketCalendar } from '@/lib/alpacaClient'
 import { logAudit } from '@/lib/auditLogger'
@@ -18,7 +19,7 @@ import {
  * Scheduled analysis runs (specs/022-scheduler-autopilot).
  *
  * 1. `scheduledRunsCron` fires on weekdays at 10:30 New York time, finds users with autopilot on (mode ≠ 'off'),
- *    a run due, the premium_plus role and Alpaca connected, and fans out one event per user (event id = user + date).
+ *    a run due, the Portfolio add-on and Alpaca connected, and fans out one event per user (event id = user + date).
  * 2. `scheduledUserRun` handles one user: re-checks everything, confirms today is a trading day with the user's OWN
  *    Alpaca credentials (/v2/calendar — skips holidays), then starts the run through startAnalysisRun() (the same code
  *    as POST /api/portfolio/run) and moves next_run_at forward. Idempotent per user per date; one at a time per user.
@@ -56,13 +57,13 @@ export const scheduledRunsCron = inngest.createFunction(
         .map(r => r.user_id as string)
       if (due.length === 0) return []
 
-      const [roles, creds] = await Promise.all([
-        admin.from('user_roles').select('user_id').in('user_id', due).eq('role', 'premium_plus'),
+      // Portfolio add-on (specs/027) — assistants never have it; fails closed on a query error.
+      const [withPortfolio, creds] = await Promise.all([
+        filterPortfolioUsers(due, admin),
         admin.from('alpaca_credentials').select('user_id').in('user_id', due),
       ])
-      const premium = new Set((roles.data ?? []).map(r => r.user_id as string))
       const connected = new Set((creds.data ?? []).map(r => r.user_id as string))
-      return due.filter(id => premium.has(id) && connected.has(id))
+      return due.filter(id => withPortfolio.has(id) && connected.has(id))
     })
 
     if (userIds.length === 0) return { date, users: 0 }
@@ -110,12 +111,7 @@ export const scheduledUserRun = inngest.createFunction(
       const settings = readAutopilotSettings(settingsRow as Record<string, unknown> | null)
       if (!isScheduledRunDue(settings, now)) return { started: false, reason: 'not_due' }
 
-      const { data: role } = await admin
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user_id)
-        .maybeSingle()
-      if (role?.role !== 'premium_plus') return { started: false, reason: 'not_premium_plus' }
+      if (!(await userHasPortfolio(user_id, admin))) return { started: false, reason: 'no_portfolio_addon' }
 
       const creds = await loadAlpacaCredentials(user_id)
       if (!creds) return { started: false, reason: 'no_credentials' }

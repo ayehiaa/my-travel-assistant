@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveSignupRole } from '@/lib/invitationRoles'
+import { resolveSignupAccess } from '@/lib/invitationRoles'
+import { accessColumns, isAdminEmail, legacyRoleFor } from '@/lib/access'
 
 const schema = z.object({
   token:    z.string().uuid(),
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   // Re-validate the invitation token server-side
   const { data: invitation } = await admin
     .from('customer_invitations')
-    // select('*') so this works before migration 20261121 (no role column → 'main')
+    // select('*') so this works before migrations 20261121/20261121b (plan/features derived from role, or Free)
     .select('*')
     .eq('token', token)
     .maybeSingle()
@@ -60,18 +61,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
-  // Role from the invitation, re-validated and capped at the inviter's CURRENT role (anything unexpected → 'main')
-  const { data: inviterRole } = await admin
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', invitation.invited_by)
-    .maybeSingle()
-  const role = resolveSignupRole((invitation as Record<string, unknown>).role, inviterRole?.role)
+  // Plan + add-ons from the invitation, re-validated — granted only when the inviter is STILL an admin
+  // (APP_ADMIN_EMAILS); anything else (legacy premium invites, rows written outside the API) → Free, no add-ons.
+  const { data: inviterAuth } = await admin.auth.admin.getUserById(invitation.invited_by)
+  const inviterIsAdmin = isAdminEmail(inviterAuth?.user?.email, process.env.APP_ADMIN_EMAILS)
+  const granted = resolveSignupAccess(invitation, inviterIsAdmin)
+  const fields = { accountType: 'member' as const, plan: granted.plan, features: granted.features }
 
-  // Provision user_roles row
+  // Provision user_roles row: legacy role first (works before migration 20261121b) …
   await admin
     .from('user_roles')
-    .insert({ user_id: newUser.user.id, role, display_name: fullName.trim() })
+    .insert({ user_id: newUser.user.id, role: legacyRoleFor(fields), display_name: fullName.trim() })
+
+  // … then the new columns, best effort (missing columns → access is derived from the legacy role)
+  await admin
+    .from('user_roles')
+    .update(accessColumns(fields))
+    .eq('user_id', newUser.user.id)
 
   // Consume the invitation token
   await admin

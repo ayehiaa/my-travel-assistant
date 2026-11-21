@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/026-friend-onboarding-byo-ai-key/spec.md` (friend onboarding: role picker on customer invitations, Alpaca setup guide + Getting started checklist, bring-your-own Anthropic API key)
+Active feature spec: `specs/027-plans-addons-admin/spec.md` (account type / plan / add-ons replace `user_roles.role`; admin via `APP_ADMIN_EMAILS`; `/admin` page; admin-only customer invitations; RLS hardening on user_roles)
 <!-- SPECKIT END -->

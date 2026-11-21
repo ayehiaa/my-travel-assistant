@@ -1,5 +1,6 @@
 import type { ShariahScreeningResult } from '@/types/shariah'
 
+/** LEGACY user_roles.role — still written for compatibility; access decisions use src/lib/access.ts (specs/027). */
 export type UserRole = 'main' | 'assistant' | 'premium' | 'premium_plus'
 
 export type UserRoleStatus = 'active' | 'deactivated'
@@ -35,13 +36,22 @@ export type AuditAction =
   | 'notification_test_sent'
   | 'ai_key_connected'
   | 'ai_key_disconnected'
+  | 'user_plan_changed'
+  | 'user_features_changed'
+  | 'customer_invited'
+  | 'customer_invitation_revoked'
 
 export interface UserRoleRecord {
   user_id: string
+  /** Legacy — see src/lib/access.ts. */
   role: UserRole
   display_name: string
   status: UserRoleStatus
   created_at: string
+  /** Migration 20261121b (missing before it is applied → derived from role by deriveAccess). */
+  account_type?: 'member' | 'assistant'
+  plan?: 'free' | 'plus'
+  features?: string[]
 }
 
 export type InvitationStatus = 'pending' | 'active' | 'expired'
@@ -68,8 +78,11 @@ export interface CustomerInvitation {
   status: CustomerInvitationStatus
   invited_at: string
   expires_at: string
-  /** Role granted at signup (migration 20261121; missing column → read as 'main'). */
+  /** Legacy role kept in sync with plan/features (migration 20261121; missing column → read as 'main'). */
   role?: 'main' | 'premium' | 'premium_plus'
+  /** Plan + add-ons granted at signup (migration 20261121b; missing → derived from role). */
+  plan?: 'free' | 'plus'
+  features?: string[]
 }
 
 export interface Trip {
