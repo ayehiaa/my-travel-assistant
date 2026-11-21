@@ -15,6 +15,9 @@ export const AGENT_NAMES = [
   'sector_analysis',
 ] as const
 
+/** Every stage shown in the run progress list: the 7 agents, then the synthesizer and the Shariah screening. */
+export const PIPELINE_STAGES = [...AGENT_NAMES, 'synthesizer', 'shariah_screening'] as const
+
 export type StartRunResult =
   | { ok: true; runId: string }
   | { ok: false; reason: 'no_credentials' | 'alpaca_unreachable' | 'no_funds' | 'db_error' | 'event_failed' }
@@ -64,7 +67,7 @@ export async function startAnalysisRun(params: { userId: string; trigger: RunTri
 
   const { error: progressError } = await admin
     .from('run_progress')
-    .insert(AGENT_NAMES.map(name => ({ run_id: runId, agent_name: name, status: 'pending' })))
+    .insert(PIPELINE_STAGES.map(name => ({ run_id: runId, agent_name: name, status: 'pending' })))
   if (progressError) return { ok: false, reason: 'db_error' }
 
   const { error: updateError } = await admin
