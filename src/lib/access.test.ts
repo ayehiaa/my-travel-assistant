@@ -1,3 +1,4 @@
+import { GMAIL_IMPORT_ENABLED } from '@/lib/features'
 import { describe, it, expect } from 'vitest'
 import {
   accessBadge,
@@ -132,8 +133,9 @@ describe('limitsFor / isAtLimit', () => {
   it('free has the beta limits', () => {
     expect(limitsFor(deriveAccess({ role: 'main' }))).toEqual({ maxTrips: 10, maxExpenses: 10, maxAssistants: 1, gmailImport: false })
   })
-  it('plus is unlimited with Gmail import', () => {
-    expect(limitsFor(deriveAccess({ role: 'premium' }))).toEqual({ maxTrips: null, maxExpenses: null, maxAssistants: null, gmailImport: true })
+  it('plus is unlimited; Gmail import follows the app-wide switch (hidden for now)', () => {
+    expect(limitsFor(deriveAccess({ role: 'premium' }))).toEqual({ maxTrips: null, maxExpenses: null, maxAssistants: null, gmailImport: GMAIL_IMPORT_ENABLED })
+    expect(GMAIL_IMPORT_ENABLED).toBe(false)
   })
   it('returns a copy (callers cannot mutate the constants)', () => {
     const l = limitsFor({ effectivePlan: 'free' })
