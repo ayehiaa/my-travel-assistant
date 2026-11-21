@@ -7,6 +7,9 @@ import HoldingsList, { type HoldingView } from './HoldingsList'
 import PerformanceSection from './PerformanceSection'
 import RefreshButton from './RefreshButton'
 import { ChartSkeleton } from './HubSkeletons'
+import GettingStartedChecklist from './GettingStartedChecklist'
+import { getAiKeyStatus } from '@/lib/aiKeyStore'
+import { buildSetupChecklist } from '@/lib/setupChecklist'
 import {
   getLatestCompleteRecommendation,
   getLiveState,
@@ -33,6 +36,7 @@ import type { RatioKey, ScreeningRatio, ShariahScreeningResult } from '@/types/s
 
 interface Props {
   userId: string
+  email: string
   period: ChartPeriod
 }
 
@@ -90,19 +94,32 @@ function toHoldingView(
 }
 
 /** Overview tab: headline numbers, performance, allocation vs target, holdings (+ drawer), autopilot. */
-export default async function OverviewTab({ userId, period }: Props) {
-  const [live, settingsRow, latestRec, pending, executions] = await Promise.all([
+export default async function OverviewTab({ userId, email, period }: Props) {
+  const [live, settingsRow, latestRec, pending, executions, aiKey] = await Promise.all([
     getLiveState(userId),
     getSettingsRow(userId),
     getLatestCompleteRecommendation(userId),
     getPendingApproval(userId),
     getRecentExecutions(userId, 50),
+    getAiKeyStatus(userId, email),
   ])
   const safety = readSafetySettings(settingsRow)
   const autopilot = readAutopilotSettings(settingsRow)
 
+  // The Overview only renders after the terms gate, so step ① is always done here.
+  const checklist = buildSetupChecklist({
+    tosAccepted:     true,
+    alpacaConnected: live.connected,
+    aiKey:           aiKey.connected ? 'own' : aiKey.usingOwnerFallback ? 'app_owner' : 'none',
+    hasCompletedRun: !!latestRec,
+  })
+  const gettingStarted = checklist.complete
+    ? null
+    : <GettingStartedChecklist items={checklist.items} doneCount={checklist.doneCount} />
+
   const statusCards = (
     <>
+      {gettingStarted}
       <TradingStatusBanner safety={safety} />
       <AutopilotStatus mode={autopilot.mode} nextRunAt={autopilot.next_run_at} pending={pending} />
     </>
@@ -151,6 +168,7 @@ export default async function OverviewTab({ userId, period }: Props) {
 
   return (
     <div className="space-y-4">
+      {gettingStarted}
       {safety.trading_paused && <TradingStatusBanner safety={{ ...safety, dry_run: false }} />}
 
       {/* Headline */}

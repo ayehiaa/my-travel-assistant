@@ -60,7 +60,7 @@ export default async function PortfolioPage({
             {tab === 'overview' && 'Your account, read live from Alpaca.'}
             {tab === 'rebalance' && 'Review the latest analysis and act on it.'}
             {tab === 'activity' && 'Everything that happened, newest first.'}
-            {tab === 'settings' && 'Targets, autopilot, safety, notifications and your Alpaca connection.'}
+            {tab === 'settings' && 'Targets, autopilot, safety, notifications, your Alpaca connection and your Claude API key.'}
           </p>
         </div>
       </div>
@@ -69,7 +69,7 @@ export default async function PortfolioPage({
 
       <h2 className="sr-only">{HUB_TAB_LABELS[tab]}</h2>
       <Suspense key={`${tab}:${tab === 'activity' ? `${filter}:${page}` : ''}`} fallback={<TabSkeleton tab={tab} />}>
-        {tab === 'overview' && <OverviewTab userId={user.id} period={period} />}
+        {tab === 'overview' && <OverviewTab userId={user.id} email={user.email} period={period} />}
         {tab === 'rebalance' && <RebalanceTab userId={user.id} />}
         {tab === 'activity' && <ActivityTab userId={user.id} filter={filter} page={page} />}
         {tab === 'settings' && <SettingsTab userId={user.id} email={user.email} />}

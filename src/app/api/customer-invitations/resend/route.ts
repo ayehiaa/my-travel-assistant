@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCustomerInvitationEmail } from '@/lib/email'
+import { readInvitationRole } from '@/lib/invitationRoles'
 
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
     invitedBy: roleRecord.display_name,
     signupLink,
     expiresAt,
+    role: readInvitationRole(updated),
   })
 
   return NextResponse.json({ expiresAt: updated.expires_at })

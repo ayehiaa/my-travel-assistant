@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { NonRetriableError } from 'inngest'
 import { getRoleConfig, type AiRole } from '@/lib/aiModels'
 import { extractFirstText } from '@/lib/aiResponse'
 import { buildCallUsage, type AiCallUsage } from '@/lib/aiCost'
+import { AI_KEY_REJECTED_MESSAGE, isKeyRejectedStatus, redactSecrets } from '@/lib/aiKeyResolver'
 
 /**
  * Server only. One code path for every portfolio-analysis Claude call.
@@ -22,17 +24,30 @@ export async function callClaude(params: {
   name: string
   system: string
   user: string
+  /**
+   * The run owner's Anthropic API key (specs/026 — each user pays for their own runs), resolved inside the calling
+   * Inngest step via requireRunApiKey(). Required: there is no silent fallback to the app key.
+   */
+  apiKey: string
 }): Promise<ClaudeCallResult> {
   const config = getRoleConfig(params.role)
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const client = new Anthropic({ apiKey: params.apiKey })
 
-  const response = await client.messages.create({
-    model:         config.model,
-    max_tokens:    config.maxTokens,
-    output_config: { effort: config.effort },
-    system:        params.system,
-    messages:      [{ role: 'user', content: params.user }],
-  })
+  let response: Anthropic.Message
+  try {
+    response = await client.messages.create({
+      model:         config.model,
+      max_tokens:    config.maxTokens,
+      output_config: { effort: config.effort },
+      system:        params.system,
+      messages:      [{ role: 'user', content: params.user }],
+    })
+  } catch (err) {
+    // Revoked / invalid key: fail the run at once with a clear message (retrying cannot help).
+    if (isKeyRejectedStatus((err as { status?: unknown } | null)?.status)) throw new NonRetriableError(AI_KEY_REJECTED_MESSAGE)
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(redactSecrets(message, [params.apiKey]))
+  }
 
   const stopReason = response.stop_reason ?? null
   return {

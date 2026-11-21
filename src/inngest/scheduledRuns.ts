@@ -23,6 +23,8 @@ import {
  *    Alpaca credentials (/v2/calendar — skips holidays), then starts the run through startAnalysisRun() (the same code
  *    as POST /api/portfolio/run) and moves next_run_at forward. Idempotent per user per date; one at a time per user.
  *
+ * startAnalysisRun() also refuses users without an Anthropic API key (reason 'no_ai_key', specs/026) — skipped, stays due.
+ *
  * Nothing here places orders. What happens after the run completes depends on the mode — see autopilotExecute.ts.
  */
 

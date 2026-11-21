@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { INVITABLE_ROLE_INFO, invitationRoleFeatures, type InvitableRole } from '@/lib/invitationRoles'
 
 // Configure RESEND_FROM_EMAIL to a verified Resend sender domain.
 // Configure NEXT_PUBLIC_APP_URL to your production URL.
@@ -86,13 +87,19 @@ export async function sendCustomerInvitationEmail({
   invitedBy,
   signupLink,
   expiresAt,
+  role = 'main',
 }: {
   toEmail: string
   toName: string
   invitedBy: string
   signupLink: string
   expiresAt: Date
+  /** Role the account gets (specs/026) — listed in the email so the friend knows what is included. */
+  role?: InvitableRole
 }) {
+  const featureItems = invitationRoleFeatures(role)
+    .map(f => `<li style="margin:0 0 6px;">${escapeHtml(f)}</li>`)
+    .join('')
   const expiryStr = expiresAt.toLocaleDateString('en-GB', {
     day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -106,6 +113,10 @@ export async function sendCustomerInvitationEmail({
       <strong>${safeInvitedBy}</strong> has invited you to join Sojourn — the travel planning app
       for tracking days abroad.
     </p>
+    <p style="font-size:15px;color:#374151;margin:0 0 8px;line-height:1.6;">
+      Your account (<strong>${escapeHtml(INVITABLE_ROLE_INFO[role].label)}</strong>) includes:
+    </p>
+    <ul style="font-size:14px;color:#374151;margin:0 0 20px;padding-left:20px;line-height:1.5;">${featureItems}</ul>
     <p style="font-size:15px;color:#374151;margin:0 0 28px;line-height:1.6;">
       Click the button below to create your account. Your email address has already been
       verified — just choose a password and you're in.

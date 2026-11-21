@@ -28,6 +28,8 @@ import { getStarterUniverse } from '@/lib/starterUniverse'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { buildScheduledRunInfo } from '@/lib/autopilot'
 import { saveAutopilotInfo } from '@/lib/autopilotStore'
+import { requireRunApiKey } from '@/lib/aiKeyStore'
+import { redactSecrets } from '@/lib/aiKeyResolver'
 import type { AgentOutput, PortfolioSettings, PortfolioSnapshot, TargetAllocationItem } from '@/types/database'
 
 const EventDataSchema = z.object({
@@ -37,10 +39,16 @@ const EventDataSchema = z.object({
   trigger: z.enum(['manual', 'schedule']).optional().default('manual'),
 })
 
-function sanitizeErrorMessage(err: unknown): string {
+/** Error text safe to store: app keys and (when known) the run owner's own Anthropic key are redacted. */
+function sanitizeErrorMessage(err: unknown, extraSecrets: Array<string | null | undefined> = []): string {
   const raw = (err instanceof Error ? err.message : String(err)).slice(0, 500)
-  const keys = [process.env.FRED_API_KEY, process.env.ANTHROPIC_API_KEY, process.env.NEWS_API_KEY, process.env.POLYGON_API_KEY].filter(Boolean) as string[]
-  return keys.reduce((msg, key) => msg.split(key).join('[REDACTED]'), raw)
+  return redactSecrets(raw, [
+    process.env.FRED_API_KEY,
+    process.env.ANTHROPIC_API_KEY,
+    process.env.NEWS_API_KEY,
+    process.env.POLYGON_API_KEY,
+    ...extraSecrets,
+  ])
 }
 
 async function loadSettingsRow(userId: string): Promise<Record<string, unknown> | null> {
@@ -227,8 +235,12 @@ export const portfolioAnalysis = inngest.createFunction(
     // Step 4: Run all agents in parallel
     const agentResults = await Promise.all([
       step.run('run-macroeconomics', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runMacroeconomicsAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -236,7 +248,7 @@ export const portfolioAnalysis = inngest.createFunction(
             is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -256,8 +268,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-fed-rates', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runFedRatesAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -265,7 +281,7 @@ export const portfolioAnalysis = inngest.createFunction(
             is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -285,8 +301,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-geopolitics', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runGeopoliticsAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -294,7 +314,7 @@ export const portfolioAnalysis = inngest.createFunction(
             is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -314,8 +334,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-sentiment', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runSentimentAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -323,7 +347,7 @@ export const portfolioAnalysis = inngest.createFunction(
             is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -343,8 +367,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-fundamentals', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runFundamentalsAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -352,7 +380,7 @@ export const portfolioAnalysis = inngest.createFunction(
             is_new_portfolio:  isNewPortfolio,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -372,8 +400,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-technical-analysis', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runTechnicalAnalysisAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -382,7 +414,7 @@ export const portfolioAnalysis = inngest.createFunction(
             priceData,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -402,8 +434,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }),
 
       step.run('run-sector-analysis', async (): Promise<AgentRunResult> => {
+        let apiKey: string | undefined
         try {
+          // The run owner's own Anthropic key, resolved inside this step and never returned from it
+          apiKey = await requireRunApiKey(user_id)
           return await runSectorAnalysisAgent({
+            apiKey,
             risk_profile:      settings.risk_profile,
             target_return_pct: settings.target_return_pct,
             target_horizon:    settings.target_horizon,
@@ -413,7 +449,7 @@ export const portfolioAnalysis = inngest.createFunction(
             tickerDetails,
           })
         } catch (err) {
-          const errorMessage = sanitizeErrorMessage(err)
+          const errorMessage = sanitizeErrorMessage(err, [apiKey])
           const admin = createAdminClient()
 
           await Promise.all([
@@ -531,6 +567,7 @@ export const portfolioAnalysis = inngest.createFunction(
     // Each later stage is its own step so a retry never re-runs the synthesizer.
     const { result: synthResult, usage: synthUsage } = await step.run('synthesize', async (): Promise<SynthesizerRunResult> => {
       try {
+        const apiKey = await requireRunApiKey(user_id)
         const returnMetrics = computePortfolioReturnMetrics(
           snapshot.holdings,
           priceData,
@@ -538,7 +575,7 @@ export const portfolioAnalysis = inngest.createFunction(
           settings.target_horizon,
         )
         await setStage('synthesizer', 'running')
-        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
+        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [], apiKey })
         await setStage('synthesizer', 'complete')
         return result
       } catch (err) {
@@ -609,7 +646,7 @@ export const portfolioAnalysis = inngest.createFunction(
     // Step 10: Separate, strict AI business-activity review of every ticker
     const { verdicts: reviewerVerdicts, usage: reviewerUsage } = await step.run('shariah-review', async (): Promise<ReviewerRunResult> => {
       try {
-        return await runShariahReviewer(reviewerInputs)
+        return await runShariahReviewer(reviewerInputs, await requireRunApiKey(user_id))
       } catch (err) {
         await markRunError(err)
         throw err

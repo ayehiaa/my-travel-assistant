@@ -11,6 +11,8 @@ export interface TechnicalAnalysisAgentInput {
   target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
   is_new_portfolio?: boolean
+  /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
+  apiKey: string
   priceData:         PriceHistory
 }
 
@@ -61,6 +63,7 @@ export async function runTechnicalAnalysisAgent(
     name:   'technical_analysis',
     system: withIslamicMandate(SYSTEM_PROMPT),
     user:   userContent,
+    apiKey: input.apiKey,
   })
 
   return { output: parseAgentResponse(text, stopReason), usage }

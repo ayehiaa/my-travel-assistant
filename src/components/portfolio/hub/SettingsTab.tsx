@@ -6,6 +6,8 @@ import AlpacaCredentialsForm from '../AlpacaCredentialsForm'
 import RiskSafetyCard from '../RiskSafetyCard'
 import AutopilotCard from '../AutopilotCard'
 import NotificationsCard from '../NotificationsCard'
+import AiKeyCard from '../AiKeyCard'
+import { getAiKeyStatus } from '@/lib/aiKeyStore'
 import { readSafetySettings } from '@/lib/riskLimits'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { readNotificationPrefs } from '@/lib/notifications/prefs'
@@ -15,9 +17,10 @@ import { readEmailConfig } from '@/lib/notifications/config'
 export default async function SettingsTab({ userId, email }: { userId: string; email: string }) {
   const supabase = await createClient()
   // The hub page upserts the settings row before rendering, so it normally exists here
-  const [settingsRow, credRes] = await Promise.all([
+  const [settingsRow, credRes, aiKey] = await Promise.all([
     getSettingsRow(userId),
     supabase.from('alpaca_credentials').select('is_paper').eq('user_id', userId).maybeSingle(),
+    getAiKeyStatus(userId, email),
   ])
   const alpacaCred = credRes.data
 
@@ -63,12 +66,26 @@ export default async function SettingsTab({ userId, email }: { userId: string; e
           recommended for sale.
         </p>
       </div>
-      <section>
+      <section id="alpaca" className="scroll-mt-24">
         <h3 className="mb-1 text-lg font-bold text-[var(--ink)]" style={{ fontFamily: 'var(--display)' }}>
           Alpaca connection
         </h3>
         <p className="mb-4 text-sm text-[var(--ink-3)]">Connect your Alpaca account to execute trades from recommendations.</p>
         <AlpacaCredentialsForm initialConnected={!!alpacaCred} initialIsPaper={alpacaCred?.is_paper ?? true} />
+      </section>
+      <section id="ai-key" className="scroll-mt-24">
+        <h3 className="mb-1 text-lg font-bold text-[var(--ink)]">
+          AI analysis
+        </h3>
+        <p className="mb-4 text-sm text-[var(--ink-3)]">Your own Anthropic API key — you pay for your own analysis runs.</p>
+        <AiKeyCard
+          migrationApplied={aiKey.migrationApplied}
+          initialConnected={aiKey.connected}
+          initialProvider={aiKey.provider}
+          initialLast4={aiKey.last4}
+          initialCreatedAt={aiKey.createdAt}
+          usingOwnerFallback={aiKey.usingOwnerFallback}
+        />
       </section>
     </div>
   )

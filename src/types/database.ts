@@ -33,6 +33,8 @@ export type AuditAction =
   | 'recommendation_rejected'
   | 'autopilot_mode_changed'
   | 'notification_test_sent'
+  | 'ai_key_connected'
+  | 'ai_key_disconnected'
 
 export interface UserRoleRecord {
   user_id: string
@@ -66,6 +68,8 @@ export interface CustomerInvitation {
   status: CustomerInvitationStatus
   invited_at: string
   expires_at: string
+  /** Role granted at signup (migration 20261121; missing column → read as 'main'). */
+  role?: 'main' | 'premium' | 'premium_plus'
 }
 
 export interface Trip {

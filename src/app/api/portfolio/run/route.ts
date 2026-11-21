@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { logAudit } from '@/lib/auditLogger'
 import { startAnalysisRun } from '@/lib/startAnalysisRun'
+import { NO_AI_KEY_MESSAGE } from '@/lib/aiKeyResolver'
 
 export async function POST() {
   const user = await getAuthUser()
@@ -13,6 +14,8 @@ export async function POST() {
 
   if (!result.ok) {
     switch (result.reason) {
+      case 'no_ai_key':
+        return NextResponse.json({ error: NO_AI_KEY_MESSAGE }, { status: 400 })
       case 'no_credentials':
         return NextResponse.json({ error: 'Connect your Alpaca account first' }, { status: 400 })
       case 'alpaca_unreachable':
