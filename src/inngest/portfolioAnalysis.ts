@@ -438,12 +438,34 @@ export const portfolioAnalysis = inngest.createFunction(
       sector_analysis:    sectorOutput,
     }
 
+    // Progress rows for the post-agent stages (best-effort: progress display must never fail the run).
+    const setStage = async (stage: 'synthesizer' | 'shariah_screening', status: 'running' | 'complete'): Promise<void> => {
+      try {
+        await createAdminClient()
+          .from('run_progress')
+          .update({ status, completed_at: status === 'complete' ? new Date().toISOString() : null })
+          .eq('run_id', run_id)
+          .eq('agent_name', stage)
+      } catch {
+        // Ignored — runs started before this change have no rows for these stages.
+      }
+    }
+
     const markRunError = async (err: unknown): Promise<void> => {
       const admin = createAdminClient()
       await admin
         .from('recommendations')
         .update({ status: 'error', error_message: sanitizeErrorMessage(err), updated_at: new Date().toISOString() })
         .eq('id', run_id)
+      try {
+        await admin
+          .from('run_progress')
+          .update({ status: 'error', error_message: sanitizeErrorMessage(err) })
+          .eq('run_id', run_id)
+          .eq('status', 'running')
+      } catch {
+        // Ignored — progress display only.
+      }
     }
 
     // Step 7: Synthesize agent outputs into a proposed allocation.
@@ -456,7 +478,10 @@ export const portfolioAnalysis = inngest.createFunction(
           settings.target_return_pct,
           settings.target_horizon,
         )
-        return await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
+        await setStage('synthesizer', 'running')
+        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [] })
+        await setStage('synthesizer', 'complete')
+        return result
       } catch (err) {
         await markRunError(err)
         throw err
@@ -493,6 +518,7 @@ export const portfolioAnalysis = inngest.createFunction(
 
     // Step 9: Real market data for the Shariah screen (security type, SIC, market cap, financials)
     const screeningData = await step.run('fetch-shariah-data', async (): Promise<{ details: TickerDetailsMap; financials: FinancialsMap }> => {
+      await setStage('shariah_screening', 'running')
       const missing = screeningTickers.filter(t => !tickerDetails[t])
       const extraDetails = await fetchTickerDetails(missing)
       const financials = await fetchLatestFinancials(screeningTickers)
@@ -589,6 +615,8 @@ export const portfolioAnalysis = inngest.createFunction(
         await markRunError(new Error('Failed to save recommendation'))
         throw new Error('Failed to save recommendation')
       }
+
+      await setStage('shariah_screening', 'complete')
 
       // Best-effort: the dedicated column only exists once the migration is applied.
       try {

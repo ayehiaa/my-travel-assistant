@@ -23,6 +23,8 @@ const AGENT_NAMES: Record<string, string> = {
   fundamentals: 'Fundamentals',
   technical_analysis: 'Technical Analysis',
   sector_analysis: 'Sector Analysis',
+  synthesizer: 'Synthesizer (portfolio allocation)',
+  shariah_screening: 'Shariah screening',
 }
 
 function getStatusStyle(status: string): React.CSSProperties {
@@ -137,7 +139,7 @@ export default function RunProgress({ runId, onComplete }: Props) {
           color: 'var(--ink)',
         }}
       >
-        Agent Progress
+        Analysis Progress
       </h2>
 
       <div
@@ -150,7 +152,8 @@ export default function RunProgress({ runId, onComplete }: Props) {
       >
         {agentKeys.map((key, i) => {
           const agent = agents.find(a => a.agent_name === key)
-          const status = agent?.status ?? 'pending'
+          // Runs started before the synthesizer / Shariah stages were tracked have no rows for them.
+          const status = agent?.status ?? (overallStatus === 'complete' ? 'complete' : 'pending')
           const isLast = i === agentKeys.length - 1
 
           return (
