@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/025-portfolio-trading-hub/spec.md` (one tabbed Portfolio hub: Overview / Rebalance / Activity / Settings)
+Active feature spec: `specs/026-friend-onboarding-byo-ai-key/spec.md` (friend onboarding: role picker on customer invitations, Alpaca setup guide + Getting started checklist, bring-your-own Anthropic API key)
 <!-- SPECKIT END -->
