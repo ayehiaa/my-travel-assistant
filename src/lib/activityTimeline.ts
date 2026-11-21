@@ -38,6 +38,15 @@ export const ACTIVITY_FILTER_LABELS: Record<ActivityFilter, string> = {
   open:   'Open orders',
 }
 
+/** Empty-state copy per filter (specs/028). */
+export const ACTIVITY_EMPTY_STATE: Record<ActivityFilter, { title: string; detail: string }> = {
+  all:    { title: 'Nothing here yet', detail: 'Analysis runs, approvals, orders, emails and settings changes will appear here.' },
+  runs:   { title: 'No analysis runs yet', detail: 'Run an analysis from the Rebalance tab to get started.' },
+  orders: { title: 'No orders yet', detail: 'Executions from a recommendation (including dry runs) will appear here.' },
+  alerts: { title: 'No emails sent yet', detail: 'Trading emails appear here once notifications are turned on.' },
+  open:   { title: 'No open orders', detail: 'Orders waiting to fill or waiting for the market to open will appear here.' },
+}
+
 export function parseActivityFilter(raw: string | string[] | undefined): ActivityFilter {
   const v = Array.isArray(raw) ? raw[0] : raw
   return (ACTIVITY_FILTERS as readonly string[]).includes(v ?? '') ? (v as ActivityFilter) : 'all'

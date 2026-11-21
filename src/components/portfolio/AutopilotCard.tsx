@@ -15,6 +15,7 @@ import {
   type AutopilotSettings,
   type RunInterval,
 } from '@/lib/schedule'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   initial: AutopilotSettings
@@ -91,9 +92,9 @@ export default function AutopilotCard({ initial, dryRun, tradingPaused }: Props)
   }
 
   return (
-    <section className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
+    <section className={SETTINGS_CARD} aria-labelledby="autopilot-heading">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-gray-900">Autopilot</h2>
+        <h3 id="autopilot-heading" className={SETTINGS_CARD_TITLE}>Autopilot</h3>
         <span
           className={`rounded-full px-3 py-1 text-xs font-bold ${
             savedMode === 'off' ? 'bg-gray-100 text-gray-600'

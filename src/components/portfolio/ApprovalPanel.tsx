@@ -26,7 +26,7 @@ const STATUS_CHIP: Record<ApprovalStatus, { label: string; className: string }> 
   expired:  { label: 'Expired',          className: 'bg-amber-100 text-amber-800' },
 }
 
-/** Approval panel for scheduled (autopilot) recommendations. Self-contained (moves to the hub in phase 6). */
+/** Approval panel for scheduled (autopilot) recommendations. Rendered first in the Rebalance view while pending. */
 export default function ApprovalPanel({
   recommendationId,
   status,
@@ -81,7 +81,7 @@ export default function ApprovalPanel({
   }
 
   return (
-    <section className="mb-6 rounded-xl border border-blue-200 bg-white p-5">
+    <section className="rounded-xl border border-blue-200 bg-white p-4 md:p-5" aria-label="Approval">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-bold text-gray-900">Autopilot — scheduled run</h2>
         {shownStatus && (
@@ -116,7 +116,7 @@ export default function ApprovalPanel({
             <p className="mt-2 text-sm text-amber-800">A newer recommendation exists — this one can only be rejected.</p>
           )}
           {tradingPaused && (
-            <p className="mt-2 text-sm text-red-700">Trading is paused — resume it in Portfolio Settings to approve.</p>
+            <p className="mt-2 text-sm text-red-700">Trading is paused — resume it in Settings → Safety to approve.</p>
           )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button

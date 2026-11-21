@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { fetchLivePortfolio, loadAlpacaCredentials, type AlpacaCredentials } from '@/lib/alpacaLivePortfolio'
 import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
 import { isAwaitingApproval, msUntilExpiry, readAutopilotInfo } from '@/lib/autopilot'
+import { getAiKeyStatus, type AiKeyStatus } from '@/lib/aiKeyStore'
+import { buildSetupChecklist } from '@/lib/setupChecklist'
 import type { LivePortfolio, NormalizedExecution } from '@/types/database'
 
 /**
@@ -85,4 +87,25 @@ export const getPendingApproval = cache(async (userId: string): Promise<{ recomm
   const blocking = exec !== null && executionBlocksNewRequest(exec.orders)
   if (!isAwaitingApproval(info, now, blocking)) return null
   return { recommendationId: rec.id as string, expiresInMs: msUntilExpiry(info, now) }
+})
+
+/** Claude API key status (never throws — see getAiKeyStatus). */
+export const getAiKey = cache(async (userId: string, email: string): Promise<AiKeyStatus> => getAiKeyStatus(userId, email))
+
+/**
+ * Getting-started checklist. The hub only renders after the terms gate, so step ① is always done.
+ * "Alpaca connected" means credentials are stored (no live Alpaca call).
+ */
+export const getSetupChecklist = cache(async (userId: string, email: string) => {
+  const [creds, aiKey, latestRec] = await Promise.all([
+    getCredentials(userId),
+    getAiKey(userId, email),
+    getLatestCompleteRecommendation(userId),
+  ])
+  return buildSetupChecklist({
+    tosAccepted:     true,
+    alpacaConnected: creds !== null,
+    aiKey:           aiKey.connected ? 'own' : aiKey.usingOwnerFallback ? 'app_owner' : 'none',
+    hasCompletedRun: !!latestRec,
+  })
 })

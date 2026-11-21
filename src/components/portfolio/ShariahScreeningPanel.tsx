@@ -45,7 +45,49 @@ export default function ShariahScreeningPanel({ screening }: Props) {
         {Number.isNaN(screenedAt.getTime()) ? '' : screenedAt.toLocaleString('en-GB')}.
       </p>
 
-      <div className="overflow-x-auto">
+      {/* Mobile: stacked cards (no horizontal scroll at 375px) */}
+      <ul className="space-y-2 md:hidden">
+        {screening.tickers.map(t => (
+          <li key={t.ticker} className="rounded-lg border border-gray-200 p-3 text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-semibold text-gray-900">{t.ticker}</span>
+                {t.is_holding && <span className="ml-2 text-xs text-gray-500">Held</span>}
+                {t.name && <div className="truncate text-xs text-gray-500">{t.name}</div>}
+              </div>
+              <span
+                className={
+                  t.verdict === 'compliant'
+                    ? 'shrink-0 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700'
+                    : 'shrink-0 rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700'
+                }
+              >
+                {t.verdict === 'compliant' ? 'Compliant' : 'Not compliant'}
+              </span>
+            </div>
+            <p className="mt-1 break-words text-gray-700">{t.reasons[0] ?? '—'}</p>
+            {t.non_permissible_income_pct !== null && (
+              <p className="text-xs text-gray-500">Non-permissible income ≈ {t.non_permissible_income_pct.toFixed(1)}%</p>
+            )}
+            <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              {RATIO_KEYS.map(k => {
+                const r = t.ratios[k]
+                return (
+                  <div key={k} className="min-w-0">
+                    <dt className="truncate text-gray-500" title={RATIO_LABELS[k]}>
+                      {k === 'debt' ? 'Debt' : k === 'cash_and_securities' ? 'Cash + sec.' : 'Receivables'}
+                    </dt>
+                    <dd className={`font-semibold ${ratioColour(r)}`}>{ratioText(r)}</dd>
+                    <dd className="truncate text-gray-500">{SOURCE_LABEL[r.source]}</dd>
+                  </div>
+                )
+              })}
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">

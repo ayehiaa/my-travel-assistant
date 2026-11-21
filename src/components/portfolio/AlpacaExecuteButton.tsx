@@ -6,6 +6,7 @@ import { useToast } from '@/context/ToastContext'
 import AlpacaOrderPreview, { type OrderPreviewItem } from './AlpacaOrderPreview'
 import PreviewSafetyNotice, { isPreviewBlocked } from './PreviewSafetyNotice'
 import type { PreviewSafety } from '@/app/api/portfolio/alpaca/preview/route'
+import { settingsHref } from '@/lib/portfolioHub'
 
 interface Props {
   recommendationId: string
@@ -100,7 +101,7 @@ export default function AlpacaExecuteButton({
           Execute trades
         </button>
         <a
-          href="/portfolio?tab=settings"
+          href={settingsHref('setup', 'alpaca')}
           style={{
             fontSize: 13,
             color: 'var(--blue-700)',

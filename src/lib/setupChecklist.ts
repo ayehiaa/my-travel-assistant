@@ -1,6 +1,6 @@
-import { hubHref } from '@/lib/portfolioHub'
+import { hubHref, settingsHref } from '@/lib/portfolioHub'
 
-/** "Getting started" checklist on the Portfolio Overview (specs/026-friend-onboarding-byo-ai-key). Pure. */
+/** "Getting started" checklist in Portfolio Settings → Setup (specs/026-friend-onboarding-byo-ai-key). Pure. */
 
 export type AiKeyState = 'own' | 'app_owner' | 'none'
 
@@ -19,18 +19,17 @@ export function buildSetupChecklist(state: {
   aiKey: AiKeyState
   hasCompletedRun: boolean
 }): { items: ChecklistItem[]; complete: boolean; doneCount: number } {
-  const settings = hubHref({ tab: 'settings' })
   const items: ChecklistItem[] = [
     {
       key: 'terms', label: 'Accept terms', done: state.tosAccepted, href: hubHref({}), cta: 'Review terms',
       detail: 'The Portfolio terms and risk notice.',
     },
     {
-      key: 'alpaca', label: 'Connect Alpaca (paper)', done: state.alpacaConnected, href: `${settings}#alpaca`, cta: 'Open Settings',
+      key: 'alpaca', label: 'Connect Alpaca (paper)', done: state.alpacaConnected, href: settingsHref('setup', 'alpaca'), cta: 'Connect Alpaca',
       detail: 'Create a free paper-trading account and paste its API keys.',
     },
     {
-      key: 'ai_key', label: 'Add your Anthropic API key', done: state.aiKey !== 'none', href: `${settings}#ai-key`, cta: 'Open Settings',
+      key: 'ai_key', label: 'Add your Anthropic API key', done: state.aiKey !== 'none', href: settingsHref('setup', 'ai-key'), cta: 'Add key',
       detail: state.aiKey === 'app_owner'
         ? 'Using the app key (owner account).'
         : 'You pay Anthropic directly for your analyses (≈ $0.15–0.30 each).',

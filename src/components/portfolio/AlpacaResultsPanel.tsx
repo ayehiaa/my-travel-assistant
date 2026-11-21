@@ -109,7 +109,44 @@ export default function AlpacaResultsPanel({ execution: initial }: Props) {
           {isTerminal ? 'No orders were submitted.' : 'Orders will appear here once the market is open.'}
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Mobile: stacked cards (no horizontal scroll at 375px) */}
+        <ul className="space-y-2 md:hidden">
+          {execution.orders.map((order, idx) => {
+            const chip = ORDER_CHIP[order.status] ?? ORDER_CHIP.error
+            const amount = typeof order.notional === 'number' && order.notional > 0
+              ? formatUsd(order.notional)
+              : order.qty > 0 ? `${formatQty(order.qty)} sh` : '—'
+            const filled = (order.filled_qty ?? 0) > 0
+              ? `${formatQty(order.filled_qty ?? 0)} sh${order.filled_avg_price ? ` @ ${formatUsd(order.filled_avg_price)}` : ''}`
+              : null
+            return (
+              <li key={`${order.ticker}-${order.action}-${idx}`} className="rounded-lg border border-[var(--rule)] p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${order.action === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {order.action.toUpperCase()}
+                    </span>
+                    <span className="font-mono font-bold text-[var(--ink)]">{order.ticker}</span>
+                  </span>
+                  <span className={`inline-block shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${chip.className}`}>{chip.label}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap justify-between gap-x-3 font-mono text-xs text-[var(--ink-2)]">
+                  <span>{amount}</span>
+                  {filled && <span>Filled {filled}</span>}
+                </div>
+                {order.error_message && <p className="mt-1 break-words text-xs italic text-[var(--ink-3)]">{order.error_message}</p>}
+                {order.risk_note && <p className="mt-1 break-words text-xs text-amber-700">{order.risk_note}</p>}
+                {order.alpaca_order_id && (
+                  <p className="mt-1 font-mono text-[11px] text-[var(--ink-4)]" title={order.alpaca_order_id}>
+                    Order {order.alpaca_order_id.slice(0, 8)}...
+                  </p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b-2 border-[var(--rule)] text-left">
@@ -163,6 +200,7 @@ export default function AlpacaResultsPanel({ execution: initial }: Props) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   )

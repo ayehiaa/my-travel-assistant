@@ -9,6 +9,7 @@ import {
   type RiskLimits,
   type SafetySettings,
 } from '@/lib/riskLimits'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   initial: SafetySettings
@@ -188,9 +189,9 @@ export default function RiskSafetyCard({ initial }: Props) {
   }
 
   return (
-    <div className="mt-6 max-w-[640px] rounded-xl border border-gray-200 bg-white p-6">
+    <section className={SETTINGS_CARD} aria-labelledby="risk-safety-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-gray-900">Risk &amp; safety</h2>
+        <h3 id="risk-safety-heading" className={SETTINGS_CARD_TITLE}>Risk &amp; safety</h3>
         <div className="flex gap-2">
           {dryRun && <span className="rounded bg-purple-600 px-2 py-0.5 font-mono text-xs font-bold text-white">DRY RUN</span>}
           {paused && <span className="rounded bg-red-600 px-2 py-0.5 font-mono text-xs font-bold text-white">PAUSED</span>}
@@ -206,7 +207,7 @@ export default function RiskSafetyCard({ initial }: Props) {
 
       {/* Kill switch */}
       <section className={`mt-5 rounded-lg border p-4 ${paused ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-        <h3 className="text-sm font-bold text-gray-900">Kill switch</h3>
+        <h4 className="text-sm font-bold text-gray-900">Kill switch</h4>
         {paused ? (
           <>
             <p className="mt-1 text-sm font-semibold text-red-800">
@@ -271,7 +272,7 @@ export default function RiskSafetyCard({ initial }: Props) {
       {/* Dry run */}
       <section className="mt-5 rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-gray-900">Dry-run mode</h3>
+          <h4 className="text-sm font-bold text-gray-900">Dry-run mode</h4>
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${dryRun ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
             {dryRun ? 'On — no orders placed' : 'Off — live orders'}
           </span>
@@ -327,7 +328,7 @@ export default function RiskSafetyCard({ initial }: Props) {
 
       {/* Limits */}
       <section className="mt-5">
-        <h3 className="text-sm font-bold text-gray-900">Hard limits</h3>
+        <h4 className="text-sm font-bold text-gray-900">Hard limits</h4>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {PCT_FIELDS.map(f => (
             <label key={f.key} className="flex flex-col gap-1">
@@ -367,6 +368,6 @@ export default function RiskSafetyCard({ initial }: Props) {
           {busy === 'limits' ? 'Saving…' : 'Save limits'}
         </button>
       </section>
-    </div>
+    </section>
   )
 }

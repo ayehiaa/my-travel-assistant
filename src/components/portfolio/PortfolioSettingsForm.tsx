@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useToast } from '@/context/ToastContext'
 import { PortfolioSettings, RiskProfile, TargetHorizon } from '@/types/database'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   initialSettings: PortfolioSettings
@@ -83,15 +84,8 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
   }
 
   return (
-    <div
-      style={{
-        background: 'white',
-        borderRadius: 'var(--r-xl)',
-        border: '1px solid var(--rule)',
-        padding: '28px',
-        maxWidth: 480,
-      }}
-    >
+    <section className={SETTINGS_CARD} aria-labelledby="targets-heading">
+      <h3 id="targets-heading" className={`${SETTINGS_CARD_TITLE} mb-4`}>Target &amp; risk</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {/* Target Return */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -157,6 +151,6 @@ export default function PortfolioSettingsForm({ initialSettings }: Props) {
           {saving ? 'Saving…' : 'Save settings'}
         </button>
       </div>
-    </div>
+    </section>
   )
 }

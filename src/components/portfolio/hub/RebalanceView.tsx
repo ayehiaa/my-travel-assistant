@@ -21,6 +21,8 @@ interface Props {
   execution: NormalizedExecution | null
   hasBlockingExecution: boolean
   safety: SafetySettings
+  /** Live current vs this recommendation's target (hub Rebalance tab, latest only). Falls back to analysis-time weights. */
+  liveAllocation?: { rows: AllocationRow[]; note: string } | null
 }
 
 const DISCLAIMER_TEXT =
@@ -28,9 +30,11 @@ const DISCLAIMER_TEXT =
   'It does not constitute regulated financial advice. ' +
   'Always consult a qualified financial adviser before making investment decisions.'
 
+const CARD = 'min-w-0 rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5'
+
 function Card({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <section className="rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5" aria-labelledby={id}>
+    <section className={CARD} aria-labelledby={id}>
       <h3 id={id} className="mb-3 text-sm font-semibold text-[var(--ink)]">{title}</h3>
       {children}
     </section>
@@ -50,9 +54,9 @@ function riskNotes(rec: Recommendation, execution: NormalizedExecution | null, s
 }
 
 /**
- * The Rebalance view of one recommendation: summary, approval, review & execute, current vs target, proposed trades
- * (Shariah chips), excluded tickers, risk notes and the collapsible "Why". Shared by the hub's Rebalance tab and the
- * /portfolio/recommendations/[id] deep-link page.
+ * The Rebalance view of one recommendation (specs/028 order): pending approval → summary → current vs target →
+ * proposed trades → Shariah screening → risk notes → collapsible "Why" → run cost → review & execute + results.
+ * Shared by the hub's Rebalance tab and the /portfolio/recommendations/[id] deep-link page.
  */
 export default function RebalanceView({
   recommendation: rec,
@@ -62,24 +66,47 @@ export default function RebalanceView({
   execution,
   hasBlockingExecution,
   safety,
+  liveAllocation = null,
 }: Props) {
   const autopilot = readAutopilotInfo(rec as unknown as Record<string, unknown>)
   const now = new Date()
+  const approvalStatus = effectiveApprovalStatus(autopilot, now)
   const screening = readShariahScreening(rec)
   const actions = rec.action_list ?? []
-  const allocation: AllocationRow[] = actions
+  const analysisAllocation: AllocationRow[] = actions
     .map(a => ({ ticker: a.ticker, current_pct: a.current_pct, target_pct: a.target_pct, drift_pct: a.current_pct - a.target_pct }))
     .sort((a, b) => Math.abs(b.drift_pct) - Math.abs(a.drift_pct))
+  const allocation = liveAllocation ?? { rows: analysisAllocation, note: 'Weights at the time of the analysis.' }
   const notes = riskNotes(rec, execution, safety)
   const runDate = new Date(rec.run_at).toLocaleString('en-GB', {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London',
   })
   const trades = actions.filter(a => a.action !== 'hold').length
+  const usage = readRunUsage(rec)
+
+  const approvalPanel = autopilot.trigger === 'schedule' ? (
+    <ApprovalPanel
+      recommendationId={rec.id}
+      status={approvalStatus}
+      initialRemainingMs={msUntilExpiry(autopilot, now)}
+      isLatest={isLatest}
+      hasBlockingExecution={hasBlockingExecution}
+      dryRun={safety.dry_run}
+      isPaper={isPaper}
+      tradingPaused={safety.trading_paused}
+      autoExecution={autopilot.auto_execution}
+    />
+  ) : null
+  // A decision still waiting goes first; a decided / expired one is context after the summary
+  const approvalFirst = approvalStatus === 'pending'
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
+      {approvalFirst && approvalPanel}
+
       {/* Summary */}
-      <section className="rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5">
+      <section className={CARD} aria-labelledby="summary-heading">
+        <h3 id="summary-heading" className="sr-only">Summary</h3>
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-3)]">
           <span className="rounded-full bg-[var(--paper-3)] px-2 py-0.5 font-semibold">
             {autopilot.trigger === 'schedule' ? 'Scheduled run' : 'Manual run'}
@@ -87,25 +114,61 @@ export default function RebalanceView({
           <span>{runDate}</span>
           {!isLatest && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">Not the latest</span>}
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--ink-2)]">{rec.summary_text ?? 'Summary not available.'}</p>
+        <p className="mt-2 break-words text-sm leading-relaxed text-[var(--ink-2)]">{rec.summary_text ?? 'Summary not available.'}</p>
         <p className="mt-2 text-xs text-[var(--ink-3)]">
           {trades} trade{trades === 1 ? '' : 's'} proposed{screening ? ` · ${screening.excluded.length} excluded by Shariah screening` : ''}
         </p>
-        <div className="mt-1"><RunCostLine usage={readRunUsage(rec)} /></div>
       </section>
 
-      {autopilot.trigger === 'schedule' && (
-        <ApprovalPanel
-          recommendationId={rec.id}
-          status={effectiveApprovalStatus(autopilot, now)}
-          initialRemainingMs={msUntilExpiry(autopilot, now)}
-          isLatest={isLatest}
-          hasBlockingExecution={hasBlockingExecution}
-          dryRun={safety.dry_run}
-          isPaper={isPaper}
-          tradingPaused={safety.trading_paused}
-          autoExecution={autopilot.auto_execution}
-        />
+      {!approvalFirst && approvalPanel}
+
+      <AllocationBars rows={allocation.rows} title="Current vs target" note={allocation.note} />
+
+      <Card title="Proposed trades" id="trades-heading">
+        <ProposedTrades actions={actions} screening={screening} />
+      </Card>
+
+      <Card title="Shariah screening" id="shariah-heading">
+        <ShariahScreeningPanel screening={screening} />
+      </Card>
+
+      <Card title="Risk checks" id="risk-heading">
+        {notes.length > 0 ? (
+          <ul className="list-disc space-y-1 break-words pl-5 text-sm text-[var(--ink-2)]">
+            {notes.map((n, i) => <li key={i}>{n}</li>)}
+          </ul>
+        ) : (
+          <p className="text-sm text-[var(--ink-3)]">No forced trades or risk adjustments.</p>
+        )}
+        <p className="mt-2 text-xs text-[var(--ink-3)]">
+          Position-size, daily-order and loss-stop limits and the Shariah buy guard are applied again when you review
+          and execute.
+        </p>
+      </Card>
+
+      <details className={`group ${CARD}`}>
+        <summary className="cursor-pointer list-none text-sm font-semibold text-[var(--ink)] [&::-webkit-details-marker]:hidden">
+          <span className="mr-1 inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>
+          Why — agent analysis
+        </summary>
+        <div className="mt-4 space-y-5">
+          <div>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-3)]">Agent breakdown</h4>
+            <AgentBreakdown agentOutputs={rec.agent_outputs ?? {}} />
+          </div>
+          {rec.conflict_notes && (
+            <div>
+              <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--ink-3)]">Agent disagreements</h4>
+              <p className="break-words text-sm leading-relaxed text-[var(--ink-2)]">{rec.conflict_notes}</p>
+            </div>
+          )}
+        </div>
+      </details>
+
+      {usage && (
+        <div className="rounded-xl border border-[var(--rule)] bg-white px-4 py-3 md:px-5">
+          <RunCostLine usage={usage} />
+        </div>
       )}
 
       {/* Review & execute + live results */}
@@ -120,59 +183,6 @@ export default function RebalanceView({
         />
         {execution !== null && <AlpacaResultsPanel key={execution.id} execution={execution} />}
       </Card>
-
-      <AllocationBars rows={allocation} title="Current vs target" note="Weights at the time of the analysis." />
-
-      <Card title="Proposed trades" id="trades-heading">
-        <ProposedTrades actions={actions} screening={screening} />
-        {screening && screening.excluded.length > 0 && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-800">Excluded</h4>
-            <ul className="space-y-0.5 text-sm text-red-900">
-              {screening.excluded.map(e => (
-                <li key={e.ticker}><span className="font-mono font-semibold">{e.ticker}</span> — {e.reasons.join('; ')}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Card>
-
-      <Card title="Risk checks" id="risk-heading">
-        {notes.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--ink-2)]">
-            {notes.map((n, i) => <li key={i}>{n}</li>)}
-          </ul>
-        ) : (
-          <p className="text-sm text-[var(--ink-3)]">No forced trades or risk adjustments.</p>
-        )}
-        <p className="mt-2 text-xs text-[var(--ink-3)]">
-          Position-size, daily-order and loss-stop limits and the Shariah buy guard are applied again when you review
-          and execute.
-        </p>
-      </Card>
-
-      <details className="group rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-[var(--ink)]">
-          <span className="mr-1 inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>
-          Why — agent analysis &amp; Shariah screening
-        </summary>
-        <div className="mt-4 space-y-5">
-          <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-3)]">Agent breakdown</h4>
-            <AgentBreakdown agentOutputs={rec.agent_outputs ?? {}} />
-          </div>
-          {rec.conflict_notes && (
-            <div>
-              <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--ink-3)]">Agent disagreements</h4>
-              <p className="text-sm leading-relaxed text-[var(--ink-2)]">{rec.conflict_notes}</p>
-            </div>
-          )}
-          <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-3)]">Shariah screening</h4>
-            <ShariahScreeningPanel screening={screening} />
-          </div>
-        </div>
-      </details>
 
       <p className="rounded-lg border border-yellow-600/40 bg-yellow-50 px-3 py-2 text-xs leading-relaxed text-amber-900">{DISCLAIMER_TEXT}</p>
     </div>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { isValidAnthropicKeyFormat } from '@/lib/aiKeyResolver'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   migrationApplied: boolean
@@ -170,9 +171,9 @@ export default function AiKeyCard(props: Props) {
   )
 
   return (
-    <section className="max-w-[480px] rounded-xl border border-[var(--rule)] bg-white p-5" aria-labelledby="ai-key-heading">
+    <section className={SETTINGS_CARD} aria-labelledby="ai-key-heading">
       <div className="flex items-center justify-between gap-3">
-        <h3 id="ai-key-heading" className="text-sm font-semibold text-[var(--ink)]">Claude API key</h3>
+        <h3 id="ai-key-heading" className={SETTINGS_CARD_TITLE}>Claude API key</h3>
         {connected ? (
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">Connected</span>
         ) : props.usingOwnerFallback ? (

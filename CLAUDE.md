@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/027-plans-addons-admin/spec.md` (account type / plan / add-ons replace `user_roles.role`; admin via `APP_ADMIN_EMAILS`; `/admin` page; admin-only customer invitations; RLS hardening on user_roles)
+Active feature spec: `specs/028-portfolio-hub-ux-cleanup/spec.md` (Portfolio hub UX restructure, presentation only: global status strip, slimmer Overview, reordered Rebalance, sectioned Settings `?tab=settings&section=…`, mobile polish)
 <!-- SPECKIT END -->

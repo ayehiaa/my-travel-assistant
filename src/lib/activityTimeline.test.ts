@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  ACTIVITY_EMPTY_STATE,
+  ACTIVITY_FILTERS,
   approvalActivity,
   auditActivity,
   executionActivity,
@@ -113,5 +115,15 @@ describe('mergeTimeline / filterTimeline / paginateTimeline', () => {
     expect(parseActivityFilter('open')).toBe('open')
     expect(parseActivityFilter('bogus')).toBe('all')
     expect(parseActivityFilter(undefined)).toBe('all')
+  })
+})
+
+describe('ACTIVITY_EMPTY_STATE', () => {
+  it('has copy for every filter', () => {
+    for (const f of ACTIVITY_FILTERS) {
+      expect(ACTIVITY_EMPTY_STATE[f].title.length).toBeGreaterThan(0)
+      expect(ACTIVITY_EMPTY_STATE[f].detail.length).toBeGreaterThan(0)
+    }
+    expect(ACTIVITY_EMPTY_STATE.open.title).toBe('No open orders')
   })
 })

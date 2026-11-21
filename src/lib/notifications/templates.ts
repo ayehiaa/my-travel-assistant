@@ -1,3 +1,4 @@
+import { settingsHref } from '@/lib/portfolioHub'
 import {
   escapeHtml,
   formatNyDate,
@@ -48,7 +49,7 @@ const C = {
 // ── HTML building blocks ─────────────────────────────────────────────────────
 
 function layout(title: string, bodyHtml: string, ctx: TemplateContext): string {
-  const settingsUrl = `${ctx.baseUrl}/portfolio/settings`
+  const settingsUrl = `${ctx.baseUrl}${settingsHref('notifications')}`
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
@@ -112,7 +113,7 @@ function recommendationUrl(ctx: TemplateContext, id: string): string {
 }
 
 function textFooter(ctx: TemplateContext): string {
-  return `\n\n—\nTurn these emails off in Portfolio Settings → Notifications: ${ctx.baseUrl}/portfolio/settings\nNot investment advice.`
+  return `\n\n—\nTurn these emails off in Portfolio Settings → Notifications: ${ctx.baseUrl}${settingsHref('notifications')}\nNot investment advice.`
 }
 
 function tradesText(trades: TradeLine[]): string {
@@ -298,7 +299,7 @@ function tradingPaused(d: TradingPausedPayload, ctx: TemplateContext): RenderedE
   const source = d.source === 'loss_stop' ? 'An automatic loss stop paused trading.' : 'Trading was paused with the kill switch.'
   const subject = d.source === 'loss_stop' ? 'Trading paused — loss stop triggered' : 'Trading paused'
   const reason = truncate(d.reason, 300)
-  const url = `${ctx.baseUrl}/portfolio/settings`
+  const url = `${ctx.baseUrl}${settingsHref('safety')}`
   const text = [
     source,
     `Reason: ${reason}`,
@@ -327,7 +328,7 @@ function tradingResumed(d: TradingResumedPayload, ctx: TemplateContext): Rendere
     callout(`Trading was resumed (${escapeHtml(when)}).`, 'green'),
     p('Executions can run again, within your risk limits and dry-run setting.'),
     p('If this was not you, pause trading immediately in Portfolio Settings.', C.red),
-    button('Open Portfolio Settings', `${ctx.baseUrl}/portfolio/settings`),
+    button('Open Portfolio Settings', `${ctx.baseUrl}${settingsHref('safety')}`),
   ].join(''), ctx)
   return { subject, text, html }
 }
