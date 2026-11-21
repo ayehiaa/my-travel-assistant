@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '@/context/ToastContext'
+import AlpacaSetupGuide from './AlpacaSetupGuide'
 
 interface Props {
   initialConnected: boolean
@@ -184,6 +185,7 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
 
   return (
     <div style={cardStyle}>
+      <AlpacaSetupGuide />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={labelStyle} htmlFor="alpaca-key-id">API Key ID</label>

@@ -11,6 +11,8 @@ export interface MacroAgentInput {
   target_horizon: 'monthly' | 'annual'
   holdings_tickers: string[]
   is_new_portfolio?: boolean
+  /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
+  apiKey: string
 }
 
 const SYSTEM_PROMPT =
@@ -44,6 +46,7 @@ export async function runMacroeconomicsAgent(input: MacroAgentInput): Promise<Ag
     name:   'macroeconomics',
     system: withIslamicMandate(SYSTEM_PROMPT),
     user:   userContent,
+    apiKey: input.apiKey,
   })
 
   return { output: parseAgentResponse(text, stopReason), usage }

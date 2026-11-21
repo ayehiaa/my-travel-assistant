@@ -12,6 +12,8 @@ export interface SectorAnalysisAgentInput {
   target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
   is_new_portfolio?: boolean
+  /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
+  apiKey: string
   priceData:         PriceHistory
   tickerDetails:     TickerDetailsMap
 }
@@ -77,6 +79,7 @@ export async function runSectorAnalysisAgent(
     name:   'sector_analysis',
     system: withIslamicMandate(SYSTEM_PROMPT),
     user:   userContent,
+    apiKey: input.apiKey,
   })
 
   return { output: parseAgentResponse(text, stopReason), usage }

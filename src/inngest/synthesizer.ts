@@ -18,6 +18,8 @@ export interface SynthesizerParams {
   isNewPortfolio?:   boolean
   /** Starter candidates the agents researched (new portfolio only). */
   candidateTickers?: string[]
+  /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
+  apiKey: string
 }
 
 export interface SynthesizerOutput {
@@ -183,6 +185,7 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
     name:   'synthesizer',
     system: systemPrompt,
     user:   buildUserPrompt(agentOutputs, recentSummaries),
+    apiKey: params.apiKey,
   })
 
   // A refusal or a truncated answer must never become a recommendation — throw so the step retries / fails.

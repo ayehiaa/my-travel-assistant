@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { cooldownRemainingSeconds, type RunTrigger } from '@/lib/schedule'
 import { inngest } from '@/inngest/client'
+import { resolveAiKeyForUser } from '@/lib/aiKeyStore'
 
 export const ANALYSIS_REQUESTED_EVENT = 'portfolio/analysis.requested'
 
@@ -20,17 +21,26 @@ export const PIPELINE_STAGES = [...AGENT_NAMES, 'synthesizer', 'shariah_screenin
 
 export type StartRunResult =
   | { ok: true; runId: string }
-  | { ok: false; reason: 'no_credentials' | 'alpaca_unreachable' | 'no_funds' | 'db_error' | 'event_failed' }
+  | { ok: false; reason: 'no_credentials' | 'no_ai_key' | 'alpaca_unreachable' | 'no_funds' | 'db_error' | 'event_failed' }
   | { ok: false; reason: 'cooldown'; retryAfterSeconds: number }
 
 /**
  * Server only. Shared by POST /api/portfolio/run (trigger 'manual') and the scheduler (trigger 'schedule'):
- * credentials + live value checks, cooldown (24 h manual / 20 h scheduled), recommendations row, run_progress rows,
+ * Anthropic key check (specs/026 — refused before anything is written), credentials + live value checks, cooldown (24 h manual / 20 h scheduled), recommendations row, run_progress rows,
  * last_run_at, then the Inngest event. Callers must already have checked auth / role and log the audit entry.
  */
 export async function startAnalysisRun(params: { userId: string; trigger: RunTrigger; now?: Date }): Promise<StartRunResult> {
   const { userId, trigger } = params
   const now = params.now ?? new Date()
+
+  // Each user pays for their own analysis: require their own Anthropic key (or the owner-email app-key fallback).
+  // Checked first, before any row is written. The key itself is not kept — each pipeline step resolves it again.
+  try {
+    const aiKey = await resolveAiKeyForUser(userId)
+    if (!aiKey.ok) return { ok: false, reason: 'no_ai_key' }
+  } catch {
+    return { ok: false, reason: 'db_error' }
+  }
 
   // The portfolio is read live from Alpaca — require a connected account with funds or positions
   const creds = await loadAlpacaCredentials(userId)

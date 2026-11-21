@@ -163,7 +163,7 @@ export function parseReviewerResponse(raw: string, requestedTickers: string[]): 
  * Separate Anthropic call that judges every proposed and held ticker on business activity.
  * Its verdict is only one gate: the final decision is made in code (decideTickerVerdict).
  */
-export async function runShariahReviewer(tickers: ReviewerTickerInput[]): Promise<ReviewerRunResult> {
+export async function runShariahReviewer(tickers: ReviewerTickerInput[], apiKey: string): Promise<ReviewerRunResult> {
   if (tickers.length === 0) return { verdicts: {}, usage: null }
 
   const { text, stopReason, usage } = await callClaude({
@@ -171,6 +171,7 @@ export async function runShariahReviewer(tickers: ReviewerTickerInput[]): Promis
     name:   'shariah_reviewer',
     system: SYSTEM_PROMPT,
     user:   buildReviewerUserPrompt(tickers),
+    apiKey,
   })
 
   // Fail closed: a refusal or truncated review throws (step retries, then the run fails) — it never passes a ticker.

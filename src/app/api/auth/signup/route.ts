@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveSignupRole } from '@/lib/invitationRoles'
 
 const schema = z.object({
   token:    z.string().uuid(),
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
   // Re-validate the invitation token server-side
   const { data: invitation } = await admin
     .from('customer_invitations')
-    .select('id, email, status, expires_at')
+    // select('*') so this works before migration 20261121 (no role column → 'main')
+    .select('*')
     .eq('token', token)
     .maybeSingle()
 
@@ -58,10 +60,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
+  // Role from the invitation, re-validated and capped at the inviter's CURRENT role (anything unexpected → 'main')
+  const { data: inviterRole } = await admin
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', invitation.invited_by)
+    .maybeSingle()
+  const role = resolveSignupRole((invitation as Record<string, unknown>).role, inviterRole?.role)
+
   // Provision user_roles row
   await admin
     .from('user_roles')
-    .insert({ user_id: newUser.user.id, role: 'main', display_name: fullName.trim() })
+    .insert({ user_id: newUser.user.id, role, display_name: fullName.trim() })
 
   // Consume the invitation token
   await admin

@@ -2,6 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import { CustomerInvitation, CustomerInvitationStatus } from '@/types/database'
+import { useUser } from '@/context/UserContext'
+import { INVITABLE_ROLE_INFO, allowedInviteRoles, readInvitationRole, type InvitableRole } from '@/lib/invitationRoles'
+
+const ROLE_CHIP: Record<InvitableRole, string> = {
+  main:         'bg-gray-100 text-gray-700',
+  premium:      'bg-blue-100 text-blue-800',
+  premium_plus: 'bg-purple-100 text-purple-800',
+}
+
+function RoleChip({ role }: { role: InvitableRole }) {
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${ROLE_CHIP[role]}`}>
+      {INVITABLE_ROLE_INFO[role].label}
+    </span>
+  )
+}
 
 function initials(name: string) {
   return name.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
@@ -46,6 +62,9 @@ function avatarBg(status: CustomerInvitationStatus) {
 }
 
 export default function CustomerInviteManager() {
+  const { role: myRole } = useUser()
+  const grantable = allowedInviteRoles(myRole)
+  const [inviteRole, setInviteRole] = useState<InvitableRole>('main')
   const [invitations, setInvitations] = useState<CustomerInvitation[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [inviting, setInviting] = useState(false)
@@ -69,13 +88,13 @@ export default function CustomerInviteManager() {
     const res = await fetch('/api/customer-invitations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, invitedName: name }),
+      body: JSON.stringify({ email, invitedName: name, role: inviteRole }),
     })
     const data = await res.json()
     setSubmitting(false)
     if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
     setInvitations(prev => [data, ...prev])
-    setName(''); setEmail(''); setInviting(false)
+    setName(''); setEmail(''); setInviteRole('main'); setInviting(false)
   }
 
   async function handleResend(id: string) {
@@ -142,9 +161,25 @@ export default function CustomerInviteManager() {
             />
             {error && <p style={{ fontSize: 12, color: 'var(--coral)', marginTop: 4 }}>{error}</p>}
           </div>
+          <div className="col-span-full order-last flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <label htmlFor="invite-role" className="text-[11px] font-bold uppercase tracking-wide text-[var(--ink-3)]">
+              Account type
+            </label>
+            <select
+              id="invite-role"
+              value={inviteRole}
+              onChange={e => setInviteRole(e.target.value as InvitableRole)}
+              className="rounded-lg border border-[var(--rule)] bg-white px-3 py-2 text-sm font-semibold text-[var(--ink)]"
+            >
+              {grantable.map(r => (
+                <option key={r} value={r}>{INVITABLE_ROLE_INFO[r].label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--ink-2)]">{INVITABLE_ROLE_INFO[inviteRole].description}</p>
+          </div>
           <button
             type="button"
-            onClick={() => { setInviting(false); setName(''); setEmail(''); setError(null) }}
+            onClick={() => { setInviting(false); setName(''); setEmail(''); setInviteRole('main'); setError(null) }}
             style={{
               background: 'none', border: '1.5px solid var(--rule)', borderRadius: 999,
               padding: '8px 16px', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
@@ -218,6 +253,7 @@ export default function CustomerInviteManager() {
                   {inv.invited_name}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{inv.email}</div>
+                <div className="mt-1"><RoleChip role={readInvitationRole(inv)} /></div>
               </div>
 
               <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>
