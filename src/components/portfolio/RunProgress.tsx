@@ -81,6 +81,7 @@ export default function RunProgress({ runId, onComplete }: Props) {
   const toast = useToast()
   const [agents, setAgents] = useState<AgentStatus[]>([])
   const [overallStatus, setOverallStatus] = useState<string>('running')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const onCompleteRef = useRef(onComplete)
   const completedRef = useRef(false)
@@ -100,6 +101,7 @@ export default function RunProgress({ runId, onComplete }: Props) {
         const data = await res.json()
         setAgents(data.agents)
         setOverallStatus(data.status)
+        setErrorMessage(typeof data.error_message === 'string' ? data.error_message : null)
 
         if (data.status === 'complete' || data.status === 'error') {
           if (intervalRef.current !== null) {
@@ -218,9 +220,19 @@ export default function RunProgress({ runId, onComplete }: Props) {
             color: '#dc2626',
           }}
         >
-          <strong>Run failed</strong> — one or more agents encountered an error.
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#991b1b' }}>
-            Please try running the analysis again.
+          <strong>Run failed</strong>
+          <p className="mt-1 text-sm text-red-800 break-words">
+            {errorMessage ?? 'One of the analysis stages encountered an error.'}
+          </p>
+          <p className="mt-2 text-sm text-red-800">
+            A failed run does not count towards the 24-hour limit.{' '}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="font-semibold underline"
+            >
+              Refresh to run again
+            </button>
           </p>
         </div>
       )}
