@@ -35,8 +35,20 @@ export function TabSkeleton({ tab }: { tab: HubTab }) {
           <Skeleton className="h-3 w-56" />
         </div>
         <ChartSkeleton />
-        <CardSkeleton lines={4} />
         <CardSkeleton lines={5} />
+      </div>
+    )
+  }
+  if (tab === 'settings') {
+    return (
+      <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)] md:gap-8" aria-busy="true" aria-label="Loading">
+        <div className="flex gap-2 md:flex-col">
+          {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-8 w-20 rounded-full md:w-full md:rounded-lg" />)}
+        </div>
+        <div className="max-w-2xl space-y-4">
+          <CardSkeleton lines={3} />
+          <CardSkeleton lines={4} />
+        </div>
       </div>
     )
   }

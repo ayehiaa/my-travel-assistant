@@ -7,10 +7,11 @@ import RebalanceView from '@/components/portfolio/hub/RebalanceView'
 import { Recommendation } from '@/types/database'
 import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
 import { readSafetySettings } from '@/lib/riskLimits'
+import { hubHref } from '@/lib/portfolioHub'
 
 export const metadata = { title: 'Sojourn — Portfolio Recommendation' }
 
-/** Deep-link / history view of one recommendation. Renders the same Rebalance components as the hub. */
+/** Deep-link / history view of one recommendation. Renders the same Rebalance layout as the hub (RebalanceView). */
 export default async function RecommendationDetailPage({
   params,
 }: {
@@ -70,18 +71,22 @@ export default async function RecommendationDetailPage({
 
   return (
     <main className="mx-auto max-w-[960px] px-4 pb-12 pt-6 md:px-6 md:pt-10">
-      <Link href="/portfolio?tab=activity" className="text-sm font-semibold text-[var(--blue-700)]">
+      <Link href={hubHref({ tab: 'activity' })} className="text-sm font-semibold text-[var(--blue-700)]">
         ← Portfolio activity
       </Link>
-      <h1 className="mb-6 mt-2 text-2xl font-bold text-[var(--ink)] md:text-3xl" style={{ fontFamily: 'var(--display)' }}>
-        Portfolio Recommendation
+      <h1 className="mb-2 mt-2 font-[family-name:var(--display)] text-2xl font-bold text-[var(--ink)] md:text-3xl">
+        Recommendation
       </h1>
-      {isLatest && (
-        <p className="mb-4 text-sm text-[var(--ink-3)]">
-          This is your latest recommendation — it is also shown in{' '}
-          <Link href="/portfolio?tab=rebalance" className="font-semibold text-[var(--blue-700)] underline">Rebalance</Link>.
-        </p>
-      )}
+      <p className="mb-4 text-sm text-[var(--ink-3)] md:mb-6">
+        {isLatest ? (
+          <>
+            Your latest recommendation — also shown in{' '}
+            <Link href={hubHref({ tab: 'rebalance' })} className="font-semibold text-[var(--blue-700)] underline">Rebalance</Link>.
+          </>
+        ) : (
+          'An earlier recommendation — only the latest one can be executed.'
+        )}
+      </p>
       <RebalanceView
         recommendation={rec as Recommendation}
         isLatest={isLatest}

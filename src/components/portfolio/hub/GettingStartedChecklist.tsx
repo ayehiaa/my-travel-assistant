@@ -3,7 +3,7 @@ import type { ChecklistItem } from '@/lib/setupChecklist'
 
 const NUMERALS = ['①', '②', '③', '④']
 
-/** "Getting started" card at the top of the Portfolio Overview until setup is complete (specs/026). */
+/** "Getting started" card in Portfolio Settings → Setup until setup is complete (specs/026, moved in specs/028). */
 export default function GettingStartedChecklist({ items, doneCount }: { items: ChecklistItem[]; doneCount: number }) {
   return (
     <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 md:p-5" aria-labelledby="getting-started-heading">

@@ -9,7 +9,8 @@ function expectWellFormed(email: { subject: string; text: string; html: string }
   expect(email.subject.length).toBeGreaterThan(0)
   expect(email.text.length).toBeGreaterThan(0)
   expect(email.html.startsWith('<!DOCTYPE html>')).toBe(true)
-  expect(email.html).toContain('https://app.example/portfolio/settings')
+  expect(email.html).toContain('https://app.example/portfolio?tab=settings&amp;section=notifications')
+  expect(email.text).toContain('https://app.example/portfolio?tab=settings&section=notifications')
 }
 
 describe('run_completed', () => {

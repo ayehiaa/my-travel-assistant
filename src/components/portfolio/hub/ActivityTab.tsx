@@ -6,6 +6,7 @@ import { formatUsd as formatCostUsd, readRunUsage } from '@/lib/aiCost'
 import { hubHref } from '@/lib/portfolioHub'
 import {
   ACTIVITY_AUDIT_ACTIONS,
+  ACTIVITY_EMPTY_STATE,
   ACTIVITY_FILTERS,
   ACTIVITY_MAX_PAGES,
   ACTIVITY_FILTER_LABELS,
@@ -132,7 +133,7 @@ export default async function ActivityTab({ userId, filter, page }: Props) {
   const hasMore = paged.hasMore && page < ACTIVITY_MAX_PAGES
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <nav aria-label="Filter activity" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
         <ul className="flex gap-2">
           {ACTIVITY_FILTERS.map(f => (
@@ -158,18 +159,24 @@ export default async function ActivityTab({ userId, filter, page }: Props) {
       )}
 
       {items.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-[var(--rule)] px-6 py-12 text-center text-sm text-[var(--ink-3)]">
-          {filter === 'open' ? 'No open orders.' : 'Nothing here yet.'}
+        <div className="rounded-xl border-2 border-dashed border-[var(--rule)] px-6 py-10 text-center">
+          <p className="font-semibold text-[var(--ink-2)]">{ACTIVITY_EMPTY_STATE[filter].title}</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-[var(--ink-3)]">{ACTIVITY_EMPTY_STATE[filter].detail}</p>
+          {filter === 'runs' && (
+            <Link href={hubHref({ tab: 'rebalance' })} className="mt-3 inline-block text-sm font-semibold text-[var(--blue-700)]">
+              Go to Rebalance →
+            </Link>
+          )}
         </div>
       ) : (
         <ol className="space-y-2">
           {items.map(item => (
-            <li key={item.key} className="rounded-xl border border-[var(--rule)] bg-white p-3 md:p-4">
+            <li key={item.key} className="min-w-0 rounded-xl border border-[var(--rule)] bg-white p-3 md:p-4">
               <div className="flex items-start gap-3">
                 <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${TONE_DOT[item.tone]}`} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-sm font-semibold text-[var(--ink)]">{item.title}</span>
+                    <span className="min-w-0 break-words text-sm font-semibold text-[var(--ink)]">{item.title}</span>
                     <span className="rounded bg-[var(--paper-3)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
                       {KIND_LABEL[item.kind]}
                     </span>
@@ -187,7 +194,7 @@ export default async function ActivityTab({ userId, filter, page }: Props) {
                   </div>
                   {item.detail && <p className="mt-0.5 break-words text-xs text-[var(--ink-3)]">{item.detail}</p>}
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                    <time dateTime={item.at} className="text-xs text-[var(--ink-4)]">{formatWhen(item.at)}</time>
+                    <time dateTime={item.at} className="text-xs text-[var(--ink-3)]">{formatWhen(item.at)}</time>
                     {item.recommendation_id && (
                       <Link href={`/portfolio/recommendations/${item.recommendation_id}`} className="text-xs font-semibold text-[var(--blue-700)]">
                         View recommendation →
@@ -202,7 +209,7 @@ export default async function ActivityTab({ userId, filter, page }: Props) {
       )}
 
       {(page > 1 || hasMore) && (
-        <nav aria-label="Activity pages" className="flex items-center justify-between text-sm">
+        <nav aria-label="Activity pages" className="flex items-center justify-between gap-3 border-t border-[var(--rule-soft)] pt-3 text-sm">
           {page > 1 ? (
             <Link href={hubHref({ tab: 'activity', filter: filter === 'all' ? null : filter, page: page - 1 === 1 ? null : page - 1 })} className="font-semibold text-[var(--blue-700)]">
               ← Newer

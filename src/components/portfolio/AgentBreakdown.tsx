@@ -105,6 +105,7 @@ export default function AgentBreakdown({ agentOutputs }: Props) {
                 padding: '12px 16px',
                 cursor: 'pointer',
                 display: 'flex',
+                flexWrap: 'wrap',
                 alignItems: 'center',
                 gap: 8,
                 listStyle: 'none',
@@ -113,7 +114,7 @@ export default function AgentBreakdown({ agentOutputs }: Props) {
                 color: 'var(--ink)',
               }}
             >
-              <span style={{ flex: 1 }}>{displayName}</span>
+              <span style={{ flex: '1 1 auto', minWidth: 0 }}>{displayName}</span>
               {output ? (
                 <>
                   <span style={STANCE_STYLES[output.stance] ?? STANCE_STYLES.neutral}>

@@ -10,6 +10,8 @@ import {
   parseChartPeriod,
   parseHubTab,
   parsePage,
+  parseSettingsSection,
+  settingsHref,
   proratedTargetPct,
   shariahBadgeFor,
   tradesForTicker,
@@ -43,6 +45,32 @@ describe('URL params', () => {
     expect(hubHref({ tab: 'activity', filter: 'runs', page: 2 })).toBe('/portfolio?tab=activity&filter=runs&page=2')
     expect(hubHref({ tab: 'overview', period: null })).toBe('/portfolio?tab=overview')
     expect(hubHref({})).toBe('/portfolio')
+  })
+  it('hubHref supports the settings section and a hash fragment', () => {
+    expect(hubHref({ tab: 'settings', section: 'safety' })).toBe('/portfolio?tab=settings&section=safety')
+    expect(hubHref({ tab: 'settings', section: 'setup', hash: 'alpaca' })).toBe('/portfolio?tab=settings&section=setup#alpaca')
+    expect(hubHref({ hash: null })).toBe('/portfolio')
+  })
+})
+
+describe('settings sections', () => {
+  it('parses known sections and defaults to setup', () => {
+    expect(parseSettingsSection('notifications')).toBe('notifications')
+    expect(parseSettingsSection(['automation', 'safety'])).toBe('automation')
+    expect(parseSettingsSection(undefined)).toBe('setup')
+    expect(parseSettingsSection('bogus')).toBe('setup')
+    expect(parseSettingsSection(' Safety ')).toBe('safety')
+  })
+  it('maps legacy anchors to their new section', () => {
+    expect(parseSettingsSection('alpaca')).toBe('setup')
+    expect(parseSettingsSection('#ai-key')).toBe('setup')
+    expect(parseSettingsSection('autopilot')).toBe('automation')
+    expect(parseSettingsSection('risk')).toBe('safety')
+  })
+  it('settingsHref builds section links', () => {
+    expect(settingsHref()).toBe('/portfolio?tab=settings&section=setup')
+    expect(settingsHref('notifications')).toBe('/portfolio?tab=settings&section=notifications')
+    expect(settingsHref('setup', 'ai-key')).toBe('/portfolio?tab=settings&section=setup#ai-key')
   })
 })
 

@@ -46,14 +46,71 @@ export function parsePage(raw: string | string[] | undefined, max: number): numb
   return Math.min(n, max)
 }
 
-/** Build a hub URL, dropping empty params. */
-export function hubHref(params: Record<string, string | number | null | undefined>): string {
+// ── Settings sections (specs/028-portfolio-hub-ux-cleanup) ───────────────────
+
+export const SETTINGS_SECTIONS = ['setup', 'strategy', 'automation', 'safety', 'notifications'] as const
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
+export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'setup'
+
+export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
+  setup:         'Setup',
+  strategy:      'Strategy',
+  automation:    'Automation',
+  safety:        'Safety',
+  notifications: 'Notifications',
+}
+
+export const SETTINGS_SECTION_DESCRIPTIONS: Record<SettingsSection, string> = {
+  setup:         'Connect Alpaca and add your Claude API key.',
+  strategy:      'Target return, risk profile and Islamic screening.',
+  automation:    'Scheduled analysis and autopilot.',
+  safety:        'Risk limits, dry run and the trading kill switch.',
+  notifications: 'Trading emails.',
+}
+
+/** Old anchors / names that still resolve to a section (e.g. links that pointed at #alpaca or #ai-key). */
+const SETTINGS_SECTION_ALIASES: Record<string, SettingsSection> = {
+  alpaca:    'setup',
+  'ai-key':  'setup',
+  ai_key:    'setup',
+  ai:        'setup',
+  targets:   'strategy',
+  autopilot: 'automation',
+  schedule:  'automation',
+  risk:      'safety',
+  email:     'notifications',
+}
+
+/** `?section=` → a settings section; unknown / missing → setup. Accepts legacy anchor names. */
+export function parseSettingsSection(raw: string | string[] | undefined): SettingsSection {
+  const v = firstParam(raw)?.trim().toLowerCase().replace(/^#/, '') ?? ''
+  if ((SETTINGS_SECTIONS as readonly string[]).includes(v)) return v as SettingsSection
+  return SETTINGS_SECTION_ALIASES[v] ?? DEFAULT_SETTINGS_SECTION
+}
+
+export type HubHrefParams = {
+  tab?: HubTab | null
+  section?: SettingsSection | null
+  /** Fragment appended after the query (no leading #), e.g. 'alpaca'. */
+  hash?: string | null
+} & Record<string, string | number | null | undefined>
+
+/** Build a hub URL, dropping empty params. The single URL builder for /portfolio links. */
+export function hubHref(params: HubHrefParams): string {
   const q = new URLSearchParams()
+  let hash = ''
   for (const [k, v] of Object.entries(params)) {
-    if (v !== null && v !== undefined && v !== '') q.set(k, String(v))
+    if (v === null || v === undefined || v === '') continue
+    if (k === 'hash') { hash = `#${String(v)}`; continue }
+    q.set(k, String(v))
   }
   const s = q.toString()
-  return s ? `/portfolio?${s}` : '/portfolio'
+  return `${s ? `/portfolio?${s}` : '/portfolio'}${hash}`
+}
+
+/** Link to one Settings section (optionally an anchor inside it). */
+export function settingsHref(section: SettingsSection = DEFAULT_SETTINGS_SECTION, hash?: string): string {
+  return hubHref({ tab: 'settings', section, hash })
 }
 
 // ── Returns ──────────────────────────────────────────────────────────────────

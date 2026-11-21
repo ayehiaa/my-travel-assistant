@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useToast } from '@/context/ToastContext'
 import AlpacaSetupGuide from './AlpacaSetupGuide'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   initialConnected: boolean
@@ -42,13 +43,6 @@ const labelStyle: React.CSSProperties = {
   color: 'var(--ink-3)',
 }
 
-const cardStyle: React.CSSProperties = {
-  background: 'white',
-  borderRadius: 'var(--r-xl)',
-  border: '1px solid var(--rule)',
-  padding: '28px',
-  maxWidth: 480,
-}
 
 export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper }: Props) {
   const toast = useToast()
@@ -127,8 +121,9 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
 
   if (connected) {
     return (
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <section className={SETTINGS_CARD} aria-labelledby="alpaca-heading">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 id="alpaca-heading" className={SETTINGS_CARD_TITLE}>Alpaca connection</h3>
           <span
             style={{
               background: '#dcfce7',
@@ -179,12 +174,14 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
             {safeguarded ? 'Margin & shorting disabled' : safeguarding ? 'Updating…' : 'Disable margin & shorting'}
           </button>
         </div>
-      </div>
+      </section>
     )
   }
 
   return (
-    <div style={cardStyle}>
+    <section className={SETTINGS_CARD} aria-labelledby="alpaca-heading">
+      <h3 id="alpaca-heading" className={SETTINGS_CARD_TITLE}>Alpaca connection</h3>
+      <p className="mb-4 mt-1 text-sm text-[var(--ink-3)]">Connect your Alpaca account to execute trades from recommendations.</p>
       <AlpacaSetupGuide />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -256,6 +253,6 @@ export default function AlpacaCredentialsForm({ initialConnected, initialIsPaper
           {saving ? 'Connecting…' : 'Connect'}
         </button>
       </div>
-    </div>
+    </section>
   )
 }

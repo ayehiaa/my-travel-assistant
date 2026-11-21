@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useToast } from '@/context/ToastContext'
 import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_LABELS, type NotificationType } from '@/lib/notifications/types'
 import type { NotificationPrefs } from '@/lib/notifications/prefs'
+import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from './settingsCard'
 
 interface Props {
   initial: NotificationPrefs
@@ -84,9 +85,9 @@ export default function NotificationsCard({ initial, emailConfigured, migrationA
   }
 
   return (
-    <section className="mt-6 max-w-[480px] rounded-xl border border-gray-200 bg-white p-5">
+    <section className={SETTINGS_CARD} aria-labelledby="notifications-heading">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-gray-900">Notifications</h2>
+        <h3 id="notifications-heading" className={SETTINGS_CARD_TITLE}>Notifications</h3>
         <span className={`rounded-full px-3 py-1 text-xs font-bold ${saved.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
           {saved.enabled ? 'Email on' : 'Off'}
         </span>
