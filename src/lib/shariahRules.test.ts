@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  resolveSecurityType,
+  summariseExclusionReasons,
   isCommonStock,
   findBlockedSic,
   computePolygonRatios,
@@ -112,9 +114,11 @@ describe('resolveRatio', () => {
     expect(resolveRatio(fail, 1, 'high')).toBe(fail)
   })
 
-  it('falls back to the AI estimate only when under the limit with confidence not low', () => {
+  it('falls back to the AI estimate: under the limit, low confidence only with a wide margin', () => {
     expect(resolveRatio(unknown, 10, 'medium')).toMatchObject({ status: 'pass', source: 'ai_estimate', value_pct: 10 })
-    expect(resolveRatio(unknown, 10, 'low')).toMatchObject({ status: 'fail', source: 'ai_estimate' })
+    expect(resolveRatio(unknown, 10, 'low')).toMatchObject({ status: 'pass', source: 'ai_estimate' })
+    expect(resolveRatio(unknown, 25, 'low')).toMatchObject({ status: 'fail', source: 'ai_estimate' })
+    expect(resolveRatio(unknown, 25, 'medium')).toMatchObject({ status: 'pass', source: 'ai_estimate' })
     expect(resolveRatio(unknown, 35, 'high')).toMatchObject({ status: 'fail', source: 'ai_estimate' })
     expect(resolveRatio(unknown, null, 'high')).toMatchObject({ status: 'fail', source: 'unavailable' })
     expect(resolveRatio(unknown, 10, null).status).toBe('fail')
@@ -164,11 +168,43 @@ describe('decideTickerVerdict', () => {
     expect(ok.verdict).toBe('compliant')
     expect(ok.ratio_source).toBe('ai_estimate')
 
-    const low = decideTickerVerdict(input({
+    const lowSmall = decideTickerVerdict(input({
       polygonRatios: computePolygonRatios(null, null),
       reviewer: { ...goodReviewer, confidence: 'low' },
     }))
-    expect(low.verdict).toBe('non_compliant')
+    expect(lowSmall.verdict).toBe('compliant')
+
+    const lowNearLimit = decideTickerVerdict(input({
+      polygonRatios: computePolygonRatios(null, null),
+      reviewer: { ...goodReviewer, confidence: 'low', ratio_estimates: { debt_pct: 25, cash_and_securities_pct: 5, receivables_pct: 5 } },
+    }))
+    expect(lowNearLimit.verdict).toBe('non_compliant')
+  })
+
+  it('uses the reviewer instrument type when Polygon has none', () => {
+    const viaReviewer = decideTickerVerdict(input({ security_type: null, reviewer: { ...goodReviewer, instrument_type: 'common_stock' } }))
+    expect(viaReviewer.verdict).toBe('compliant')
+    expect(viaReviewer.security_type).toBe('CS')
+
+    const etf = decideTickerVerdict(input({ security_type: null, reviewer: { ...goodReviewer, instrument_type: 'etf_or_fund' } }))
+    expect(etf.verdict).toBe('non_compliant')
+    expect(etf.reasons.join(' ')).toContain('per reviewer')
+
+    const unknownType = decideTickerVerdict(input({ security_type: null, reviewer: { ...goodReviewer, instrument_type: null } }))
+    expect(unknownType.reasons).toContain('Security type unknown — cannot confirm it is a common stock')
+  })
+
+  it('Polygon security type wins over the reviewer', () => {
+    const v = decideTickerVerdict(input({ security_type: 'ETF', reviewer: { ...goodReviewer, instrument_type: 'common_stock' } }))
+    expect(v.verdict).toBe('non_compliant')
+  })
+})
+
+describe('resolveSecurityType', () => {
+  it('prefers Polygon, then the reviewer, else null', () => {
+    expect(resolveSecurityType('CS', null)).toEqual({ type: 'CS', source: 'polygon' })
+    expect(resolveSecurityType(null, { ...goodReviewer, instrument_type: 'adr' })).toEqual({ type: 'ADRC', source: 'reviewer' })
+    expect(resolveSecurityType(null, null)).toEqual({ type: null, source: null })
   })
 })
 
@@ -266,5 +302,21 @@ describe('annotateActionList', () => {
     )
     expect(out[0].note).toBe('Not Shariah-compliant: Not an individual common stock (type ETF)')
     expect(out[1].note).toBeUndefined()
+  })
+})
+
+describe('summariseExclusionReasons', () => {
+  it('groups reasons, strips numbers and lists the top 3 with counts', () => {
+    const out = summariseExclusionReasons([
+      ['Security type unknown — cannot confirm it is a common stock', 'Interest-bearing debt 35.0% (limit 30%)'],
+      ['Security type unknown — cannot confirm it is a common stock'],
+      ['Interest-bearing debt 41.2% (limit 30%)'],
+      ['Shariah reviewer: uncertain — unknown company'],
+    ])
+    expect(out).toBe('Security type unknown (2); Interest-bearing debt (2); Shariah reviewer: uncertain (1)')
+  })
+
+  it('handles no reasons', () => {
+    expect(summariseExclusionReasons([])).toBe('none recorded')
   })
 })

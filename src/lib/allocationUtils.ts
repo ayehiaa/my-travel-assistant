@@ -46,3 +46,18 @@ export function capAllocation<T extends { target_pct: number }>(items: T[], capP
 export function removeTickers(items: TargetAllocationItem[], remove: Set<string>): TargetAllocationItem[] {
   return renormaliseAllocation(items.filter(a => !remove.has(a.ticker)))
 }
+
+/**
+ * Scale an allocation up OR down so it sums to exactly 100 (used for the synthesizer's
+ * output, which can be off by a few points). Rounding is absorbed into the largest position.
+ * Returns the input unchanged when it is empty or sums to <= 0. Pure function.
+ */
+export function normaliseTo100<T extends { target_pct: number }>(items: T[]): T[] {
+  const total = items.reduce((s, a) => s + a.target_pct, 0)
+  if (items.length === 0 || total <= 0 || Math.abs(total - 100) < 1e-9) return items
+  const scaled = items.map(a => ({ ...a, target_pct: (a.target_pct * 100) / total }))
+  const diff   = 100 - scaled.reduce((s, a) => s + a.target_pct, 0)
+  const maxIdx = scaled.reduce((mi, a, i) => (a.target_pct > scaled[mi].target_pct ? i : mi), 0)
+  scaled[maxIdx] = { ...scaled[maxIdx], target_pct: scaled[maxIdx].target_pct + diff }
+  return scaled
+}

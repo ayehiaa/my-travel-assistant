@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normaliseTo100 } from '@/lib/allocationUtils'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
 import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { withIslamicMandate } from '@/lib/islamicMandate'
@@ -42,9 +43,10 @@ const SynthesisSchema = z.object({
     .refine(
       items => {
         const sum = items.reduce((s, i) => s + i.target_pct, 0)
-        return sum >= 99.5 && sum <= 100.5
+        // Rounding / small arithmetic slips are normalised below; only a clearly wrong total fails.
+        return sum >= 90 && sum <= 110
       },
-      { message: 'Allocation must sum to 100%' }
+      { message: 'Allocation must sum to roughly 100% (90–110%)' }
     ),
   summary_text:   z.string(),
   conflict_notes: z.string(),
@@ -206,7 +208,7 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
 
   return {
     result: {
-      target_allocation: validated.target_allocation,
+      target_allocation: normaliseTo100(validated.target_allocation.filter(a => a.target_pct > 0)),
       summary_text:      validated.summary_text,
       conflict_notes:    validated.conflict_notes,
     },

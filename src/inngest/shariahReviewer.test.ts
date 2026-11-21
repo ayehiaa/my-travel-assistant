@@ -70,3 +70,22 @@ describe('buildReviewerUserPrompt', () => {
     expect(prompt).toContain('Accounts receivable / market cap: not available')
   })
 })
+
+describe('parseReviewerResponse — instrument_type', () => {
+  const entry = {
+    ticker: 'MSFT', verdict: 'compliant', reason: 'Software', non_permissible_income_pct: 2,
+    ratio_estimates: { debt_pct: 3, cash_and_securities_pct: 4, receivables_pct: 2 }, confidence: 'high',
+  }
+
+  it('keeps a valid instrument type', () => {
+    const out = parseReviewerResponse(JSON.stringify({ verdicts: [{ ...entry, instrument_type: 'common_stock' }] }), ['MSFT'])
+    expect(out.MSFT?.instrument_type).toBe('common_stock')
+  })
+
+  it('treats a missing or invalid instrument type as null without rejecting the entry', () => {
+    expect(parseReviewerResponse(JSON.stringify({ verdicts: [entry] }), ['MSFT']).MSFT?.instrument_type).toBeNull()
+    const bad = parseReviewerResponse(JSON.stringify({ verdicts: [{ ...entry, instrument_type: 'banana' }] }), ['MSFT'])
+    expect(bad.MSFT?.verdict).toBe('compliant')
+    expect(bad.MSFT?.instrument_type).toBeNull()
+  })
+})

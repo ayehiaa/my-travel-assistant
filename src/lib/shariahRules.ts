@@ -136,6 +136,23 @@ export interface ReviewerRatioEstimates {
  * Final ratio: the Polygon value when it is decisive (pass/fail); otherwise the reviewer's estimate,
  * which passes only when it is under the limit AND the reviewer's confidence is not "low".
  */
+/** Below this, an AI ratio estimate passes even at low confidence (Polygon data unavailable). */
+export const AI_ESTIMATE_LOW_CONFIDENCE_MAX_PCT = 20
+
+/**
+ * Security type for the stocks-only check: Polygon's type when known; otherwise the reviewer's view
+ * ("common_stock" → "CS"). Unknown from both → null (fails the check).
+ */
+export function resolveSecurityType(polygonType: string | null, reviewer: ReviewerTickerVerdict | null): { type: string | null; source: 'polygon' | 'reviewer' | null } {
+  if (polygonType) return { type: polygonType, source: 'polygon' }
+  const t = reviewer?.instrument_type ?? null
+  if (!t) return { type: null, source: null }
+  const map: Record<ReviewerInstrumentType, string> = {
+    common_stock: 'CS', etf_or_fund: 'ETF', adr: 'ADRC', preferred: 'PFD', other: 'OTHER',
+  }
+  return { type: map[t], source: 'reviewer' }
+}
+
 export function resolveRatio(
   polygon: ScreeningRatio,
   estimatePct: number | null,
@@ -145,14 +162,21 @@ export function resolveRatio(
   if (estimatePct === null || !Number.isFinite(estimatePct)) {
     return { value_pct: polygon.value_pct, status: 'fail', source: 'unavailable', basis: polygon.basis }
   }
-  const ok = estimatePct < SHARIAH_RATIO_LIMIT_PCT && confidence !== null && confidence !== 'low'
+  // A low-confidence estimate passes only with a wide margin (< 20%); near the 30% limit it needs medium/high confidence.
+  const ok = estimatePct < SHARIAH_RATIO_LIMIT_PCT &&
+    confidence !== null &&
+    (confidence !== 'low' || estimatePct < AI_ESTIMATE_LOW_CONFIDENCE_MAX_PCT)
   return { value_pct: estimatePct, status: ok ? 'pass' : 'fail', source: 'ai_estimate', basis: null }
 }
 
 // ── Per-ticker verdict ───────────────────────────────────────────────────────
 
+export type ReviewerInstrumentType = 'common_stock' | 'etf_or_fund' | 'adr' | 'preferred' | 'other'
+
 export interface ReviewerTickerVerdict {
   verdict:                    ReviewerVerdict
+  /** The reviewer's view of the security type — used only when Polygon could not supply it. */
+  instrument_type?:           ReviewerInstrumentType | null
   reason:                     string
   non_permissible_income_pct: number | null
   ratio_estimates:            ReviewerRatioEstimates
@@ -180,9 +204,10 @@ export function decideTickerVerdict(input: TickerScreeningInput): TickerScreenin
   const reasons: string[] = []
   const r = input.reviewer
 
-  if (!isCommonStock(input.security_type)) {
-    reasons.push(input.security_type
-      ? `Not an individual common stock (type ${input.security_type})`
+  const secType = resolveSecurityType(input.security_type, r)
+  if (!isCommonStock(secType.type)) {
+    reasons.push(secType.type
+      ? `Not an individual common stock (type ${secType.type}${secType.source === 'reviewer' ? ', per reviewer' : ''})`
       : 'Security type unknown — cannot confirm it is a common stock')
   }
 
@@ -221,7 +246,7 @@ export function decideTickerVerdict(input: TickerScreeningInput): TickerScreenin
     name:                       input.name,
     verdict:                    compliant ? 'compliant' : 'non_compliant',
     reasons:                    compliant ? [r?.reason ?? 'Passed all screens'] : reasons,
-    security_type:              input.security_type,
+    security_type:              secType.type,
     sic_code:                   input.sic_code,
     sic_description:            input.sic_description,
     reviewer_verdict:           r?.verdict ?? null,
@@ -268,7 +293,10 @@ export function applyShariahScreening(
 
   const positive = compliantItems.filter(a => a.target_pct > 0)
   if (positive.length === 0) {
-    throw new Error('Shariah screening: no compliant stocks remain in the recommendation — nothing to invest in')
+    throw new Error(
+      'Shariah screening: no compliant stocks remain in the recommendation — nothing to invest in. ' +
+      `Main reasons: ${summariseExclusionReasons(Array.from(excludedMap.values()))}`,
+    )
   }
 
   const kept = capAllocation(renormaliseAllocation(positive), capPct)
@@ -371,4 +399,23 @@ export function readShariahScreening(rec: {
     if (fromOutputs.success) return fromOutputs.data
   }
   return null
+}
+
+/**
+ * The most common exclusion reasons (up to 3, with counts), for error messages. Ticker-specific numbers are
+ * stripped so the same kind of reason groups together. Pure; exported for tests.
+ */
+export function summariseExclusionReasons(reasonLists: string[][]): string {
+  const counts = new Map<string, number>()
+  for (const reasons of reasonLists) {
+    for (const reason of new Set(reasons.map(r => r.split(' — ')[0].replace(/\s*\d+(\.\d+)?%.*$/, '').trim()))) {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1)
+    }
+  }
+  if (counts.size === 0) return 'none recorded'
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([r, n]) => `${r} (${n})`)
+    .join('; ')
 }

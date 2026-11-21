@@ -23,6 +23,7 @@ import {
 } from '@/lib/shariahRules'
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
+import { isTradeableAsset } from '@/lib/alpacaClient'
 import { getStarterUniverse } from '@/lib/starterUniverse'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { buildScheduledRunInfo } from '@/lib/autopilot'
@@ -51,6 +52,40 @@ async function loadSettingsRow(userId: string): Promise<Record<string, unknown> 
   return data as Record<string, unknown> | null
 }
 
+/** Tickers Alpaca reports as active + tradeable. A lookup error keeps the ticker (Shariah screening still checks it). */
+async function confirmTradeable(
+  tickers: string[],
+  creds: { keyId: string; secret: string; isPaper: boolean },
+): Promise<Set<string>> {
+  const checks = await Promise.all(tickers.map(async t => {
+    try {
+      return (await isTradeableAsset(t, creds.keyId, creds.secret, creds.isPaper)) ? t : null
+    } catch {
+      return t
+    }
+  }))
+  return new Set(checks.filter((t): t is string => t !== null))
+}
+
+/**
+ * A failed run must not count towards the run cooldown: reset last_run_at to the latest COMPLETE run
+ * (or null). A failed scheduled run is made due again (next_run_at = null → picked up by the next trading-day check).
+ */
+async function releaseFailedRunCooldown(userId: string, trigger: 'manual' | 'schedule'): Promise<void> {
+  const admin = createAdminClient()
+  const { data: lastGood } = await admin
+    .from('recommendations')
+    .select('run_at')
+    .eq('user_id', userId)
+    .eq('status', 'complete')
+    .order('run_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const update: Record<string, unknown> = { last_run_at: (lastGood?.run_at as string | undefined) ?? null }
+  if (trigger === 'schedule') update.next_run_at = null
+  await admin.from('portfolio_settings').update(update).eq('user_id', userId)
+}
+
 interface FetchPortfolioResult {
   settings: PortfolioSettings
   tickers: string[]
@@ -65,6 +100,29 @@ export const portfolioAnalysis = inngest.createFunction(
     // One analysis per run row, and never two analyses for the same user at once (manual + scheduled).
     idempotency: 'event.data.run_id',
     concurrency: { key: 'event.data.user_id', limit: 1 },
+    // After retries are exhausted: make sure the run reads as failed, and release the cooldown so a
+    // failed run never blocks the next one (manual runs can retry at once; a failed scheduled run is due again).
+    onFailure: async ({ event, error }) => {
+      const parsed = EventDataSchema.safeParse((event.data as { event?: { data?: unknown } } | undefined)?.event?.data)
+      if (!parsed.success) return
+      const { run_id, user_id, trigger } = parsed.data
+      const admin = createAdminClient()
+      try {
+        await admin
+          .from('recommendations')
+          .update({ status: 'error', error_message: sanitizeErrorMessage(error), updated_at: new Date().toISOString() })
+          .eq('id', run_id)
+          .neq('status', 'complete')
+        await admin
+          .from('run_progress')
+          .update({ status: 'error' })
+          .eq('run_id', run_id)
+          .in('status', ['pending', 'running'])
+        await releaseFailedRunCooldown(user_id, trigger)
+      } catch {
+        // Best-effort clean-up only.
+      }
+    },
   },
   async ({ event, step }) => {
     const parseResult = EventDataSchema.safeParse(event.data)
@@ -463,8 +521,9 @@ export const portfolioAnalysis = inngest.createFunction(
           .update({ status: 'error', error_message: sanitizeErrorMessage(err) })
           .eq('run_id', run_id)
           .eq('status', 'running')
+        await releaseFailedRunCooldown(user_id, trigger)
       } catch {
-        // Ignored — progress display only.
+        // Ignored — progress display / cooldown release are best-effort.
       }
     }
 
@@ -500,7 +559,9 @@ export const portfolioAnalysis = inngest.createFunction(
 
         let cleaned = synthResult.target_allocation
         if (newTickers.length > 0) {
-          const confirmedNew = await checkTickersExist(newTickers)
+          // Alpaca (generous rate limits) confirms the symbol is an active, tradeable asset; Polygon only as a fallback.
+          const creds = await loadAlpacaCredentials(user_id)
+          const confirmedNew = creds ? await confirmTradeable(newTickers, creds) : await checkTickersExist(newTickers)
           const invalid = new Set(newTickers.filter(t => !confirmedNew.has(t)))
           if (invalid.size > 0) cleaned = removeTickers(synthResult.target_allocation, invalid)
         }

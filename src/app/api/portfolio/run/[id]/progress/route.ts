@@ -17,7 +17,7 @@ export async function GET(
   // Verify the recommendation belongs to this user
   const { data: rec, error: recError } = await supabase
     .from('recommendations')
-    .select('id, status')
+    .select('id, status, error_message')
     .eq('id', id)
     .eq('user_id', user.id)
     .maybeSingle()
@@ -37,6 +37,7 @@ export async function GET(
   return NextResponse.json({
     run_id:  id,
     status:  rec.status as string,
+    error_message: (rec.error_message as string | null) ?? null,
     agents:  rows ?? [],
   })
 }

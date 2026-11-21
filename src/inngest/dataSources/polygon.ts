@@ -17,6 +17,20 @@ interface PolygonAggResponse {
 
 const MAX_TICKERS = 50
 
+/**
+ * GET a Polygon URL, retrying on 429 (rate limit) and 5xx with a short, bounded back-off so a
+ * single Inngest step stays well inside the hosting timeout. Never logs the URL (it contains the key).
+ */
+export async function polygonGet(url: string, delaysMs: number[] = [1500, 4000]): Promise<Response> {
+  let res = await fetch(url)
+  for (const delay of delaysMs) {
+    if (res.status !== 429 && res.status < 500) return res
+    await new Promise(r => setTimeout(r, delay))
+    res = await fetch(url)
+  }
+  return res
+}
+
 export async function fetchPriceHistory(tickers: string[]): Promise<PriceHistory> {
   if (tickers.length === 0) return {}
   if (!process.env.POLYGON_API_KEY) return {}
@@ -40,7 +54,7 @@ export async function fetchPriceHistory(tickers: string[]): Promise<PriceHistory
       `?adjusted=true&sort=asc&limit=30&apiKey=${key}`
 
     try {
-      const res = await fetch(url)
+      const res = await polygonGet(url)
       if (!res.ok) {
         result[ticker] = []
         continue
@@ -128,7 +142,7 @@ export async function checkTickersExist(tickers: string[]): Promise<Set<string>>
     const url    = `https://api.polygon.io/v3/reference/tickers/${encodeURIComponent(ticker)}?apiKey=${key}`
 
     try {
-      const res = await fetch(url)
+      const res = await polygonGet(url)
       if (res.ok) {
         const json = await res.json() as PolygonTickerDetailResponse
         if (json.results) valid.add(ticker)
@@ -159,7 +173,7 @@ export async function fetchTickerDetails(tickers: string[]): Promise<TickerDetai
       `?apiKey=${key}`
 
     try {
-      const res = await fetch(url)
+      const res = await polygonGet(url)
       if (!res.ok) {
         result[ticker] = emptyDetail(ticker)
         continue
@@ -240,7 +254,7 @@ export async function fetchLatestFinancials(tickers: string[]): Promise<Financia
       `&limit=1&order=desc&sort=filing_date&apiKey=${key}`
 
     try {
-      const res = await fetch(url)
+      const res = await polygonGet(url)
       if (!res.ok) {
         result[ticker] = null
         continue
