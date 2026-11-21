@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { limitsFor } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -26,7 +27,7 @@ export type GmailCandidate = z.infer<typeof GmailCandidateSchema>
 export async function GET() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isPremiumOrAbove(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!limitsFor(user.access).gmailImport) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { isMember } from '@/lib/access'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function PATCH(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'main') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isMember(user.access)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { referenceDate } = await request.json()
   if (typeof referenceDate !== 'string' && referenceDate !== null) {

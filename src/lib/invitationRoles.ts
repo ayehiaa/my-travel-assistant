@@ -1,66 +1,101 @@
 import { z } from 'zod'
+import {
+  FEATURE_INFO,
+  FeatureKeySchema,
+  PLAN_INFO,
+  PlanSchema,
+  fieldsFromLegacyRole,
+  legacyRoleFor,
+  normalizeFeatures,
+  type FeatureKey,
+  type Plan,
+} from '@/lib/access'
 
 /**
- * Pure rules for the role a customer invitation grants (specs/026-friend-onboarding-byo-ai-key).
- * An inviter can only grant roles up to their own: premium → main|premium; premium_plus → main|premium|premium_plus.
+ * Pure rules for what a customer invitation grants (specs/027-plans-addons-admin; replaces the 026 role picker).
+ * Only admins (APP_ADMIN_EMAILS) can invite customers. An invitation grants a plan (free | plus) and add-ons
+ * (['portfolio'] or []). The 026 `role` column is still written (legacyInvitationRole) for compatibility.
  */
 
-export const INVITABLE_ROLES = ['main', 'premium', 'premium_plus'] as const
-export type InvitableRole = (typeof INVITABLE_ROLES)[number]
-
-export const InvitableRoleSchema = z.enum(INVITABLE_ROLES)
-
-export const INVITABLE_ROLE_INFO: Record<InvitableRole, { label: string; description: string }> = {
-  main:         { label: 'Main',     description: 'Travel only — trips, days outside the UK and expenses.' },
-  premium:      { label: 'Premium',  description: 'Travel, plus they can invite their own customers.' },
-  premium_plus: { label: 'Premium+', description: 'Travel, plus Portfolio & trading (needs their own Alpaca account and Anthropic API key).' },
+export interface InvitationAccess {
+  plan: Plan
+  features: FeatureKey[]
 }
 
-/** Roles an inviter with `inviterRole` may grant ([] when they cannot invite at all). */
-export function allowedInviteRoles(inviterRole: unknown): InvitableRole[] {
-  if (inviterRole === 'premium_plus') return ['main', 'premium', 'premium_plus']
-  if (inviterRole === 'premium') return ['main', 'premium']
-  return []
-}
+/** Legacy invitation roles (CHECK constraint from migration 20261121). */
+export type InvitableRole = 'main' | 'premium' | 'premium_plus'
 
-export function canGrantRole(inviterRole: unknown, role: InvitableRole): boolean {
-  return allowedInviteRoles(inviterRole).includes(role)
-}
+/** POST /api/customer-invitations body. */
+export const CustomerInviteSchema = z.object({
+  email:       z.string().trim().email().max(254),
+  invitedName: z.string().trim().min(1).max(100),
+  plan:        PlanSchema.default('free'),
+  features:    z.array(FeatureKeySchema).max(10).default([]),
+}).strict()
 
-/** The role stored on an invitation row; missing column / unexpected value → 'main'. */
-export function readInvitationRole(row: unknown): InvitableRole {
-  const value = row && typeof row === 'object' ? (row as Record<string, unknown>).role : undefined
-  const parsed = InvitableRoleSchema.safeParse(value)
-  return parsed.success ? parsed.data : 'main'
-}
+export type CustomerInviteInput = z.infer<typeof CustomerInviteSchema>
 
-const RANK: Record<InvitableRole, number> = { main: 0, premium: 1, premium_plus: 2 }
+const NO_ACCESS: InvitationAccess = { plan: 'free', features: [] }
 
 /**
- * Role inserted into user_roles at signup: the invitation's role (validated, unknown → 'main'), capped at the
- * highest role the inviter can STILL grant (an inviter who was downgraded cannot hand out more than they now have).
+ * Plan + add-ons stored on an invitation row. Uses the plan/features columns when present (migration 20261121b),
+ * otherwise derives them from the 026 role column (main → free, premium → plus, premium_plus → plus + portfolio);
+ * missing / unexpected → Free without add-ons.
  */
-export function resolveSignupRole(invitationRole: unknown, inviterRole: unknown): InvitableRole {
-  const parsed = InvitableRoleSchema.safeParse(invitationRole)
-  const requested: InvitableRole = parsed.success ? parsed.data : 'main'
-  const allowed = allowedInviteRoles(inviterRole)
-  if (allowed.includes(requested)) return requested
-  const capped = allowed.filter(r => RANK[r] <= RANK[requested]).sort((a, b) => RANK[b] - RANK[a])[0]
-  return capped ?? 'main'
+export function readInvitationAccess(row: unknown): InvitationAccess {
+  if (!row || typeof row !== 'object') return { ...NO_ACCESS, features: [] }
+  const r = row as Record<string, unknown>
+  if (typeof r.plan === 'string') {
+    const plan = PlanSchema.safeParse(r.plan)
+    return { plan: plan.success ? plan.data : 'free', features: normalizeFeatures(r.features) }
+  }
+  const role = r.role === 'premium' || r.role === 'premium_plus' ? r.role : 'main'
+  const fields = fieldsFromLegacyRole(role)
+  return { plan: fields.plan, features: fields.features }
+}
+
+/** The 026 role column value kept in sync with plan + add-ons (Free + Portfolio → 'main'; the columns carry it). */
+export function legacyInvitationRole(access: InvitationAccess): InvitableRole {
+  const role = legacyRoleFor({ accountType: 'member', plan: access.plan, features: access.features })
+  return role === 'assistant' ? 'main' : role
+}
+
+/** True when the 026 role column alone can carry these values (needed before migration 20261121b). */
+export function isRepresentableInvitation(access: InvitationAccess): boolean {
+  const back = readInvitationAccess({ role: legacyInvitationRole(access) })
+  return back.plan === access.plan && back.features.join(',') === normalizeFeatures(access.features).join(',')
+}
+
+/**
+ * What signup grants: the invitation's plan + add-ons, re-validated — but ONLY when the inviter is (still) an admin.
+ * Invitations created by anyone else (legacy premium invites, rows written outside the API) grant Free, no add-ons.
+ */
+export function resolveSignupAccess(invitationRow: unknown, inviterIsAdmin: boolean): InvitationAccess {
+  if (!inviterIsAdmin) return { plan: 'free', features: [] }
+  return readInvitationAccess(invitationRow)
+}
+
+/** e.g. "Plus + Portfolio (beta)", "Free (beta limits)". */
+export function invitationAccessLabel(access: InvitationAccess): string {
+  const parts = [PLAN_INFO[access.plan].label, ...normalizeFeatures(access.features).map(f => FEATURE_INFO[f].label)]
+  return parts.join(' + ')
 }
 
 /** Bullet points for the invitation email: what the new account includes. */
-export function invitationRoleFeatures(role: InvitableRole): string[] {
-  const travel = 'Travel planning: trips, days outside the UK and expenses'
-  if (role === 'main') return [travel]
-  if (role === 'premium') return [travel, 'Invite your own customers to Sojourn']
-  return [
-    travel,
-    'Invite your own customers to Sojourn',
-    'Portfolio & trading (for testing): AI analysis of a US stock portfolio. It needs your OWN Alpaca account ' +
-      '(a free paper-trading account is fine) and your OWN Anthropic API key — you pay Anthropic directly for the AI ' +
-      'usage (roughly $0.15–0.30 per analysis).',
+export function invitationFeatureBullets(access: InvitationAccess): string[] {
+  const bullets = [
+    access.plan === 'plus'
+      ? 'Travel planning on the Plus plan: unlimited trips, expenses and assistants, plus Gmail trip import'
+      : 'Travel planning on the Free plan (beta limits): up to 10 trips, 10 expenses and 1 assistant',
   ]
+  if (normalizeFeatures(access.features).includes('portfolio')) {
+    bullets.push(
+      'Portfolio (beta, for testing): AI analysis of a US stock portfolio. It needs your OWN Alpaca account ' +
+        '(a free paper-trading account is fine) and your OWN Anthropic API key — you pay Anthropic directly for the AI ' +
+        'usage (roughly $0.15–0.30 per analysis).',
+    )
+  }
+  return bullets
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import { readRunUsage } from '@/lib/aiCost'
 
@@ -12,7 +13,7 @@ export async function GET(
 
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (authUser.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(authUser.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const idParse = z.string().uuid().safeParse(id)
   if (!idParse.success) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })

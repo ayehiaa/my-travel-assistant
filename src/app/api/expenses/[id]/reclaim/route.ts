@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
@@ -57,7 +58,7 @@ export async function PATCH(
     action: 'expense_reclaimed',
     tripId: null,
     tripSnapshot: null,
-    onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf: isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json(data)

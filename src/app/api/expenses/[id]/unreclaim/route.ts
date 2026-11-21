@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
@@ -11,7 +12,7 @@ export async function PATCH(
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (user.role === 'assistant') {
+  if (isAssistant(user.access)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

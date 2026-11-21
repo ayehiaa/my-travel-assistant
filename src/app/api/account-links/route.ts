@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deactivateAssistant } from '@/lib/deactivateAssistant'
 import { logAudit } from '@/lib/auditLogger'
+import { deriveAccess, isMember } from '@/lib/access'
 
 export async function GET() {
   const supabase = await createClient()
@@ -12,7 +13,7 @@ export async function GET() {
 
   const { data: roleRecord } = await supabase
     .from('user_roles')
-    .select('role')
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
@@ -21,7 +22,7 @@ export async function GET() {
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
-  if (roleRecord.role === 'main' || roleRecord.role === 'premium' || roleRecord.role === 'premium_plus') {
+  if (isMember(deriveAccess(roleRecord))) {
     // Expire any pending links past their expires_at
     await admin
       .from('account_links')
@@ -94,12 +95,12 @@ export async function DELETE(request: NextRequest) {
 
   const { data: roleRecord } = await supabase
     .from('user_roles')
-    .select('role')
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium' && roleRecord?.role !== 'premium_plus') {
-    return NextResponse.json({ error: 'Only main or premium accounts can remove assistants' }, { status: 403 })
+  if (!roleRecord || !isMember(deriveAccess(roleRecord))) {
+    return NextResponse.json({ error: 'Only member accounts can remove assistants' }, { status: 403 })
   }
 
   const deleteSchema = z.object({ id: z.string().uuid() })

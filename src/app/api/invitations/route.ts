@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendInvitationEmail, sendAssistantAddedEmail } from '@/lib/email'
 import { logAudit } from '@/lib/auditLogger'
+import { accessColumns, canInviteAssistants, deriveAccess, isAtLimit, isMember, limitsFor } from '@/lib/access'
 
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -19,16 +20,18 @@ export async function POST(request: NextRequest) {
 
   const { data: roleRecord } = await supabase
     .from('user_roles')
-    .select('role, display_name')
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main' && roleRecord?.role !== 'premium' && roleRecord?.role !== 'premium_plus') {
-    return NextResponse.json({ error: 'Only main or premium accounts can invite assistants' }, { status: 403 })
+  const inviterAccess = roleRecord ? deriveAccess(roleRecord) : null
+  if (!roleRecord || !inviterAccess || !canInviteAssistants(inviterAccess)) {
+    return NextResponse.json({ error: 'Only member accounts can invite assistants' }, { status: 403 })
   }
 
-  // ── Beta assistant limit (main accounts only) ─────────────────────────────
-  if (roleRecord?.role === 'main') {
+  // ── Beta assistant limit (Free plan) ──────────────────────────────────────
+  const { maxAssistants } = limitsFor(inviterAccess)
+  if (maxAssistants !== null) {
     const { count: linkCount, error: linkCountError } = await supabase
       .from('account_links')
       .select('id', { count: 'exact', head: true })
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
       .in('status', ['pending', 'active'])
 
     if (linkCountError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-    if ((linkCount ?? 0) >= 1) {
+    if (isAtLimit(maxAssistants, linkCount ?? 0)) {
       return NextResponse.json(
         {
           error: 'BETA_ASSISTANT_LIMIT_REACHED',
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, assistantName } = parsed.data
-  const mainName = roleRecord.display_name
+  const mainName = roleRecord.display_name as string
   const admin = createAdminClient()
 
   // Look up existing account by email
@@ -75,11 +78,12 @@ export async function POST(request: NextRequest) {
 
     const { data: existingRole } = await supabase
       .from('user_roles')
-      .select('role, display_name')
+      .select('*')
       .eq('user_id', existingAuthUser.id)
       .single()
 
-    if (existingRole?.role === 'main') {
+    // Any member account (Free or Plus) is a primary account — only assistants can be linked
+    if (existingRole && isMember(deriveAccess(existingRole))) {
       return NextResponse.json({
         error: 'This email is a primary account and cannot be invited as an assistant',
       }, { status: 400 })
@@ -154,6 +158,13 @@ export async function POST(request: NextRequest) {
     await admin.auth.admin.deleteUser(newUser.id)
     return NextResponse.json({ error: 'Failed to set up assistant account' }, { status: 500 })
   }
+
+  // Best effort (migration 20261121b): new columns. Legacy role 'assistant' already makes deriveAccess treat the
+  // account as an assistant even if this update fails or the columns do not exist yet.
+  await admin
+    .from('user_roles')
+    .update(accessColumns({ accountType: 'assistant', plan: 'free', features: [] }))
+    .eq('user_id', newUser.id)
 
   const now = new Date()
   const expiresAt = new Date(now.getTime() + THREE_DAYS_MS)

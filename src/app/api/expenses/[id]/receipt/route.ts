@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -161,7 +162,7 @@ export async function POST(
     action:       'expense_updated',
     tripId:       null,
     tripSnapshot: null,
-    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf:   isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json(updatedExpense)
@@ -228,7 +229,7 @@ export async function DELETE(
     action:       'expense_updated',
     tripId:       null,
     tripSnapshot: null,
-    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf:   isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json(updatedExpense)

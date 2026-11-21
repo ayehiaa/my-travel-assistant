@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { logAudit } from '@/lib/auditLogger'
 import { AnthropicApiKeySchema } from '@/lib/aiKeyResolver'
 import { deleteUserAiKey, saveUserAiKey, verifyAnthropicKey } from '@/lib/aiKeyStore'
@@ -14,7 +15,7 @@ const MIGRATION_MESSAGE = 'Database update needed — the owner must apply supab
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(user.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let raw: unknown
   try {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(user.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const result = await deleteUserAiKey(user.id)
   if (!result.ok) {

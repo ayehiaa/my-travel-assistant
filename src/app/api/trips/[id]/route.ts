@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
@@ -120,7 +121,7 @@ export async function PATCH(
     tripId:       id,
     tripSnapshot: { ...(updatedTrip as Trip), legs: newLegs as TripLeg[] },
     changedFields,
-    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf:   isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json({ ...updatedTrip, legs: newLegs })
@@ -165,7 +166,7 @@ export async function DELETE(
     action: 'deleted',
     tripId: null,
     tripSnapshot: { ...(trip as Trip), legs: (trip.legs ?? []) as TripLeg[] },
-    onBehalfOf: user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf: isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return new NextResponse(null, { status: 204 })

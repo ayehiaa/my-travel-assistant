@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendInvitationEmail } from '@/lib/email'
+import { canInviteAssistants, deriveAccess } from '@/lib/access'
 
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -15,12 +16,12 @@ export async function POST(request: NextRequest) {
 
   const { data: roleRecord } = await supabase
     .from('user_roles')
-    .select('role, display_name')
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
-  if (roleRecord?.role !== 'main') {
-    return NextResponse.json({ error: 'Only main accounts can resend invitations' }, { status: 403 })
+  if (!roleRecord || !canInviteAssistants(deriveAccess(roleRecord))) {
+    return NextResponse.json({ error: 'Only member accounts can resend invitations' }, { status: 403 })
   }
 
   const body = await request.json()

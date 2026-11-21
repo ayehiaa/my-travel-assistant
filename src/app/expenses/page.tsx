@@ -3,7 +3,8 @@ import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ExpenseList from '@/components/expenses/ExpenseList'
-import { ExpenseWithCategory, ExpenseCategory, TripWithUsers, UserRole } from '@/types/database'
+import { ExpenseWithCategory, ExpenseCategory, TripWithUsers } from '@/types/database'
+import { isAssistant, limitsFor } from '@/lib/access'
 import { buildGbpRates, GbpRates } from '@/lib/currencyConverter'
 
 export const metadata = { title: 'Expenses — Sojourn' }
@@ -21,7 +22,7 @@ export default async function ExpensesPage({
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
-  const [{ data: expenses }, { data: categories }, { data: rawTrips }, { data: ownerRoleRow }] = await Promise.all([
+  const [{ data: expenses }, { data: categories }, { data: rawTrips }] = await Promise.all([
     supabase
       .from('expenses')
       .select('*, category:expense_categories(name)')
@@ -36,18 +37,14 @@ export default async function ExpensesPage({
       .select('*, legs:trip_legs(*)')
       .eq('owner_id', activeMainAccountId)
       .order('leg_order', { referencedTable: 'trip_legs', ascending: true }),
-    supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', activeMainAccountId)
-      .single(),
   ])
 
   const rateMap: GbpRates = await buildGbpRates((expenses ?? []) as ExpenseWithCategory[])
 
-  const ownerRole: UserRole = (ownerRoleRow?.role as UserRole) ?? 'main'
+  // Free plan limit (assistants follow the linked member's plan)
+  const expenseLimit = limitsFor(user.access).maxExpenses
   const expenseCount = (expenses ?? []).length
-  const canDelete = user.role !== 'assistant'
+  const canDelete = !isAssistant(user.access)
 
   return (
     <main className="max-w-[1280px] mx-auto px-7 py-10">
@@ -66,7 +63,7 @@ export default async function ExpensesPage({
         categories={(categories ?? []) as ExpenseCategory[]}
         trips={(rawTrips ?? []) as TripWithUsers[]}
         canDelete={canDelete}
-        ownerRole={ownerRole}
+        expenseLimit={expenseLimit}
         expenseCount={expenseCount}
         initialTripId={initialTripId}
         rateMap={rateMap}

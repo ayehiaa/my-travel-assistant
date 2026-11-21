@@ -26,6 +26,10 @@ const ACTION_PILLS = {
   recommendation_rejected:    { bg: 'var(--coral-soft)',    color: '#b8493d',          label: 'Rejected' },
   autopilot_mode_changed:     { bg: 'var(--lavender-soft)', color: 'var(--lavender)', label: 'Autopilot' },
   notification_test_sent:     { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Test email' },
+  user_plan_changed:          { bg: 'var(--blue-100)',      color: 'var(--blue-700)',  label: 'Plan changed' },
+  user_features_changed:      { bg: 'var(--blue-100)',      color: 'var(--blue-700)',  label: 'Add-ons changed' },
+  customer_invited:           { bg: 'var(--blue-100)',      color: 'var(--blue-700)',  label: 'Customer invited' },
+  customer_invitation_revoked: { bg: 'var(--coral-soft)',   color: 'var(--coral)',     label: 'Invite revoked' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -82,6 +86,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'notification_test_sent') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Notifications</span>
+  }
+  if (action === 'user_plan_changed' || action === 'user_features_changed' || action === 'customer_invited' || action === 'customer_invitation_revoked') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Admin · Users</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Account</span>

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { NonRetriableError } from 'inngest'
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { filterPortfolioUsers } from '@/lib/accessServer'
 import { loadAlpacaCredentials } from '@/lib/alpacaLivePortfolio'
 import { fetchWeeklyEquityHistory } from '@/lib/alpacaClient'
 import { readShariahScreening } from '@/lib/shariahRules'
@@ -305,13 +306,12 @@ export const weeklySummaryCron = inngest.createFunction(
       const { data: creds } = await admin.from('alpaca_credentials').select('user_id')
       const connected = (creds ?? []).map(c => c.user_id as string)
       if (connected.length === 0) return []
-      const [roles, settings] = await Promise.all([
-        admin.from('user_roles').select('user_id').in('user_id', connected).eq('role', 'premium_plus'),
+      const [withPortfolio, settings] = await Promise.all([
+        filterPortfolioUsers(connected, admin),
         admin.from('portfolio_settings').select('*').in('user_id', connected),
       ])
-      const premium = new Set((roles.data ?? []).map(r => r.user_id as string))
       const prefsByUser = new Map((settings.data ?? []).map(r => [r.user_id as string, readNotificationPrefs(r as Record<string, unknown>)]))
-      return connected.filter(id => premium.has(id) && isNotificationEnabled(prefsByUser.get(id) ?? readNotificationPrefs(null), 'weekly_summary'))
+      return connected.filter(id => withPortfolio.has(id) && isNotificationEnabled(prefsByUser.get(id) ?? readNotificationPrefs(null), 'weekly_summary'))
     })
     if (userIds.length === 0) return { date, users: 0 }
     await step.sendEvent('fan-out', userIds.map(user_id => ({

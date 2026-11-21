@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { isAssistant, limitsFor } from '@/lib/access'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/auditLogger'
 import { daysOutsideUK } from '@/lib/daysCalculator'
-import { Trip, TripLeg, UserRole } from '@/types/database'
+import { Trip, TripLeg } from '@/types/database'
 import { TripInsertSchema } from '@/lib/tripSchemas'
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -48,25 +49,16 @@ export async function POST(request: NextRequest) {
   const activeMainAccountId = await getActiveMainAccountId(user)
   const supabase = await createClient()
 
-  // ── Beta trip limit (exempt premium owners and their assistants) ─────────
-  let ownerIsPremium = isPremiumOrAbove(user.role)
-  if (user.role === 'assistant') {
-    const { data: ownerRoleRow } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', activeMainAccountId)
-      .single()
-    ownerIsPremium = !!(ownerRoleRow?.role && isPremiumOrAbove(ownerRoleRow.role as UserRole))
-  }
-
-  if (!ownerIsPremium) {
+  // ── Beta trip limit (Free plan; assistants follow the linked member's plan) ─
+  const { maxTrips } = limitsFor(user.access)
+  if (maxTrips !== null) {
     const { count: tripCount, error: countError } = await supabase
       .from('trips')
       .select('id', { count: 'exact', head: true })
       .eq('owner_id', activeMainAccountId)
 
     if (countError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-    if ((tripCount ?? 0) >= 10) {
+    if ((tripCount ?? 0) >= maxTrips) {
       return NextResponse.json(
         {
           error: 'BETA_TRIP_LIMIT_REACHED',
@@ -150,7 +142,7 @@ export async function POST(request: NextRequest) {
     action:       'created',
     tripId:       trip.id,
     tripSnapshot: { ...(trip as Trip), legs: insertedLegs as TripLeg[] },
-    onBehalfOf:   user.role === 'assistant' ? activeMainAccountId : undefined,
+    onBehalfOf:   isAssistant(user.access) ? activeMainAccountId : undefined,
   })
 
   return NextResponse.json({ ...trip, legs: insertedLegs }, { status: 201 })

@@ -1,12 +1,17 @@
 import { cookies } from 'next/headers'
 import { createClient } from './supabase/server'
 import { createAdminClient } from './supabase/admin'
-import { AuthUser } from './auth'
+import type { AccountType } from './access'
 
 export const ACTIVE_ACCOUNT_COOKIE = 'active_main_account'
 
-export async function getActiveMainAccountId(user: AuthUser): Promise<string> {
-  if (user.role === 'main') return user.id
+/** The account whose data the user acts on: members → themselves; assistants → the active linked member account. */
+export async function getActiveMainAccountId(user: { id: string; access: { accountType: AccountType } }): Promise<string> {
+  return resolveActiveMainAccountId(user.id, user.access.accountType)
+}
+
+export async function resolveActiveMainAccountId(userId: string, accountType: AccountType): Promise<string> {
+  if (accountType === 'member') return userId
 
   const supabase = await createClient()
   const cookieStore = await cookies()
@@ -16,7 +21,7 @@ export async function getActiveMainAccountId(user: AuthUser): Promise<string> {
     const { data } = await supabase
       .from('account_links')
       .select('main_user_id')
-      .eq('assistant_user_id', user.id)
+      .eq('assistant_user_id', userId)
       .eq('main_user_id', cookieValue)
       .eq('status', 'active')
       .maybeSingle()
@@ -28,11 +33,11 @@ export async function getActiveMainAccountId(user: AuthUser): Promise<string> {
   const { data: links } = await supabase
     .from('account_links')
     .select('main_user_id')
-    .eq('assistant_user_id', user.id)
+    .eq('assistant_user_id', userId)
     .eq('status', 'active')
     .limit(1)
 
-  return links?.[0]?.main_user_id ?? user.id
+  return links?.[0]?.main_user_id ?? userId
 }
 
 export async function getLinkedMainAccounts(

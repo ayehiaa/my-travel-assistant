@@ -1,78 +1,93 @@
 import { describe, it, expect } from 'vitest'
 import {
-  allowedInviteRoles,
-  canGrantRole,
-  readInvitationRole,
-  resolveSignupRole,
-  invitationRoleFeatures,
+  CustomerInviteSchema,
+  invitationAccessLabel,
+  invitationFeatureBullets,
   isMissingSchemaError,
-  InvitableRoleSchema,
+  isRepresentableInvitation,
+  legacyInvitationRole,
+  readInvitationAccess,
+  resolveSignupAccess,
 } from './invitationRoles'
 
-describe('allowedInviteRoles / canGrantRole', () => {
-  it('premium_plus can grant every invitable role', () => {
-    expect(allowedInviteRoles('premium_plus')).toEqual(['main', 'premium', 'premium_plus'])
+describe('CustomerInviteSchema (invite validation)', () => {
+  it('defaults to Free without add-ons', () => {
+    const parsed = CustomerInviteSchema.parse({ email: 'a@b.com', invitedName: 'Ann' })
+    expect(parsed).toEqual({ email: 'a@b.com', invitedName: 'Ann', plan: 'free', features: [] })
   })
-  it('premium can grant main and premium only', () => {
-    expect(allowedInviteRoles('premium')).toEqual(['main', 'premium'])
-    expect(canGrantRole('premium', 'premium_plus')).toBe(false)
-    expect(canGrantRole('premium', 'premium')).toBe(true)
+  it('accepts plus + portfolio', () => {
+    const parsed = CustomerInviteSchema.parse({ email: 'a@b.com', invitedName: 'Ann', plan: 'plus', features: ['portfolio'] })
+    expect(parsed.plan).toBe('plus')
+    expect(parsed.features).toEqual(['portfolio'])
   })
-  it('main, assistant and unknown roles cannot invite', () => {
-    for (const r of ['main', 'assistant', undefined, null, 'admin']) {
-      expect(allowedInviteRoles(r)).toEqual([])
-      expect(canGrantRole(r, 'main')).toBe(false)
-    }
-  })
-})
-
-describe('InvitableRoleSchema', () => {
-  it('rejects assistant and arbitrary strings', () => {
-    expect(InvitableRoleSchema.safeParse('assistant').success).toBe(false)
-    expect(InvitableRoleSchema.safeParse('owner').success).toBe(false)
-    expect(InvitableRoleSchema.safeParse('premium_plus').success).toBe(true)
+  it('rejects unknown plans, unknown add-ons, legacy role field and bad input', () => {
+    expect(CustomerInviteSchema.safeParse({ email: 'a@b.com', invitedName: 'Ann', plan: 'premium' }).success).toBe(false)
+    expect(CustomerInviteSchema.safeParse({ email: 'a@b.com', invitedName: 'Ann', features: ['admin'] }).success).toBe(false)
+    expect(CustomerInviteSchema.safeParse({ email: 'a@b.com', invitedName: 'Ann', role: 'premium_plus' }).success).toBe(false)
+    expect(CustomerInviteSchema.safeParse({ email: 'nope', invitedName: 'Ann' }).success).toBe(false)
+    expect(CustomerInviteSchema.safeParse({ email: 'a@b.com', invitedName: '' }).success).toBe(false)
+    expect(CustomerInviteSchema.safeParse({ email: 'a@b.com', invitedName: 'x'.repeat(101) }).success).toBe(false)
   })
 })
 
-describe('readInvitationRole', () => {
-  it('reads a valid role', () => {
-    expect(readInvitationRole({ role: 'premium_plus' })).toBe('premium_plus')
+describe('readInvitationAccess', () => {
+  it('reads the plan/features columns when present', () => {
+    expect(readInvitationAccess({ plan: 'free', features: ['portfolio'], role: 'main' })).toEqual({ plan: 'free', features: ['portfolio'] })
+    expect(readInvitationAccess({ plan: 'plus', features: ['junk', 'portfolio', 'portfolio'] })).toEqual({ plan: 'plus', features: ['portfolio'] })
+    expect(readInvitationAccess({ plan: 'gold', features: null })).toEqual({ plan: 'free', features: [] })
   })
-  it('defaults to main when the column is missing or the value is unexpected', () => {
-    expect(readInvitationRole({})).toBe('main')
-    expect(readInvitationRole({ role: 'assistant' })).toBe('main')
-    expect(readInvitationRole({ role: 42 })).toBe('main')
-    expect(readInvitationRole(null)).toBe('main')
+  it('derives from the 026 role column before migration 20261121b', () => {
+    expect(readInvitationAccess({ role: 'main' })).toEqual({ plan: 'free', features: [] })
+    expect(readInvitationAccess({ role: 'premium' })).toEqual({ plan: 'plus', features: [] })
+    expect(readInvitationAccess({ role: 'premium_plus' })).toEqual({ plan: 'plus', features: ['portfolio'] })
+    expect(readInvitationAccess({ role: 'assistant' })).toEqual({ plan: 'free', features: [] })
   })
-})
-
-describe('resolveSignupRole', () => {
-  it('keeps the invitation role when the inviter can still grant it', () => {
-    expect(resolveSignupRole('premium_plus', 'premium_plus')).toBe('premium_plus')
-    expect(resolveSignupRole('premium', 'premium')).toBe('premium')
-  })
-  it('caps at the highest role a downgraded inviter can still grant', () => {
-    expect(resolveSignupRole('premium_plus', 'premium')).toBe('premium')
-  })
-  it('falls back to main when the inviter can no longer invite', () => {
-    expect(resolveSignupRole('premium_plus', 'main')).toBe('main')
-    expect(resolveSignupRole('premium', null)).toBe('main')
-  })
-  it('unexpected invitation values become main', () => {
-    expect(resolveSignupRole('assistant', 'premium_plus')).toBe('main')
-    expect(resolveSignupRole(undefined, 'premium_plus')).toBe('main')
-    expect(resolveSignupRole('PREMIUM_PLUS', 'premium_plus')).toBe('main')
+  it('missing / junk rows → Free', () => {
+    expect(readInvitationAccess({})).toEqual({ plan: 'free', features: [] })
+    expect(readInvitationAccess(null)).toEqual({ plan: 'free', features: [] })
+    expect(readInvitationAccess('x')).toEqual({ plan: 'free', features: [] })
   })
 })
 
-describe('invitationRoleFeatures', () => {
-  it('premium_plus mentions own Alpaca account and own Anthropic API key', () => {
-    const text = invitationRoleFeatures('premium_plus').join(' ')
-    expect(text).toMatch(/own Alpaca account/i)
-    expect(text).toMatch(/own Anthropic API key/i)
+describe('legacyInvitationRole / isRepresentableInvitation', () => {
+  it('keeps the 026 role column in sync', () => {
+    expect(legacyInvitationRole({ plan: 'free', features: [] })).toBe('main')
+    expect(legacyInvitationRole({ plan: 'plus', features: [] })).toBe('premium')
+    expect(legacyInvitationRole({ plan: 'plus', features: ['portfolio'] })).toBe('premium_plus')
+    expect(legacyInvitationRole({ plan: 'free', features: ['portfolio'] })).toBe('main')
   })
-  it('main is travel only', () => {
-    expect(invitationRoleFeatures('main')).toHaveLength(1)
+  it('Free + Portfolio cannot be stored in the role column alone', () => {
+    expect(isRepresentableInvitation({ plan: 'free', features: ['portfolio'] })).toBe(false)
+    expect(isRepresentableInvitation({ plan: 'free', features: [] })).toBe(true)
+    expect(isRepresentableInvitation({ plan: 'plus', features: [] })).toBe(true)
+    expect(isRepresentableInvitation({ plan: 'plus', features: ['portfolio'] })).toBe(true)
+  })
+})
+
+describe('resolveSignupAccess', () => {
+  it('grants the invitation only when the inviter is an admin', () => {
+    const inv = { plan: 'plus', features: ['portfolio'] }
+    expect(resolveSignupAccess(inv, true)).toEqual({ plan: 'plus', features: ['portfolio'] })
+    expect(resolveSignupAccess(inv, false)).toEqual({ plan: 'free', features: [] })
+    expect(resolveSignupAccess({ role: 'premium_plus' }, false)).toEqual({ plan: 'free', features: [] })
+    expect(resolveSignupAccess({ role: 'premium_plus' }, true)).toEqual({ plan: 'plus', features: ['portfolio'] })
+  })
+})
+
+describe('invitation copy', () => {
+  it('labels plan + add-ons', () => {
+    expect(invitationAccessLabel({ plan: 'free', features: [] })).toBe('Free (beta limits)')
+    expect(invitationAccessLabel({ plan: 'plus', features: ['portfolio'] })).toBe('Plus + Portfolio (beta)')
+  })
+  it('lists the Portfolio requirements (own Alpaca + own Anthropic key)', () => {
+    const free = invitationFeatureBullets({ plan: 'free', features: [] })
+    expect(free).toHaveLength(1)
+    expect(free[0]).toMatch(/10 trips/)
+    const withPortfolio = invitationFeatureBullets({ plan: 'plus', features: ['portfolio'] })
+    expect(withPortfolio).toHaveLength(2)
+    expect(withPortfolio[0]).toMatch(/unlimited/)
+    expect(withPortfolio[1]).toMatch(/OWN Alpaca/)
+    expect(withPortfolio[1]).toMatch(/OWN Anthropic API key/)
   })
 })
 

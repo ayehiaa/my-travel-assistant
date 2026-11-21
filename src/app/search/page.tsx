@@ -12,7 +12,7 @@ import { FlightOffer } from '@/types/flights'
 export default function SearchPage() {
   const summaryRef = useRef<HTMLDivElement>(null)
   const user = useUser()
-  const isAssistant = user.role === 'assistant'
+  const isAssistant = user.access.accountType === 'assistant'
   const ownerFirstName = isAssistant
     ? (user.linkedMainAccounts.find(a => a.id === user.activeMainAccountId)?.displayName?.split(' ')[0] ?? 'the traveller')
     : null

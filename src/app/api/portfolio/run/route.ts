@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { logAudit } from '@/lib/auditLogger'
 import { startAnalysisRun } from '@/lib/startAnalysisRun'
 import { NO_AI_KEY_MESSAGE } from '@/lib/aiKeyResolver'
@@ -7,7 +8,7 @@ import { NO_AI_KEY_MESSAGE } from '@/lib/aiKeyResolver'
 export async function POST() {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'premium_plus') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!hasFeature(user.access, 'portfolio')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Shared with the scheduler (src/inngest/scheduledRuns.ts): credentials, live value, cooldown, rows, event.
   const result = await startAnalysisRun({ userId: user.id, trigger: 'manual' })

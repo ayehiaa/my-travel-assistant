@@ -44,8 +44,8 @@ export default async function RootLayout({
   if (user) {
     const [activeMainAccountId, linkedMainAccounts] = await Promise.all([
       getActiveMainAccountId(user),
-      user.role === 'assistant' ? getLinkedMainAccounts(user.id) : Promise.resolve([]),
-      user.role === 'assistant' ? activatePendingLinks(user.id) : Promise.resolve(),
+      user.access.accountType === 'assistant' ? getLinkedMainAccounts(user.id) : Promise.resolve([]),
+      user.access.accountType === 'assistant' ? activatePendingLinks(user.id) : Promise.resolve(),
     ])
     contextValue = { ...user, activeMainAccountId, linkedMainAccounts }
   }

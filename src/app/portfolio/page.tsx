@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import PortfolioTosGate from '@/components/portfolio/PortfolioTosGate'
 import HubTabs from '@/components/portfolio/hub/HubTabs'
@@ -26,7 +27,7 @@ export default async function PortfolioPage({
 
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (user.role !== 'premium_plus') redirect('/')
+  if (!hasFeature(user.access, 'portfolio')) redirect('/')
 
   const supabase = await createClient()
   const { data: profile } = await supabase

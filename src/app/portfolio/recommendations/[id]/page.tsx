@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
 import RebalanceView from '@/components/portfolio/hub/RebalanceView'
 import { Recommendation } from '@/types/database'
@@ -19,7 +20,7 @@ export default async function RecommendationDetailPage({
 
   const authUser = await getAuthUser()
   if (!authUser) redirect('/login')
-  if (authUser.role !== 'premium_plus') redirect('/')
+  if (!hasFeature(authUser.access, 'portfolio')) redirect('/')
 
   const supabase = await createClient()
 

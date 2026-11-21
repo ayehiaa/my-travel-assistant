@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { getAuthUser, isPremiumOrAbove } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
+import { limitsFor } from '@/lib/access'
 import GmailReviewClient from './GmailReviewClient'
 
 export const metadata = { title: 'Sojourn — Gmail Import' }
@@ -7,7 +8,7 @@ export const metadata = { title: 'Sojourn — Gmail Import' }
 export default async function GmailReviewPage() {
   const user = await getAuthUser()
   if (!user) redirect('/login')
-  if (!isPremiumOrAbove(user.role)) redirect('/?error=gmail_premium_only')
+  if (!limitsFor(user.access).gmailImport) redirect('/?error=gmail_premium_only')
 
   return (
     <main style={{ maxWidth: 800, margin: '0 auto', padding: '40px 20px' }}>
