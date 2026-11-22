@@ -1,24 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
-import { loadCheckins, loadEntries, nowFor, type ActiveEnrolment } from '@/lib/health/healthServer'
+import { loadCheckins, loadEntries, loadLibrary, nowFor, type ActiveEnrolment } from '@/lib/health/healthServer'
 import { signedPhotoUrls } from '@/lib/health/healthPhotos'
-import { sumNutrients, uncertaintyBand } from '@/lib/health/nutrition'
+import { mealsRemaining, suggestSlot, sumNutrients, uncertaintyBand } from '@/lib/health/nutrition'
 import { formatDuration, sleepDurationMinutes } from '@/lib/health/checkin'
-import { healthHref } from '@/lib/health/healthHub'
 import { loadJointChecks, loadWorkouts } from '@/lib/health/trainingServer'
-import FoodEntryCard from './FoodEntryCard'
-import ActivitySection from './ActivitySection'
-import LogDatePicker from './LogDatePicker'
+import { recentFoods } from '@/lib/health/lifestyleUi'
+import { addDays } from '@/lib/health/time'
+import { loadActivityProps } from './ActivitySection'
 import HealthNotice from './HealthNotice'
-import { CARD, CARD_TITLE, fmtNum } from './ui'
+import FoodView, { type FoodModel } from './FoodView'
 
-/** Log (specs/029 §5): one day's food entries (edit / delete), check-in, totals; date picker for past days. */
+/** Food tab (was "Log"; specs/029 §5, redesigned in specs/032): one day's meals, totals, recents, cardio & steps. */
 export default async function LogTab({ userId, enrolment, date }: { userId: string; enrolment: ActiveEnrolment; date: string }) {
   const supabase = await createClient()
-  const today = nowFor(enrolment).date
+  const { date: today, time } = nowFor(enrolment)
   let entries: Awaited<ReturnType<typeof loadEntries>>
+  let recentEntries: Awaited<ReturnType<typeof loadEntries>>
   let checkins: Awaited<ReturnType<typeof loadCheckins>>
+  let library: Awaited<ReturnType<typeof loadLibrary>>
   try {
-    ;[entries, checkins] = await Promise.all([loadEntries(supabase, userId, date, date), loadCheckins(supabase, userId, date, date)])
+    ;[entries, recentEntries, checkins, library] = await Promise.all([
+      loadEntries(supabase, userId, date, date),
+      loadEntries(supabase, userId, addDays(today, -13), today),
+      loadCheckins(supabase, userId, date, date),
+      loadLibrary(supabase, userId, 20),
+    ])
   } catch (err) {
     return <HealthNotice title="Could not load this day">{err instanceof Error ? err.message : 'Try again shortly.'}</HealthNotice>
   }
@@ -27,70 +33,57 @@ export default async function LogTab({ userId, enrolment, date }: { userId: stri
   let workouts: Awaited<ReturnType<typeof loadWorkouts>> = []
   let joint: Awaited<ReturnType<typeof loadJointChecks>> = []
   try { [workouts, joint] = await Promise.all([loadWorkouts(supabase, userId, date, date), loadJointChecks(supabase, userId)]) } catch { /* not available */ }
+  const activity = await loadActivityProps({ userId, enrolment, date, painPassed: null, checks: [] })
+
+  const { def, targets } = enrolment
   const checkin = checkins[0] ?? null
   const totals = sumNutrients(entries.flatMap(e => e.items))
-  const band = uncertaintyBand(totals.kcal)
-  const { def } = enrolment
-  const slots = def.mealSlots.map(s => ({ key: s.key, name: s.name }))
-  const componentLabels = Object.fromEntries(def.components.map(c => [c.key, { name: c.name, unit: c.unit }]))
   const supplementNames = new Map(def.supplements.map(s => [s.key, s.name]))
+  const oneStarch = def.nutritionRules.some(r => r.type === 'one_starch_per_meal')
+  const logTime = date === today ? time : '12:00'
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <LogDatePicker date={date} today={today} />
-        {date === today && <a href={`${healthHref({ tab: 'today' })}#log-food`} className="text-sm font-semibold text-[var(--blue-700)] underline">+ Log food</a>}
-      </div>
+  const dayLines: string[] = []
+  if (checkin) {
+    const parts = [checkin.weightKg != null ? `${checkin.weightKg} kg` : null]
+    if (checkin.bedTime && checkin.wakeTime) parts.push(`slept ${checkin.bedTime}–${checkin.wakeTime} (${formatDuration(sleepDurationMinutes(checkin.bedTime, checkin.wakeTime))})`)
+    if (checkin.supplementsTaken.length > 0) parts.push(checkin.supplementsTaken.map(k => supplementNames.get(k) ?? k).join(', '))
+    dayLines.push(`Check-in: ${parts.filter(Boolean).join(' · ') || 'saved'}`)
+  }
+  for (const w of workouts) {
+    const check = joint.find(c => c.workoutId === w.id)
+    let line = `${def.trainingSessions.find(t => t.key === w.sessionKey)?.name ?? w.sessionKey}: ${w.status}${w.skipReason ? ` (${w.skipReason})` : ''}${w.durationMinutes ? ` · ${w.durationMinutes} min` : ''}`
+    if (check && (check.duringPain !== null || check.nextMorningPain !== null)) {
+      line += ` · joint ${check.duringPain ?? '–'}/10${check.nextMorningPain !== null ? `, ${check.nextMorningPain}/10 next morning` : ''}${check.swelling ? ', swelling' : ''}${check.redFlags.length ? `, red flags: ${check.redFlags.join(', ')}` : ''}`
+    }
+    dayLines.push(line)
+  }
 
-      <section className={CARD} aria-labelledby="day-h">
-        <h2 id="day-h" className={CARD_TITLE}>Day summary</h2>
-        <p className="text-sm text-[var(--ink-2)]">
-          <strong className="text-[var(--ink)]">{totals.kcal} kcal</strong> ({band.low}–{band.high}) · protein {fmtNum(totals.proteinG)} g ·
-          sat fat {fmtNum(totals.satFatG)} g · carbs {fmtNum(totals.carbsG)} g · fat {fmtNum(totals.fatG)} g · fibre {fmtNum(totals.fibreG)} g
-        </p>
-        <p className="mt-2 text-sm text-[var(--ink-2)]">
-          {checkin ? (
-            <>
-              Check-in: {checkin.weightKg != null ? `${checkin.weightKg} kg` : 'no weight'}
-              {checkin.bedTime && checkin.wakeTime && <> · sleep {checkin.bedTime}–{checkin.wakeTime} ({formatDuration(sleepDurationMinutes(checkin.bedTime, checkin.wakeTime))})</>}
-              {checkin.supplementsTaken.length > 0 && <> · {checkin.supplementsTaken.map(k => supplementNames.get(k) ?? k).join(', ')}</>}
-            </>
-          ) : 'No morning check-in this day.'}
-        </p>
-        {workouts.map(w => {
-          const check = joint.find(c => c.workoutId === w.id)
-          return (
-            <p key={w.id} className="mt-2 text-sm text-[var(--ink-2)]">
-              Training:{' '}
-              <a className="font-semibold text-[var(--ink)] underline" href={healthHref({ tab: 'training', session: w.sessionKey, date: w.date })}>
-                {def.trainingSessions.find(t => t.key === w.sessionKey)?.name ?? w.sessionKey}
-              </a>{' '}
-              — {w.status}{w.skipReason ? ` (${w.skipReason})` : ''}{w.durationMinutes ? ` · ${w.durationMinutes} min` : ''}
-              {check && (check.duringPain !== null || check.nextMorningPain !== null) && (
-                <> · joint {check.duringPain ?? '–'}/10 during{check.nextMorningPain !== null && `, ${check.nextMorningPain}/10 next morning`}{check.swelling && ', swelling'}{check.redFlags.length > 0 && `, red flags: ${check.redFlags.join(', ')}`}</>
-              )}
-            </p>
-          )
-        })}
-      </section>
+  const view = (e: (typeof entries)[number]) => ({
+    id: e.id, time: e.time, slot: e.slot, text: e.text, restaurant: e.restaurant, noAddedFat: e.noAddedFat, items: e.items,
+    photos: e.photoPaths.filter(p => !!urls[p]).map(p => ({ path: p, url: urls[p] })),
+  })
+  const known = new Set(def.mealSlots.map(s => s.key))
+  const meals: FoodModel['meals'] = def.mealSlots.map(s => ({
+    key: s.key, name: s.name, window: `${s.start}–${s.end}`, entries: entries.filter(e => e.slot === s.key).map(view),
+  }))
+  const other = entries.filter(e => !e.slot || !known.has(e.slot))
+  if (other.length) meals.push({ key: '_other', name: 'Other', window: null, entries: other.map(view) })
 
-      <ActivitySection userId={userId} enrolment={enrolment} date={date} painPassed={null} checks={[]} title={date === today ? 'Cardio & steps today' : 'Cardio & steps this day'} />
-
-      {entries.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--rule)] p-6 text-center text-sm text-[var(--ink-3)]">Nothing logged on this day.</p>
-      ) : (
-        entries.map(e => (
-          <FoodEntryCard
-            key={e.id}
-            entry={{
-              id: e.id, time: e.time, slot: e.slot, text: e.text, restaurant: e.restaurant, noAddedFat: e.noAddedFat, items: e.items,
-              photos: e.photoPaths.filter(p => !!urls[p]).map(p => ({ path: p, url: urls[p] })),
-            }}
-            slots={slots}
-            componentLabels={componentLabels}
-          />
-        ))
-      )}
-    </div>
-  )
+  const model: FoodModel = {
+    date,
+    today,
+    totals,
+    targets,
+    band: uncertaintyBand(totals.kcal),
+    starchLeft: oneStarch ? mealsRemaining(def.mealSlots, time, entries.map(e => e.slot)).length : null,
+    meals,
+    slots: def.mealSlots.map(s => ({ key: s.key, name: s.name })),
+    componentLabels: Object.fromEntries(def.components.map(c => [c.key, { name: c.name, unit: c.unit }])),
+    recents: recentFoods(recentEntries, library, 8),
+    log: { date, nowTime: logTime, slots: def.mealSlots, componentLabels: Object.fromEntries(def.components.map(c => [c.key, { name: c.name, unit: c.unit }])), eatingOut: def.eatingOut },
+    relogSlot: suggestSlot(def.mealSlots, logTime)?.key ?? null,
+    dayLines,
+    activity: activity.status === 'ok' ? activity.props : null,
+  }
+  return <FoodView m={model} />
 }

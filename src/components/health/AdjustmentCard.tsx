@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { sendJson, errorOf } from './api'
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE } from './ui'
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD } from './ui'
+import InfoPopover from './ui/InfoPopover'
 
 export interface AdjustmentCardProps {
   periodEnd: string
@@ -33,18 +34,23 @@ export default function AdjustmentCard(p: AdjustmentCardProps) {
   const change = p.kcalChange !== 0
   return (
     <section className={`${CARD} border-[var(--blue-700)]`} aria-labelledby="adj-h">
-      <h2 id="adj-h" className={CARD_TITLE}>Fortnightly check</h2>
-      <p className="text-sm text-[var(--ink)]">{p.reasoning}</p>
-      {change && (
-        <p className="mt-2 text-sm text-[var(--ink-2)]">
-          Energy {p.currentKcal} → <strong className="text-[var(--ink)]">{p.newKcal} kcal</strong> · carbs {p.currentCarbsG} → {p.newCarbsG} g · protein unchanged.
+      <div className="-mt-2 flex items-center justify-between gap-2">
+        <h2 id="adj-h" className="text-sm font-bold text-[var(--ink)]">Calorie check</h2>
+        <InfoPopover label="Why">
+          <p>{p.reasoning}</p>
+          {p.caveat && <p className="mt-2 text-xs">{p.caveat}</p>}
+        </InfoPopover>
+      </div>
+      {change ? (
+        <p className="text-sm text-[var(--ink-2)]">
+          <span className="text-xl font-bold text-[var(--ink)]">{p.currentKcal} → {p.newKcal}</span> kcal
+          <span className="block text-xs text-[var(--ink-3)]">Carbs {p.currentCarbsG} → {p.newCarbsG} g · protein same</span>
         </p>
-      )}
-      {p.caveat && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">{p.caveat}</p>}
+      ) : <p className="text-sm text-[var(--ink)]">{p.reasoning}</p>}
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         {change ? (
           <>
-            <button type="button" className={BUTTON_SECONDARY} disabled={busy} onClick={() => decide('decline')}>Keep my targets</button>
+            <button type="button" className={BUTTON_SECONDARY} disabled={busy} onClick={() => decide('decline')}>Keep</button>
             <button type="button" className={BUTTON_PRIMARY} disabled={busy} onClick={() => decide('accept')}>Accept {p.kcalChange > 0 ? '+' : '−'}{Math.abs(p.kcalChange)} kcal</button>
           </>
         ) : (

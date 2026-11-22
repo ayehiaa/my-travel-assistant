@@ -50,7 +50,7 @@ export function ImportUpload({ drafts }: { drafts: OpenDraft[] }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast(data.error ?? 'Import failed', 'error'); return }
       toast('Draft ready — review each section', 'success')
-      router.push(healthHref({ tab: 'programme', view: 'import', import: data.id }))
+      router.push(healthHref({ tab: 'plan', view: 'import', import: data.id }))
     } catch {
       toast('Network error — try again', 'error')
     } finally {
@@ -88,7 +88,7 @@ export function ImportUpload({ drafts }: { drafts: OpenDraft[] }) {
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {drafts.map(d => (
               <li key={d.id}>
-                <Link className="font-semibold text-[var(--blue-700)] underline" href={healthHref({ tab: 'programme', view: 'import', import: d.id })}>
+                <Link className="font-semibold text-[var(--blue-700)] underline" href={healthHref({ tab: 'plan', view: 'import', import: d.id })}>
                   {d.fileName ?? 'Pasted text'}
                 </Link>
                 <span className="text-xs text-[var(--ink-3)]"> · {new Date(d.createdAt).toLocaleDateString('en-GB')} · {d.confirmed.length}/{IMPORT_SECTIONS.length} sections confirmed</span>
@@ -153,7 +153,7 @@ export function ImportReview(props: ReviewProps) {
     setBusy(false)
     if (!res.ok) { toast(errorOf(res, 'Could not save the programme'), 'error'); return }
     toast(res.data.activated ? 'Programme started' : 'Programme saved — switch to it any time from Edit & versions', 'success')
-    router.push(healthHref({ tab: 'programme', view: res.data.activated ? 'overview' : 'edit' }))
+    router.push(healthHref({ tab: 'plan', view: res.data.activated ? 'overview' : 'edit' }))
     router.refresh()
   }
 
@@ -163,7 +163,7 @@ export function ImportReview(props: ReviewProps) {
     const res = await sendJson(`/api/health/programme/import/${props.id}`, undefined, 'DELETE')
     setBusy(false)
     if (!res.ok) { toast(errorOf(res, 'Could not discard'), 'error'); return }
-    router.push(healthHref({ tab: 'programme', view: 'import' }))
+    router.push(healthHref({ tab: 'plan', view: 'import' }))
     router.refresh()
   }
 

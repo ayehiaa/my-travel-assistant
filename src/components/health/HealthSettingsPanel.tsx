@@ -91,7 +91,7 @@ export default function HealthSettingsPanel({ initial, available, emailConfigure
 
   return (
     <section className={CARD} id="health-settings" aria-labelledby="hs-h">
-      <h2 id="hs-h" className={CARD_TITLE}>Health settings</h2>
+      <h2 id="hs-h" className={CARD_TITLE}>Reminders &amp; units</h2>
       {!available && <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Settings need a database update — the owner must apply <code>supabase/apply_health_p2.sql</code>. Defaults are used until then.</p>}
 
       <h3 className="text-sm font-bold text-[var(--ink)]">Units</h3>

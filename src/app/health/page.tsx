@@ -3,10 +3,11 @@ import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
-import { HEALTH_CONSENT_VERSION, HEALTH_TAB_LABELS, parseHealthTab, parseLogDate, parsePlanWeek, parseProgrammeView } from '@/lib/health/healthHub'
+import { HEALTH_CONSENT_VERSION, HEALTH_TAB_LABELS, healthHref, legacyTabRedirect, parseHealthTab, parseLogDate, parsePlanWeek, parseProgrammeView } from '@/lib/health/healthHub'
 import { loadHealthState, nowFor } from '@/lib/health/healthServer'
 import { PROGRAMME_TEMPLATES } from '@/lib/health/seedProgramme'
 import { localDate } from '@/lib/health/time'
+import LifestyleFab from '@/components/health/LifestyleFab'
 import HealthTabs from '@/components/health/HealthTabs'
 import HealthNotice from '@/components/health/HealthNotice'
 import ConsentGate from '@/components/health/ConsentGate'
@@ -19,16 +20,19 @@ import ProgrammeTab from '@/components/health/ProgrammeTab'
 import { HealthTabSkeleton } from '@/components/health/HealthSkeletons'
 
 export const metadata = {
-  title: 'Sojourn — Health',
+  title: 'Sojourn — Lifestyle',
 }
 
-/** Health hub: /health?tab=today|log|training|progress|programme (specs/029-health-routines, phases P1a–P3). */
+/** Lifestyle hub: /health?tab=today|food|train|progress|plan (specs/029 P1a–P3; redesigned in specs/032). */
 export default async function HealthPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const params = await searchParams
+  // Old tab names (log / training / programme) keep working: redirect to the renamed tab with the same query.
+  const legacy = legacyTabRedirect(params)
+  if (legacy) redirect(legacy)
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (!hasFeature(user.access, 'health')) redirect('/')
@@ -58,30 +62,47 @@ export default async function HealthPage({
     const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
     const training = { session: one(params.session), exercise: one(params.exercise), date: one(params.date), travel: one(params.travel) === '1' }
     const programme = { view: parseProgrammeView(params.view), week: parsePlanWeek(params.week, nowFor(enrolment).date), importId: one(params.import) }
-    const suspenseKey = tab === 'log' ? `log:${logDate}`
-      : tab === 'training' ? `training:${training.session ?? ''}:${training.exercise ?? ''}:${training.date ?? ''}`
-      : tab === 'programme' ? `programme:${programme.view}:${programme.week}:${programme.importId ?? ''}`
+    const suspenseKey = tab === 'food' ? `food:${logDate}`
+      : tab === 'train' ? `train:${training.session ?? ''}:${training.exercise ?? ''}:${training.date ?? ''}`
+      : tab === 'plan' ? `plan:${programme.view}:${programme.week}:${programme.importId ?? ''}`
       : tab
+    const now = nowFor(enrolment)
+    const def = enrolment.def
+    const inPlayer = tab === 'train' && !!training.session
     body = (
       <>
         <HealthTabs active={tab} />
         <h2 className="sr-only">{HEALTH_TAB_LABELS[tab]}</h2>
         <Suspense key={suspenseKey} fallback={<HealthTabSkeleton />}>
-          {tab === 'today' && <TodayTab userId={user.id} enrolment={enrolment} />}
-          {tab === 'log' && <LogTab userId={user.id} enrolment={enrolment} date={logDate} />}
-          {tab === 'training' && <TrainingTab userId={user.id} enrolment={enrolment} session={training.session} exercise={training.exercise} date={training.date} travel={training.travel} />}
+          {tab === 'today' && <TodayTab userId={user.id} enrolment={enrolment} editCheckin={one(params.checkin) === '1'} />}
+          {tab === 'food' && <LogTab userId={user.id} enrolment={enrolment} date={logDate} />}
+          {tab === 'train' && <TrainingTab userId={user.id} enrolment={enrolment} session={training.session} exercise={training.exercise} date={training.date} travel={training.travel} openCardio={one(params.cardio) === '1'} />}
           {tab === 'progress' && <ProgressTab userId={user.id} enrolment={enrolment} />}
-          {tab === 'programme' && <ProgrammeTab userId={user.id} email={user.email} enrolment={enrolment} view={programme.view} week={programme.week} importId={programme.importId} />}
+          {tab === 'plan' && <ProgrammeTab userId={user.id} email={user.email} enrolment={enrolment} view={programme.view} week={programme.week} importId={programme.importId} />}
         </Suspense>
+        {!inPlayer && (
+          <LifestyleFab
+            ctx={{
+              date: now.date, nowTime: now.time, slots: def.mealSlots, eatingOut: def.eatingOut,
+              componentLabels: Object.fromEntries(def.components.map(c => [c.key, { name: c.name, unit: c.unit }])),
+            }}
+            links={{
+              recent: `${healthHref({ tab: 'food' })}#recent`,
+              weight: `${healthHref({ tab: 'today', checkin: 1 })}#checkin`,
+              workout: healthHref({ tab: 'train' }),
+              cardio: `${healthHref({ tab: 'train', cardio: 1 })}#cardio`,
+            }}
+          />
+        )}
       </>
     )
   }
 
   return (
-    <main className="mx-auto max-w-[960px] px-4 pb-28 pt-6 md:px-6 md:pb-12 md:pt-10">
-      <div className="mb-4 md:mb-6">
-        <h1 className="text-2xl font-bold text-[var(--ink)] md:text-3xl" style={{ fontFamily: 'var(--display)' }}>Health</h1>
-        <p className="mt-1 text-sm text-[var(--ink-3)]">Your programme, food, weight and sleep. Not medical advice.</p>
+    <main className="mx-auto max-w-[960px] px-4 pb-36 pt-4 md:px-6 md:pb-24 md:pt-8">
+      <div className="mb-3 flex items-baseline justify-between gap-2 md:mb-5">
+        <h1 className="font-display text-2xl font-bold text-[var(--ink)] md:text-3xl">Lifestyle</h1>
+        <p className="text-xs text-[var(--ink-4)]">Not medical advice</p>
       </div>
       {body}
     </main>

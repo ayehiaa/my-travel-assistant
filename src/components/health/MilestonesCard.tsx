@@ -23,7 +23,7 @@ const STATE: Record<MilestoneItem['state'], { label: string; cls: string }> = {
 }
 
 /** Milestones checklist per programme week with expected vs actual (specs/029 US9). */
-export default function MilestonesCard({ items }: { items: MilestoneItem[] }) {
+export default function MilestonesCard({ items, bare = false }: { items: MilestoneItem[]; bare?: boolean }) {
   const toast = useToast()
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,8 +35,8 @@ export default function MilestonesCard({ items }: { items: MilestoneItem[] }) {
     router.refresh()
   }
   return (
-    <section className={CARD} aria-labelledby="mile-h">
-      <h2 id="mile-h" className={CARD_TITLE}>Milestones</h2>
+    <section className={bare ? '' : CARD} aria-labelledby={bare ? undefined : "mile-h"}>
+      {!bare && <h2 id="mile-h" className={CARD_TITLE}>Milestones</h2>}
       <ol className="m-0 flex list-none flex-col gap-3 p-0">
         {items.map(m => (
           <li key={m.week} className="border-b border-[var(--rule-soft)] pb-3 last:border-0">

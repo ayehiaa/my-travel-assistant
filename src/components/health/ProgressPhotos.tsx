@@ -8,7 +8,7 @@ import { sendJson, errorOf } from './api'
 import { BUTTON_SECONDARY, CARD, CARD_TITLE } from './ui'
 
 /** Private progress photos (specs/029 US9): resized + metadata stripped, signed URLs, never auto-deleted. */
-export default function ProgressPhotos({ today, photos }: { today: string; photos: Array<{ id: string; date: string; url: string | null }> }) {
+export default function ProgressPhotos({ today, photos, bare = false }: { today: string; photos: Array<{ id: string; date: string; url: string | null }>; bare?: boolean }) {
   const toast = useToast()
   const router = useRouter()
   const ref = useRef<HTMLInputElement>(null)
@@ -39,8 +39,8 @@ export default function ProgressPhotos({ today, photos }: { today: string; photo
     router.refresh()
   }
   return (
-    <section className={CARD} aria-labelledby="photo-h">
-      <h2 id="photo-h" className={CARD_TITLE}>Progress photos</h2>
+    <section className={bare ? '' : CARD} aria-labelledby={bare ? undefined : "photo-h"}>
+      {!bare && <h2 id="photo-h" className={CARD_TITLE}>Progress photos</h2>}
       <p className="text-xs text-[var(--ink-3)]">Private to you (signed links only, location data removed). Same light, pose and time of day each time.</p>
       {photos.length > 0 && (
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">

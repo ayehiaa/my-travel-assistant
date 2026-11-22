@@ -16,11 +16,18 @@ import {
 import LineChart from '@/components/portfolio/hub/LineChart'
 import { loadTripRanges } from '@/lib/health/p2Server'
 import { tripOn } from '@/lib/health/travel'
-import ActivitySection from './ActivitySection'
+import ActivityCard, { type ActivityCardProps } from './ActivityCard'
+import { loadActivityProps } from './ActivitySection'
+import { effortText, phaseLabel, shortLabel, weekChip, weekDot, type DotState } from '@/lib/health/lifestyleUi'
+import Chip from './ui/Chip'
+import Disclosure from './ui/Disclosure'
+import InfoPopover from './ui/InfoPopover'
+import OverflowMenu, { MENU_ITEM } from './ui/OverflowMenu'
+import { PRIMARY_BTN } from './ui/Section'
 import HealthNotice from './HealthNotice'
 import SessionPlayer, { type PlayerExercise } from './SessionPlayer'
 import { ApprovalToggle, DeleteWorkoutButton, JointClearanceButton } from './TrainingActions'
-import { BUTTON_PRIMARY, CARD, CARD_TITLE } from './ui'
+import { CARD, CARD_TITLE } from './ui'
 import { OfflineSyncBanner } from './offlineSync'
 
 const BACKDATE_DAYS = 60
@@ -40,23 +47,13 @@ function weekBanner(enrolment: ActiveEnrolment, position: TrainingPosition, toda
   return parts.join(' · ')
 }
 
-const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  done:     { label: 'Done', cls: 'bg-green-100 text-green-800' },
-  partial:  { label: 'Partial', cls: 'bg-amber-100 text-amber-900' },
-  skipped:  { label: 'Skipped', cls: 'bg-gray-200 text-gray-800' },
-  moved:    { label: 'Done another day', cls: 'bg-green-50 text-green-800' },
-  missed:   { label: 'Missed', cls: 'bg-red-100 text-red-800' },
-  today:    { label: 'Today', cls: 'bg-blue-100 text-blue-800' },
-  upcoming: { label: 'Planned', cls: 'bg-[var(--paper-2)] text-[var(--ink-3)]' },
-  before_start: { label: 'Before start', cls: 'bg-[var(--paper-2)] text-[var(--ink-3)]' },
-}
 
 function sessionName(enrolment: ActiveEnrolment, key: string): string {
   return enrolment.def.trainingSessions.find(s => s.key === key)?.name ?? key.toUpperCase()
 }
 
 /** Training (specs/029 US5/US6): overview, guided session player (?session=) and exercise history (?exercise=). */
-export default async function TrainingTab({ userId, enrolment, session, exercise, date, travel }: {
+export default async function TrainingTab({ userId, enrolment, session, exercise, date, travel, openCardio = false }: {
   userId: string
   enrolment: ActiveEnrolment
   session?: string
@@ -64,6 +61,8 @@ export default async function TrainingTab({ userId, enrolment, session, exercise
   date?: string
   /** ?travel=1 from Today's travel mode. */
   travel?: boolean
+  /** ?cardio=1 from the + menu: open the cardio & steps section. */
+  openCardio?: boolean
 }) {
   const supabase = await createClient()
   const loaded = await loadTrainingContext(supabase, userId, enrolment)
@@ -79,165 +78,248 @@ export default async function TrainingTab({ userId, enrolment, session, exercise
     const d = date && isValidDate(date) && date <= ctx.today && date >= addDays(ctx.today, -BACKDATE_DAYS) ? date : ctx.today
     return <PlayerLoader userId={userId} enrolment={enrolment} ctx={ctx} session={s} date={d} travel={travel === true} />
   }
-  return <Overview userId={userId} enrolment={enrolment} ctx={ctx} />
+  return <Overview userId={userId} enrolment={enrolment} ctx={ctx} openCardio={openCardio} />
 }
 
 // ── Overview ────────────────────────────────────────────────────────────────
 
-async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment: ActiveEnrolment; ctx: TrainingContext }) {
+const DOT: Record<DotState, { cls: string; label: string }> = {
+  done:         { cls: 'bg-green-600 text-white', label: 'done' },
+  partial:      { cls: 'bg-amber-400 text-white', label: 'partial' },
+  skipped:      { cls: 'bg-[var(--ink-4)] text-white', label: 'skipped' },
+  missed:       { cls: 'border-2 border-red-500 text-red-700', label: 'missed' },
+  today:        { cls: 'border-2 border-[var(--blue-700)] text-[var(--blue-700)]', label: 'today' },
+  planned:      { cls: 'border border-[var(--ink-4)] text-[var(--ink-3)]', label: 'planned' },
+  cardio:       { cls: 'text-teal-700', label: 'cardio' },
+  rest:         { cls: 'text-[var(--ink-4)]', label: 'rest' },
+  before_start: { cls: 'border border-dashed border-[var(--ink-4)] text-[var(--ink-4)]', label: 'before start' },
+}
+const DOT_ICON: Partial<Record<DotState, string>> = { done: '✓', partial: '½', missed: '!', skipped: '–', cardio: '♥', rest: '·' }
+
+export interface TrainOverviewModel {
+  today: string
+  phase: string
+  phaseInfo: string[]
+  joint: { level: 'ok' | 'reduce' | 'stop'; message: string; uncleared: { id: string; date: string; redFlags: string[] } | null }
+  week: Array<{ date: string; letter: string; dot: DotState; title: string; href: string | null; isToday: boolean }>
+  next: { name: string; focus: string; meta: string; href: string } | null
+  reason: string
+  warnings: string[]
+  sessions: Array<{ key: string; name: string; href: string }>
+  recent: Array<{ id: string; date: string; name: string; href: string; meta: string }>
+  jointLine: string | null
+  unlocks: Array<{ key: string; name: string; available: boolean; status: string; reason: string; notes: string | null; approval: { approved: boolean; movement: string } | null }>
+  excluded: string[]
+  history: Array<{ key: string; name: string; exercises: Array<{ key: string; name: string; href: string }> }>
+  activity: Omit<ActivityCardProps, 'title'> | null
+  openCardio: boolean
+}
+
+async function Overview({ userId, enrolment, ctx, openCardio }: { userId: string; enrolment: ActiveEnrolment; ctx: TrainingContext; openCardio: boolean }) {
   const def = enrolment.def
   const supabase = await createClient()
   let recent: Awaited<ReturnType<typeof loadWorkouts>> = []
   try { recent = await loadWorkouts(supabase, userId, addDays(ctx.today, -27), ctx.today) } catch { recent = [] }
   const week = weekSchedule(def, ctx.today, ctx.weekWorkouts, enrolment.startDate)
   const rec = ctx.recommendation
-  const block = ctx.position.block
+  const pos = ctx.position
+  const block = pos.block
   const rules = def.painRules
   const latest = ctx.joint.basis
+  const activity = await loadActivityProps({ userId, enrolment, date: ctx.today, painPassed: ctx.painPassed, checks: ctx.checks })
+  const nextSession = rec.sessionKey ? def.trainingSessions.find(t => t.key === rec.sessionKey) ?? null : null
+  const blockIndex = block ? def.blocks.findIndex(b => b.key === block.key) : -1
+  const weekText = weekChip(enrolment.startDate, ctx.today, def.identity.durationWeeks)
 
+  const model: TrainOverviewModel = {
+    today: ctx.today,
+    phase: [block ? phaseLabel(block.name, blockIndex) : null, weekText, pos.light ? 'Light week' : null, pos.deload ? 'Deload week' : null].filter(Boolean).join(' · '),
+    phaseInfo: [
+      weekBanner(enrolment, pos, ctx.today),
+      ...(block ? [`${block.focus} · ${block.repRange} reps${block.rir ? ` · ${effortText(block.rir)}` : ''}`] : []),
+      ...(block?.intensityTechnique ? [block.intensityTechnique] : []),
+      ...(def.weeklySchedule?.spacingRules ?? []),
+    ],
+    joint: {
+      level: ctx.joint.level,
+      message: ctx.joint.message ?? '',
+      uncleared: ctx.joint.uncleared?.id ? { id: ctx.joint.uncleared.id, date: fmtDay(ctx.joint.uncleared.date), redFlags: ctx.joint.uncleared.redFlags } : null,
+    },
+    week: week.map(d => ({
+      date: d.date,
+      letter: fmtDay(d.date).slice(0, 2),
+      dot: weekDot(d),
+      title: `${fmtDay(d.date)}: ${shortLabel(d.label)}${d.status ? ` — ${STATUS_WORD[d.status] ?? d.status}` : ''}${d.workouts.filter(w => w.sessionKey !== d.sessionKey).map(w => ` (${sessionName(enrolment, w.sessionKey)} ${w.status})`).join('')}`,
+      href: d.sessionKey ? healthHref({ tab: 'train', session: d.sessionKey, date: d.date < ctx.today ? d.date : null }) : null,
+      isToday: d.date === ctx.today,
+    })),
+    next: nextSession ? {
+      name: nextSession.name,
+      focus: nextSession.focus,
+      meta: `${nextSession.exercises.length} exercises · ${nextSession.exercises.reduce((n, e) => n + (e.sets ?? 0), 0)} sets`,
+      href: healthHref({ tab: 'train', session: nextSession.key }),
+    } : null,
+    reason: rec.reason,
+    warnings: rec.warnings,
+    sessions: def.trainingSessions.map(t => ({ key: t.key, name: `${t.name} · ${t.focus}`, href: healthHref({ tab: 'train', session: t.key }) })),
+    recent: [...recent].reverse().map(w => ({
+      id: w.id, date: fmtDay(w.date), name: sessionName(enrolment, w.sessionKey),
+      href: healthHref({ tab: 'train', session: w.sessionKey, date: w.date }),
+      meta: `${w.status}${w.skipReason ? ` — ${w.skipReason}` : ''}${w.durationMinutes ? ` · ${w.durationMinutes} min` : ''}${w.travelMode ? ' · travel' : ''}`,
+    })),
+    jointLine: rules ? (latest
+      ? `${fmtDay(latest.date)}: ${outcomeLabel(evaluateJointCheck(rules, latest))}${latest.duringPain !== null ? ` · ${latest.duringPain}/10 during` : ''}${latest.nextMorningPain !== null ? ` · ${latest.nextMorningPain}/10 next morning` : ''}`
+      : 'No joint check yet') : null,
+    unlocks: ctx.unlocks.map(u => ({
+      key: u.key,
+      name: u.exercise?.name ?? u.movement,
+      available: u.available,
+      status: u.available ? `Unlocked · ${sessionName(enrolment, unlockHostSession(def) ?? '')}` : 'Locked',
+      reason: u.reason,
+      notes: u.notes ?? null,
+      approval: u.requires === 'professional_approval' ? { approved: ctx.approvals.includes(u.key), movement: u.movement } : null,
+    })),
+    excluded: def.movementRestrictions?.excluded ?? [],
+    history: def.trainingSessions.map(t => ({ key: t.key, name: t.name, exercises: t.exercises.map(e => ({ key: e.key, name: e.name, href: healthHref({ tab: 'train', exercise: e.key }) })) })),
+    activity: activity.status === 'ok' ? activity.props : null,
+    openCardio,
+  }
+  return <TrainOverview m={model} />
+}
+
+const STATUS_WORD: Record<string, string> = {
+  done: 'done', partial: 'partial', skipped: 'skipped', moved: 'done another day', missed: 'missed', today: 'today', upcoming: 'planned', before_start: 'before start',
+}
+
+/** Train overview (specs/032): phase chip, week strip, today's session → Start, then details behind disclosures. */
+export function TrainOverview({ m }: { m: TrainOverviewModel }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <OfflineSyncBanner />
-      <section className={`${CARD} bg-[var(--paper-2)]`} aria-labelledby="blk-h">
-        <h2 id="blk-h" className="text-lg font-bold text-[var(--ink)]">{weekBanner(enrolment, ctx.position, ctx.today)}</h2>
-        {block && (
-          <p className="mt-1 text-sm text-[var(--ink-2)]">
-            {block.focus} · {block.repRange} reps{block.rir && <> · RIR {block.rir}</>}
-            {block.intensityTechnique && <span className="block text-xs text-[var(--ink-3)]">{block.intensityTechnique}</span>}
-          </p>
+      <div className="flex items-center gap-1">
+        <Chip>{m.phase}</Chip>
+        {m.phaseInfo.length > 0 && (
+          <InfoPopover label="About this phase" align="left">
+            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">{m.phaseInfo.map(t => <li key={t}>{t}</li>)}</ul>
+          </InfoPopover>
         )}
-      </section>
+      </div>
 
-      {ctx.joint.level !== 'ok' && (
-        <section className={`${CARD} ${ctx.joint.level === 'stop' ? 'border-red-300 bg-red-50' : 'border-amber-200 bg-amber-50'}`} role="alert">
-          <h2 className={`mb-1 text-base font-bold ${ctx.joint.level === 'stop' ? 'text-red-900' : 'text-amber-900'}`}>
-            {ctx.joint.level === 'stop' ? 'Leg work paused — red flag' : 'Joint check: go easier next session'}
-          </h2>
-          <p className={`text-sm ${ctx.joint.level === 'stop' ? 'text-red-900' : 'text-amber-900'}`}>{ctx.joint.message}</p>
-          {ctx.joint.uncleared?.id && (
-            <div className="mt-3">
-              <p className="mb-2 text-xs text-red-900">Recorded {fmtDay(ctx.joint.uncleared.date)}: {ctx.joint.uncleared.redFlags.join(', ')}.</p>
-              <JointClearanceButton checkId={ctx.joint.uncleared.id} />
+      {m.joint.level !== 'ok' && (
+        <section className={`rounded-xl border px-4 py-3 ${m.joint.level === 'stop' ? 'border-red-300 bg-red-50 text-red-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`} role="alert">
+          <p className="text-sm font-bold">{m.joint.level === 'stop' ? '▲ Leg work paused' : '! Go easier next session'}</p>
+          <p className="mt-0.5 text-xs">{m.joint.message}</p>
+          {m.joint.uncleared && (
+            <div className="mt-2">
+              <p className="mb-2 text-xs">{m.joint.uncleared.date}: {m.joint.uncleared.redFlags.join(', ')}</p>
+              <JointClearanceButton checkId={m.joint.uncleared.id} />
             </div>
           )}
         </section>
       )}
 
-      <section className={CARD} aria-labelledby="today-tr-h">
-        <h2 id="today-tr-h" className={CARD_TITLE}>Today</h2>
-        <p className="text-sm text-[var(--ink)]">{rec.reason}</p>
-        {rec.warnings.map(w => <p key={w} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{w}</p>)}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {rec.sessionKey && (
-            <Link href={healthHref({ tab: 'training', session: rec.sessionKey })} className={BUTTON_PRIMARY}>
-              Start {sessionName(enrolment, rec.sessionKey)}
-            </Link>
-          )}
-          <span className="text-xs text-[var(--ink-3)]">Or open:</span>
-          {def.trainingSessions.map(t => (
-            <Link key={t.key} href={healthHref({ tab: 'training', session: t.key })} className="text-sm font-semibold text-[var(--blue-700)] underline">{t.name}</Link>
-          ))}
-        </div>
-      </section>
+      <ol className="m-0 grid list-none grid-cols-7 gap-1 rounded-xl border border-[var(--rule)] bg-white p-2" aria-label="This week">
+        {m.week.map(d => {
+          const dot = (
+            <>
+              <span className={`text-[11px] font-semibold ${d.isToday ? 'text-[var(--blue-700)]' : 'text-[var(--ink-3)]'}`}>{d.letter}</span>
+              <span className={`grid h-8 w-8 place-items-center rounded-full text-xs font-bold ${DOT[d.dot].cls}`} aria-hidden="true">{DOT_ICON[d.dot] ?? ''}</span>
+              <span className="sr-only">{d.title}</span>
+            </>
+          )
+          return (
+            <li key={d.date}>
+              {d.href
+                ? <Link href={d.href} title={d.title} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg hover:bg-[var(--paper-2)]">{dot}</Link>
+                : <span title={d.title} className="flex min-h-14 flex-col items-center justify-center gap-1">{dot}</span>}
+            </li>
+          )
+        })}
+      </ol>
+      <p className="-mt-2 text-center text-[11px] text-[var(--ink-3)]" aria-hidden="true">✓ done · ½ partial · ○ lift · ♥ cardio</p>
 
-      <section className={CARD} aria-labelledby="wk-h">
-        <h2 id="wk-h" className={CARD_TITLE}>This week</h2>
-        <ol className="m-0 flex list-none flex-col gap-2 p-0">
-          {week.map(d => {
-            const chip = d.status ? STATUS_CHIP[d.status] : null
-            return (
-              <li key={d.date} className={`flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--rule-soft)] pb-2 text-sm last:border-0 ${d.date === ctx.today ? 'font-semibold' : ''}`}>
-                <span className="min-w-0">
-                  <span className="mr-2 inline-block w-24 font-mono text-xs text-[var(--ink-3)]">{fmtDay(d.date)}</span>
-                  <span className="text-[var(--ink)]">{d.label}</span>
-                  {d.workouts.filter(w => w.sessionKey !== d.sessionKey).map(w => (
-                    <span key={w.sessionKey} className="ml-2 text-xs text-[var(--ink-3)]">({sessionName(enrolment, w.sessionKey)} {w.status})</span>
-                  ))}
-                </span>
-                {chip && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${chip.cls}`}>{chip.label}</span>}
-              </li>
-            )
-          })}
-        </ol>
-        {(def.weeklySchedule?.spacingRules.length ?? 0) > 0 && (
-          <ul className="mt-3 list-disc pl-5 text-xs text-[var(--ink-3)]">
-            {def.weeklySchedule!.spacingRules.map(r => <li key={r}>{r}</li>)}
-          </ul>
+      <section aria-label="Today's session" className="rounded-xl border border-[var(--rule)] bg-white p-4">
+        {m.next ? (
+          <>
+            <p className="text-xs font-semibold text-[var(--ink-3)]">Next</p>
+            <h2 className="text-lg font-bold text-[var(--ink)]">{m.next.name} <span className="font-normal text-[var(--ink-3)]">· {m.next.focus}</span></h2>
+            <p className="text-xs text-[var(--ink-3)]">{m.next.meta}</p>
+            {m.warnings.map(w => <p key={w} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">! {w}</p>)}
+            <div className="mt-3 flex items-center gap-2">
+              <Link href={m.next.href} className={`${PRIMARY_BTN} flex-1`}>Start</Link>
+              <OverflowMenu label="Other sessions">
+                {m.sessions.map(s => <Link key={s.key} href={s.href} className={MENU_ITEM}>{s.name}</Link>)}
+              </OverflowMenu>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 text-sm text-[var(--ink)]">{m.reason}</p>
+            <OverflowMenu label="Open a session">
+              {m.sessions.map(s => <Link key={s.key} href={s.href} className={MENU_ITEM}>{s.name}</Link>)}
+            </OverflowMenu>
+          </div>
         )}
       </section>
 
-      {(rules || ctx.unlocks.length > 0) && (
-        <section className={CARD} aria-labelledby="jt-h">
-          <h2 id="jt-h" className={CARD_TITLE}>Joint & unlocks</h2>
-          {rules && (
-            <p className="text-sm text-[var(--ink-2)]">
-              Latest joint check: {latest ? <>{fmtDay(latest.date)} — <strong className="text-[var(--ink)]">{outcomeLabel(evaluateJointCheck(rules, latest))}</strong>
-                {latest.duringPain !== null && <> · {latest.duringPain}/10 during</>}
-                {latest.nextMorningPain !== null && <> · {latest.nextMorningPain}/10 next morning</>}</> : 'none yet'}
-            </p>
-          )}
-          {ctx.unlocks.length > 0 && (
-            <ul className="m-0 mt-3 flex list-none flex-col gap-3 p-0">
-              {ctx.unlocks.map(u => (
-                <li key={u.key} className="rounded-lg border border-[var(--rule)] p-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <strong className="text-sm text-[var(--ink)]">{u.exercise?.name ?? u.movement}</strong>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${u.available ? 'bg-green-100 text-green-800' : 'bg-[var(--paper-2)] text-[var(--ink-3)]'}`}>
-                      {u.available ? `Unlocked — in ${sessionName(enrolment, unlockHostSession(def) ?? '')}` : 'Locked'}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--ink-2)]">{u.reason}</p>
-                  {u.notes && <p className="mt-1 text-xs text-[var(--ink-3)]">{u.notes}</p>}
-                  {u.requires === 'professional_approval' && (
-                    <ApprovalToggle unlockKey={u.key} approved={ctx.approvals.includes(u.key)} movement={u.movement} />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {(def.movementRestrictions?.excluded.length ?? 0) > 0 && (
-            <p className="mt-3 text-xs text-[var(--ink-3)]">Never offered: {def.movementRestrictions!.excluded.join(', ').toLowerCase()}.</p>
-          )}
-        </section>
+      {m.activity && (
+        <Disclosure id="cardio" title="Cardio & steps" meta={m.activity.migrationNeeded ? undefined : `${m.activity.weekly.minutes}${m.activity.weekly.target !== null ? `/${m.activity.weekly.target}` : ''} min`} open={m.openCardio}>
+          <ActivityCard {...m.activity} bare />
+        </Disclosure>
       )}
 
-      <section className={CARD} aria-labelledby="recent-h">
-        <h2 id="recent-h" className={CARD_TITLE}>Recent sessions</h2>
-        {recent.length === 0 ? <p className="text-sm text-[var(--ink-3)]">No sessions logged in the last 4 weeks.</p> : (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {[...recent].reverse().map(w => (
-              <li key={w.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--rule-soft)] pb-2 text-sm last:border-0">
-                <span>
-                  <span className="mr-2 inline-block w-24 font-mono text-xs text-[var(--ink-3)]">{fmtDay(w.date)}</span>
-                  <Link href={healthHref({ tab: 'training', session: w.sessionKey, date: w.date })} className="font-semibold text-[var(--ink)] underline">{sessionName(enrolment, w.sessionKey)}</Link>
-                  <span className="ml-2 text-xs text-[var(--ink-3)]">
-                    {w.status}{w.skipReason ? ` — ${w.skipReason}` : ''}{w.durationMinutes ? ` · ${w.durationMinutes} min` : ''}{w.travelMode ? ' · travel' : ''}
-                  </span>
-                </span>
+      <Disclosure title="Recent sessions" meta={`${m.recent.length}`}>
+        {m.recent.length === 0 ? <p className="text-sm text-[var(--ink-3)]">None in the last 4 weeks.</p> : (
+          <ul className="m-0 flex list-none flex-col divide-y divide-[var(--rule-soft)] p-0">
+            {m.recent.map(w => (
+              <li key={w.id} className="flex min-h-12 items-center gap-2 py-1">
+                <Link href={w.href} className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-[var(--ink)]">{w.name} <span className="font-normal text-[var(--ink-3)]">· {w.date}</span></span>
+                  <span className="block truncate text-xs text-[var(--ink-3)]">{w.meta}</span>
+                </Link>
                 <DeleteWorkoutButton id={w.id} />
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Disclosure>
 
-      <ActivitySection userId={userId} enrolment={enrolment} date={ctx.today} painPassed={ctx.painPassed} checks={ctx.checks} title="Cardio (Zone 2) & steps" />
+      {(m.jointLine || m.unlocks.length > 0) && (
+        <Disclosure title="Joint & unlocks" meta={m.unlocks.filter(u => u.available).length ? `${m.unlocks.filter(u => u.available).length} unlocked` : undefined}>
+          {m.jointLine && <p className="text-sm text-[var(--ink-2)]">Last joint check: <strong className="text-[var(--ink)]">{m.jointLine}</strong></p>}
+          {m.unlocks.length > 0 && (
+            <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+              {m.unlocks.map(u => (
+                <li key={u.key} className="rounded-lg border border-[var(--rule)] p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <strong className="text-sm text-[var(--ink)]">{u.name}</strong>
+                    <Chip tone={u.available ? 'good' : 'neutral'}>{u.available ? '✓ ' : '🔒 '}{u.status}</Chip>
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--ink-2)]">{u.reason}</p>
+                  {u.notes && <p className="mt-1 text-xs text-[var(--ink-3)]">{u.notes}</p>}
+                  {u.approval && <ApprovalToggle unlockKey={u.key} approved={u.approval.approved} movement={u.approval.movement} />}
+                </li>
+              ))}
+            </ul>
+          )}
+          {m.excluded.length > 0 && <p className="mt-2 text-xs text-[var(--ink-3)]">Never offered: {m.excluded.join(', ').toLowerCase()}.</p>}
+        </Disclosure>
+      )}
 
-      <section className={CARD} aria-labelledby="hist-h">
-        <h2 id="hist-h" className={CARD_TITLE}>Exercise history</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {def.trainingSessions.map(t => (
+      <Disclosure title="Exercise history">
+        <div className="grid gap-3 md:grid-cols-3">
+          {m.history.map(t => (
             <div key={t.key}>
-              <h3 className="mb-1 text-sm font-bold text-[var(--ink)]">{t.name}</h3>
-              <ul className="m-0 flex list-none flex-col gap-1 p-0">
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-[var(--ink-3)]">{t.name}</h3>
+              <ul className="m-0 flex list-none flex-col p-0">
                 {t.exercises.map(e => (
-                  <li key={e.key}><Link href={healthHref({ tab: 'training', exercise: e.key })} className="text-sm text-[var(--blue-700)] underline">{e.name}</Link></li>
+                  <li key={e.key}><Link href={e.href} className="flex min-h-11 items-center text-sm text-[var(--blue-700)]">{e.name}</Link></li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
-      </section>
+      </Disclosure>
     </div>
   )
 }
@@ -369,7 +451,7 @@ async function ExerciseHistory({ userId, enrolment, exerciseKey }: { userId: str
   const def = enrolment.def
   const host = def.trainingSessions.find(s => s.exercises.some(e => e.key === exerciseKey)) ?? def.trainingSessions.find(s => s.key === unlockHostSession(def))
   const ex = host ? findExercise(def, host.key, exerciseKey) : null
-  if (!host || !ex) return <HealthNotice title="Exercise not found">That exercise is not in your programme. <Link className="underline" href={healthHref({ tab: 'training' })}>Back to training</Link></HealthNotice>
+  if (!host || !ex) return <HealthNotice title="Exercise not found">That exercise is not in your programme. <Link className="underline" href={healthHref({ tab: 'train' })}>Back to Train</Link></HealthNotice>
 
   const supabase = await createClient()
   let entries: Awaited<ReturnType<typeof loadExerciseHistory>>[string]
@@ -385,7 +467,7 @@ async function ExerciseHistory({ userId, enrolment, exerciseKey }: { userId: str
   return (
     <div className="flex flex-col gap-4">
       <section className={CARD}>
-        <Link href={healthHref({ tab: 'training' })} className="text-sm font-semibold text-[var(--blue-700)] underline">← Training</Link>
+        <Link href={healthHref({ tab: 'train' })} className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--blue-700)]">‹ Train</Link>
         <h2 className="mt-1 text-xl font-bold text-[var(--ink)]">{ex.name}</h2>
         <p className="text-sm text-[var(--ink-3)]">{host.name} · {entries.length} session{entries.length === 1 ? '' : 's'} logged</p>
         {unit && (
@@ -397,7 +479,7 @@ async function ExerciseHistory({ userId, enrolment, exerciseKey }: { userId: str
               startLabel={entries[0] ? fmtDay(entries[0].date) : undefined}
               endLabel={entries.length ? fmtDay(entries[entries.length - 1].date) : undefined}
             />
-            <p className="mt-1 text-xs text-[var(--ink-3)]">Top set {unit === 'kg' ? 'load per dumbbell (kg)' : 'hold (seconds)'} per session.</p>
+            <p className="mt-1 text-xs text-[var(--ink-3)]">Top set · {unit === 'kg' ? 'kg per dumbbell' : 'seconds'}</p>
           </div>
         )}
       </section>
