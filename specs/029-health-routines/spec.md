@@ -350,3 +350,4 @@ target loss band. Output: proposal (no change / −150 kcal / +150 kcal) with re
 | **P1b** | Training: session player, block/week logic, progression suggestions, deloads, travel variants, excluded movements, joint/pain rules and conditional unlocks |
 | **P2** | Cardio + manual steps, fortnightly adjustment engine, measurements/labs/milestones, weekly review, restaurant & travel modes (Trips integration), email + Web Push reminders, 30-day photo auto-delete |
 | **P3** | Programme import from PDF, meal-plan rotation + shopping list, clinician export (PDF/CSV), offline set logging, barcode scanning (Open Food Facts) |
+| **P3.1** | Estimate accuracy: assumption chips (nothing unstated merged into items), reference nutrition data (USDA SR28 subset; CoFID not downloadable from the build environment) supplies the numbers, "no butter / no oil" toggle, edit description + re-calculate saved entries |

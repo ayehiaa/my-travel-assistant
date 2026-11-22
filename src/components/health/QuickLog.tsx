@@ -7,6 +7,7 @@ import type { MealSlot } from '@/lib/health/programmeSchema'
 import { suggestSlot, type FoodItem } from '@/lib/health/nutrition'
 import FoodItemsEditor, { fromEditable, toEditable, type EditableItem } from './FoodItemsEditor'
 import BarcodeScanner from './BarcodeScanner'
+import NoAddedFatToggle from './NoAddedFatToggle'
 import { preparePhoto } from './resizePhoto'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
 
@@ -31,6 +32,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
   const [time, setTime] = useState(nowTime)
   const [slot, setSlot] = useState<string>(suggestSlot(slots, nowTime)?.key ?? '')
   const [restaurant, setRestaurant] = useState(false)
+  const [noAddedFat, setNoAddedFat] = useState(false)
   const [items, setItems] = useState<EditableItem[] | null>(null)
   const [photoPaths, setPhotoPaths] = useState<string[]>([])
   const [tips, setTips] = useState<string[]>([])
@@ -54,7 +56,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
 
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.url))
-    setText(''); setPhotos([]); setItems(null); setPhotoPaths([]); setRestaurant(false); setTips([])
+    setText(''); setPhotos([]); setItems(null); setPhotoPaths([]); setRestaurant(false); setNoAddedFat(false); setTips([])
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -68,6 +70,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
       form.set('date', date)
       form.set('time', time)
       if (restaurant) form.set('restaurant', 'true')
+      if (noAddedFat) form.set('noAddedFat', 'true')
       for (const p of photos) form.append('photos', await preparePhoto(p.file), 'photo.jpg')
       const res = await fetch('/api/health/food/estimate', { method: 'POST', body: form })
       const data = await res.json().catch(() => ({}))
@@ -91,7 +94,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
       const res = await fetch('/api/health/food', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, time, slot: slot || null, text: text.trim() || null, restaurant, photoPaths, items: clean, remember }),
+        body: JSON.stringify({ date, time, slot: slot || null, text: text.trim() || null, restaurant, noAddedFat, photoPaths, items: clean, remember }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast(data.error ?? 'Could not save the food', 'error'); return }
@@ -151,6 +154,9 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
               <ul className="mt-1 list-disc pl-5 text-xs">{eatingOut.map(r => <li key={r}>{r}</li>)}</ul>
             </div>
           )}
+          <div className="mt-3">
+            <NoAddedFatToggle checked={noAddedFat} onChange={setNoAddedFat} prominent={restaurant} />
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => addFiles(e.target.files)} />
             <button type="button" className={BUTTON_SECONDARY} disabled={photos.length >= MAX_PHOTOS} onClick={() => fileRef.current?.click()}>

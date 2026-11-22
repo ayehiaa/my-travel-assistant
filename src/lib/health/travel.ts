@@ -103,8 +103,13 @@ export function restaurantTips(def: ProgrammeDefinition, items: ReadonlyArray<Pi
   return [...new Set(tips)].slice(0, 5)
 }
 
-/** Restaurant context for the AI prompt (menu photos / descriptions are DATA). */
+/**
+ * Restaurant context for the AI prompt (menu photos / descriptions are DATA). P3.1: hidden cooking fat is NEVER
+ * merged into a dish — it is returned as a separate `added_fat` assumption (a removable chip) with its own amount.
+ */
 export const RESTAURANT_PROMPT_NOTE =
   'This is a restaurant or takeaway dish, possibly a MENU photo or menu description. Estimate the dish as typically ' +
-  'served in a UK restaurant, including hidden cooking fat (butter on the grill, oil, ghee, cream). If it is a menu, ' +
+  'served in a UK restaurant. Restaurants often add hidden cooking fat (butter on the grill or on toast, oil, ghee, ' +
+  'cream): when that is genuinely likely and the person did not mention it, return it as a SEPARATE assumption of ' +
+  'kind "added_fat" with its own grams and nutrition — never fold it into the item\'s own numbers. If it is a menu, ' +
   'estimate the dish(es) the person says they are choosing, or the most likely one.'

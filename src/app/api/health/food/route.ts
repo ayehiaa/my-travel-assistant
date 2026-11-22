@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       input_text:   input.text ?? null,
       restaurant:   input.restaurant,
       photo_paths:  input.photoPaths,
+      // P3.1: the no-added-fat toggle lives in the existing jsonb column (no migration).
+      ai_usage:     input.noAddedFat ? { noAddedFat: true } : null,
     })
     .select('id')
     .single()

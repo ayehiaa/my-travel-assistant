@@ -413,3 +413,59 @@ data-rights order succeeds.
 - Offline queue is per device; the player page itself must already be loaded (no service-worker page caching).
 - Clock skew between devices can affect which set wins (clamped to server time on the future side only).
 - Apple Health / Google Fit sync (§10 P3 list) is out of scope (owner decision §12.2: manual steps).
+
+## Phase P3.1 — Estimate accuracy (assumption chips, reference nutrition data, no-butter/oil toggle, edit & re-calculate)
+
+Trigger: a production log "Avocado on one sourdough toast, 2 poached eggs, 2 flat white soya milk" (eating-out mode)
+came back as "Sourdough toast **with butter** 75 g — sat 2 g" (butter never mentioned) and "Smashed avocado 80 g —
+sat 2.8 g" (reference ≈ 1.7 g). Sat fat is the most important number (15 g/day target).
+
+### Design
+- **Assumptions (chips)** — `assumptions.ts`: every AI item may carry `assumptions[] = { key, label, kind:
+  added_fat|portion|preparation|ingredient, addsKcal, addsSatFatG, addsProteinG, addsCarbsG, addsFatG, kept, grams?,
+  refId? }`. Item numbers stored = base (item as described) + kept deltas; `setAssumptionKept` moves totals by exactly
+  one chip; `dropAddedFat`; `applyAssumptionPrefs` / `assumptionPrefsOf` (remembered chip choices); tolerant
+  `readAssumptions` (old entries → none). Portion scaling scales the base only.
+- **Prompt contract** (`foodEstimate.ts`): item numbers EXACTLY AS DESCRIBED; anything not stated (butter, oil,
+  dressing, sauce, sugar, a guessed larger portion) is a separate assumption, only when genuinely likely.
+  `RESTAURANT_PROMPT_NOTE` now asks for hidden fat as `added_fat` assumptions, never merged.
+- **Reference data** (`referenceFoods.ts`, `reference/usdaSr28Foods.json`, `reference/README.md`,
+  `scripts/health/build-reference-foods.mjs`): 423 foods from USDA SR28 (public domain) — CoFID could not be
+  downloaded here (gov.uk blocked). Matching approach (simplest robust): deterministic candidate search over the
+  text → candidate ids in the prompt → model returns `reference_key` (or `parts` with grams for composite items such as
+  a flat white) → code validates the id and scales per portion; no key → strict name match (≥ 0.8, unambiguous) →
+  otherwise AI numbers. Assumptions with a reference key + grams also get reference deltas (7 g butter → 3.6 g sat).
+  Components (beta-glucan, soy protein, nuts, pulses, oily fish, starch servings, caffeine) stay model-derived.
+- **Precedence** (`resolveEstimate`, `pickItemSource`): personal library (+ remembered chip choices) → reference
+  dataset (generic) → Open Food Facts (only for items the model marked as branded packaged; label values replace the
+  base, chips stay) → AI. Each item shows its source: "Ref: USDA SR28", "Library", "Open Food Facts", "AI estimate".
+- **No-butter/oil toggle**: Log food (prominent card in eating-out mode, checkbox otherwise) and the entry editor;
+  prompt note + `dropAddedFat` on the result; saved with the entry.
+- **Storage without a migration** (`itemMeta.ts`): assumptions, `refId` and the 'reference' source live under a
+  reserved `_meta` key in the existing `health_food_items.components` jsonb (the P1a `source` CHECK does not allow
+  'reference', so the column keeps 'ai'); `rowToItem` strips `_meta` before validation. The toggle is stored as
+  `{ noAddedFat }` in the existing `health_food_entries.ai_usage` jsonb. Library chip choices live in
+  `health_food_library.per100.assumptionPrefs`; the library now stores the BASE food per 100 g.
+- **Edit & re-calculate** (owner requirement 4): `FoodEntryCard` (Log tab and, new, under "Meals today" on Today)
+  edits text, photos (remove / add), slot, time, eating-out and the toggle; **Re-calculate** → `POST
+  /api/health/food/[id]` (auth + ownership + Zod, same user AI key) runs the shared pipeline
+  `foodEstimateServer.runFoodEstimate` (also used by `/food/estimate` — no duplicate pipeline) on the edited inputs
+  (stored photos re-sent as base64) and returns items for review; **Save** = extended `PATCH` (items + text +
+  restaurant + noAddedFat + photo list; same entry id / created_at, `updated_at` bumped; removed photos deleted after
+  the update); **Cancel** keeps the old version (photos uploaded for an abandoned re-calculation are removed by the
+  daily cleanup after 24 h). Manual item edits without re-calculating work as before. Pure planning:
+  `foodEntryEdit.ts`.
+
+### Decisions made autonomously
+1. USDA SR28 instead of CoFID (gov.uk + FDC blocked; SR28 official files obtained unmodified via an npm package;
+   sha256 recorded). Labels say "Ref: USDA SR28", never CoFID.
+2. Carbs = by difference − fibre (UK convention); everything else copied.
+3. No migration: `_meta` in `components` jsonb and `ai_usage.noAddedFat` (existing columns). Exports include `_meta`.
+4. Assumption deltas are non-negative "adds"; they do not scale with portion edits.
+5. Candidate list in the prompt (single AI call) rather than a second AI round-trip; strict name fallback.
+6. Manual nutrient edits turn a reference/AI item into "Entered by hand".
+
+### Limitations / follow-ups
+- US composition data (e.g. US 2 % milk for semi-skimmed); swap to CoFID when it can be downloaded.
+- Component contributions are still model-derived, not computed from reference rows.
+- Restaurant tips on a re-calculation count the entry's old version in "sat fat left today".

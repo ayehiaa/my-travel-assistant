@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/029-health-routines/spec.md` (Health module — final phase P3 done: programme import from PDF/text with section review + versioned editing, meal plan + shopping list, clinician PDF/CSV export, offline set logging, barcode scanning, data export/delete; plan in `plan.md`, tasks in `tasks.md`)
+Active feature spec: `specs/029-health-routines/spec.md` (Health module — latest phase P3.1 done: estimate accuracy — assumption chips, USDA SR28 reference nutrition data, no-butter/oil toggle, edit + re-calculate saved food entries; earlier P3: programme import, meal plan, clinician export, offline sets, barcode, data rights; plan in `plan.md`, tasks in `tasks.md`)
 <!-- SPECKIT END -->
