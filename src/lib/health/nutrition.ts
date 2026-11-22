@@ -81,7 +81,7 @@ export const ZERO_TOTALS: NutrientTotals = { kcal: 0, proteinG: 0, carbsG: 0, fa
 
 const r1 = (v: number) => Math.round(v * 10) / 10
 
-type NutrientLike = Pick<FoodItem, 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'satFatG' | 'fibreG'>
+export type NutrientLike = Pick<FoodItem, 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'satFatG' | 'fibreG'>
 
 export function sumNutrients(items: NutrientLike[]): NutrientTotals {
   const t = items.reduce<NutrientTotals>((acc, i) => ({

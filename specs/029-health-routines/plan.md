@@ -183,3 +183,119 @@ cross-user child inserts are rejected by RLS.
 - No browser or Supabase run here — UI reviewed from markup; API exercised only through types and pure tests.
 - Exercise history reads up to 1,500 recent set rows per query (ample for a 12-week programme).
 - Retest after the deload is a note only (no dedicated retest form); cardio, intervals unlock and Zone 2 are P2.
+
+---
+
+## Phase P2 — Feedback loop (cardio & steps, adjustments, measurements/labs/milestones, weekly review, travel & restaurant, reminders, photo retention)
+
+### Design
+- **Fix first (owner's document, Block 2 knee progression)**: `ExerciseSchema.blockProgressions` (fromBlock, requires
+  `pain_rule_ok`, optional `holdCapSeconds`, optional note). Seed: both shallow wall sits → hold cap 60 s from Block 2;
+  band terminal knee extension → "Use a stronger band." from Block 2. `effectivePrescription(…, { painRulePassed })`
+  applies them only when the pain rule has passed (same `painRulePassed()` as the sit-to-stand unlock); otherwise the
+  45 s knee-watched cap stays. `progressionSuggestion` takes TODAY's cap (`opts.holdCapSeconds`), so a hold done while
+  the rule passed never suggests > 45 s once it stops passing. `upgradeSeedDefinition()` back-fills the field into
+  programme copies enrolled before this fix (seed template only, never overwrites).
+- **Pure logic** (`src/lib/health/`, all tested): `units.ts`, `cardio.ts`, `adjustment.ts`, `measurements.ts`,
+  `weeklyReview.ts`, `travel.ts`, `healthSettings.ts`, `reminders.ts`, `pushConfig.ts`, `photoCleanup.ts`;
+  `painRules.recoveryOk()`.
+- **Server**: `p2Server.ts` (loaders; missing table → `P2MigrationNeeded` → friendly card), `reviewServer.ts`
+  (weekly review from stored data), `reminderDelivery.ts` (Resend email + web-push, idempotent),
+  `healthServer.effectiveTimezone()` (per-day override → `enrolment.timezone`; `homeTimezone` keeps the enrolment's).
+- **API**: `POST/DELETE /api/health/activity` (cardio | steps), `POST/DELETE /api/health/progress-data`
+  (waist | lab | milestone), `POST/DELETE /api/health/progress-photos`, `POST /api/health/adjustments`,
+  `GET/PATCH /api/health/settings`, `POST /api/health/day-timezones`, `GET/POST/DELETE /api/health/push`;
+  `food/estimate` accepts `restaurant=true` (prompt note + deterministic tips). All: auth → Health add-on → Zod → DB.
+- **Inngest**: `health-reminders-cron` (every 15 min → one event per enabled user per quarter hour),
+  `health-reminders-user` (local time, due types, content, delivery; each send a memoised step),
+  `health-photo-cleanup` (daily 03:17 UTC).
+- **PWA**: `src/app/manifest.ts` (→ `/manifest.webmanifest`), `public/sw.js` (push + notification click only, no
+  caching), `public/app-icon.svg`; `/sw.js` and `/manifest.webmanifest` are public in the middleware. The service
+  worker is registered only when the user turns push on in Health settings.
+- **UI**: Today — travel-mode card (trip, eating-out rules, day timezone control), fortnightly proposal card, "This
+  week" card (mid-point review, milestone due, waist due), cardio & steps card, restaurant mode in Log food, weights
+  in the chosen unit. Training — cardio & steps card; the session player pre-selects travel mode on trip days.
+  Log — cardio & steps for the chosen day. Progress — proposal / "not enough weigh-ins", adjustment history, waist,
+  lipid panel, milestones (expected vs actual), progress photos, weekly reviews (this week so far + stored weeks).
+  Programme — Health settings panel (units, reminders, quiet hours, training time, review day/time, push on/off).
+
+### Data model (migration `20261122c_health_p2.sql`, paste-ready `supabase/apply_health_p2.sql`)
+`health_cardio_sessions`, `health_steps` (unique user + date), `health_adjustments` (unique enrolment + period end;
+targets before/after), `health_measurements` (waist cm; unique user + date + kind), `health_progress_photos` (path
+must be `progress/<uid>/…` by RLS), `health_lab_results` (mmol/L + entered unit), `health_milestone_checks`,
+`health_weekly_reviews` (jsonb stats; unique user + week), `health_settings` (units + reminders jsonb),
+`health_day_timezones` (unique user + date), `health_push_subscriptions` (unique endpoint). Owner-only RLS on all;
+adjustments / milestone ticks must reference the user's own enrolment, cardio the user's own daily log. Audit CHECK
+(full list) + `health_adjustment_accepted`, `health_adjustment_declined`. Pre-checks P1a and P1b. Tested on local
+PostgreSQL 16 with Supabase stubs: stops before P1a / before P1b with the message, applies after P1b, re-runs cleanly,
+cross-user reads return 0 rows, cross-user insert and a foreign progress-photo path are rejected by RLS.
+
+### Decisions made autonomously (P2)
+1. **Knee progression applies from Block 2 onwards** (Block 3 too) — the owner's note says the 45 s cap applies "in
+   Block 1 and whenever the pain rule has not passed", so Block 3 with the rule passed keeps 60 s. The 60 s is a cap
+   reached through the normal +15 s hold progression, not a jump. Band TKE shows the note; its progression message was
+   already "shorter / thicker band".
+2. **Cardio**: types offered = the programme's allowed list; avoid-list types are selectable under "On your avoid
+   list" and need a confirm (client) — the API returns 409 `needsConfirmation` without `confirmAvoid`. HR is optional
+   and only flagged (never blocks). Weekly target = sessions × minutes (4 × 30 = 120), ISO week Mon–Sun.
+3. **Intervals** unlock = week ≥ the unlockable's `fromWeek` (5) AND `painRulePassed` (last 2 pain-check sessions OK)
+   AND **recovery OK** = no red flag in the last 3 pain-check sessions (and none uncleared) and ≥ 2 of the last 3 OK.
+   The option is hidden where training data is unavailable (Log tab / missing P1b), and the server re-checks.
+4. **Adjustment periods** are fixed fortnights from the start date (days 1–14, 15–28, …), capped at the programme
+   length; only the latest finished fortnight can be decided (409 if stale), once per enrolment. Loss = 7-day average
+   of the fortnight's first week − second week, each with ≥ 5 weigh-ins (else "not enough data", no buttons).
+   Boundary losses (exactly 0.4 or 1.2 kg) resolve to "no change". Accept: kcal ± change (never below the safety floor
+   1,500 ♂ / 1,200 ♀ or the programme min), protein unchanged, carbs ± change ÷ 4 rounded to 5 g; fat unchanged.
+   "No change" proposals show "Got it" (recorded as accepted, 0 kcal). The proposal is recomputed server-side.
+   Creatine caveat for fortnights ending within water-weight weeks + 1 week (first two fortnights in the seed).
+5. **Mid-point review**: shown on Today during the milestone week whose task mentions "review" (seed week 6).
+6. **Waist bands**: male > 94 raised / > 102 high (brief); female > 80 / > 88 (same guidance's female cut-offs).
+   Fortnightly reminder when the last waist is ≥ 14 days old (or none).
+7. **Lipids** stored in mmol/L (2 dp); mg/dL factors 38.67 (cholesterol) and 88.57 (TG); non-HDL = total − HDL
+   computed, not stored. Implausible values (likely wrong unit) are rejected. **Escalation** fires for a panel taken in
+   or after the programme's last week (week 12) with LDL above the programme threshold (4.9 mmol/L).
+8. **Milestones**: ticks per task (stable key `w<week>:<task>`); states upcoming / this week / open / done; actual =
+   7-day-average weight vs start weight and waist change since the first measurement, as of the milestone week end.
+9. **Weekly review**: ISO week Mon–Sun; daily components count days the target was hit; a "gap" is < 4/7 days
+   (scaled for a partial week). Focus templates in fixed priority: oats + soya combined fix (beta-glucan AND soy gaps)
+   → sat-fat ceiling breached → protein < 5/7 → each component gap (programme's own suggestion text) → sessions →
+   cardio → steps → sleep consistency → "plan the week's food". Stored per week (Sunday reminder generates it; the
+   Progress tab stores last week's when missing); Progress also shows "this week so far" live.
+10. **Trips**: the user's OWN trips (`trips.owner_id = user`; Health users are members, assistants never get
+    Health). A trip covers first departure → last arrival (local dates in the home timezone); one-way trips cover
+    their travel day(s) only. On trip days Today shows travel mode and the player pre-selects hotel variants.
+11. **Day timezone**: optional per-day override (`health_day_timezones`), set from the travel card ("Use <device tz>
+    for this trip" / "Back to <home>"). The override for date D applies when it is D in that timezone (home date ±1
+    checked, newest first) — a day is never split or duplicated. Default: enrolment timezone.
+12. **Restaurant mode**: the "Eating out" tick shows the programme rules, sends `restaurant=true` (prompt note: dish
+    or menu, hidden cooking fat) and returns deterministic tips (sauce on the side, no butter on the grill, fried →
+    grilled, one starch, sat fat vs what is left today, leave a third) — AI never words or decides the tips.
+13. **Reminders** are **opt-in (off by default)**; once on, every type is on, email + push channels on, quiet hours
+    22:00–07:00 (a reminder scheduled inside quiet hours is skipped that day). Times: check-in = typical wake + 30 min
+    (07:30 + 30 default); pre-training coffee only with a "training time" setting (before the cut-off: 45 min before;
+    after: cut-off − 30 min "skip it"); caffeine = cut-off − 30 min; evening gap = last meal slot start − 60 min
+    (only when something is missing: top recommendations); bedtime = bedtime − max last-meal gap; weekly review =
+    chosen day/time (Sun 18:00); milestone = 09:00 on the first day of a milestone week; adjustment = 09:00 the day
+    after a fortnight ends (only for a ±kcal proposal not yet decided). One-hour catch-up window; idempotent per user /
+    type / local date via `notification_log` (`health_<type>`), the Inngest event id and Resend's Idempotency-Key.
+    Health reminder kinds are not part of the portfolio notification preferences.
+14. **Web Push**: `web-push@3.6.7` (exact; the 4.0.0 major was released only ~2 weeks ago). VAPID from `VAPID_PUBLIC_KEY`,
+    `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:/https:); missing or malformed → push silently disabled (GET
+    /api/health/push returns `publicKey: null`, the settings panel says so), email still works. Subscriptions with a
+    404/410 answer or 10 consecutive failures are deleted. The public key is served by the API (no NEXT_PUBLIC var).
+15. **Photo retention**: daily job deletes food photos older than 30 days (storage object age) and clears
+    `photo_paths` of entries older than 30 days (items kept); photos not referenced by any entry are deleted after
+    24 h. Never deletes when the entries query fails; progress photos (`progress/…`) are never touched. Bounded per run.
+16. **Progress photos** reuse the private `health-photos` bucket under `progress/<uid>/<date>/<uuid>.jpg` (same EXIF
+    stripping and signed URLs); kept until the user deletes them.
+17. **Audit**: adjustment accepted / declined are audited (kcal before/after + period only). Cardio, steps, waist,
+    labs, photos, milestones, settings, push subscriptions are personal logs — not audited (spec §8, P1a decision 10).
+18. **Units**: Progress (weight, waist, lipids), Today's weight card and the check-in weight entry follow the units
+    setting; everything is stored in kg / cm / mmol/L.
+
+### Risks / limitations
+- No browser, Supabase, Resend or push service here — UI reviewed from markup; delivery code exercised only through
+  types and the pure tests. iOS needs the site added to the Home Screen for Web Push.
+- Reminder scheduling uses typical times (median of recent check-ins); a user without check-ins gets the defaults.
+- Food photos uploaded before P2 for discarded estimates are cleaned by the first daily run (> 24 h old).
+- Food-entry `eaten_at` on back-dated entries uses today's timezone (unchanged from P1a).

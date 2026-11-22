@@ -151,6 +151,16 @@ export const ExerciseSchema = z.object({
   /** Joint the pain rule watches for this exercise. */
   jointWatch:   z.boolean().default(false),
   travelSubstitute: z.object({ name: ShortText, notes: Text.optional() }).optional(),
+  /**
+   * Conditional changes from a block onwards (P2, owner's document): e.g. the shallow wall-sit hold may build to 60 s
+   * from Block 2 once the pain rule has passed; the band terminal knee extension moves to a stronger band.
+   */
+  blockProgressions: z.array(z.object({
+    fromBlock:      Key,
+    requires:       z.enum(['pain_rule_ok']).default('pain_rule_ok'),
+    holdCapSeconds: z.number().int().min(1).max(600).optional(),
+    note:           ShortText.optional(),
+  })).max(5).default([]),
 })
 
 export const TrainingSessionSchema = z.object({

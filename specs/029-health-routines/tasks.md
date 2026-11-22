@@ -81,3 +81,46 @@
 | Schedule | ≥1 day between lifts; A→B→C; C first if short; missed sessions roll forward | training.test.ts |
 | Progression | top of range → +2/+4 kg; stall ×2 → add a set; holds +15 s; bands; block sets/reps; light weeks; deload | training.test.ts |
 | Safety | pain ≤3 & settled; >3 / next-day soreness / swelling → reduce; red flags → disabled until clearance; excluded movements; sit-to-stand / step-up unlocks | painRules.test.ts, training.test.ts |
+
+## Phase P2 — Feedback loop
+
+### Fix first
+- [x] T36 Block 2 knee progression: `blockProgressions` in the exercise schema + seed (wall sits → 60 s cap, band TKE → "Use a stronger band"), only with the pain rule passed; today's cap drives progression; `upgradeSeedDefinition` for existing copies (+ tests in training.test.ts, seedProgramme.test.ts)
+
+### Data
+- [x] T37 Migration `supabase/migrations/20261122c_health_p2.sql` (11 tables, owner-only RLS + parent checks, audit CHECK full list) + `supabase/apply_health_p2.sql` (P1a + P1b pre-checks, verify); tested on local PostgreSQL 16 (pre-checks, apply ×2, RLS cross-user)
+- [x] T38 Audit actions `health_adjustment_accepted` / `health_adjustment_declined` (type, pills, health filter)
+
+### Pure logic (tested)
+- [x] T39 `units.ts` — kg/lb, cm/in, mmol/L ↔ mg/dL (chol / TG)
+- [x] T40 `cardio.ts` — types (allowed / avoid), HR zone flag, weekly minutes, steps status, intervals unlock; `painRules.recoveryOk`
+- [x] T41 `adjustment.ts` — fortnight periods, ≥5 weigh-ins per week, bands (boundaries → no change), creatine caveat, apply (protein kept, carbs absorb, floor), mid-point review
+- [x] T42 `measurements.ts` — waist bands + reminder, lipid input/conversion/non-HDL, escalation after week 12, milestones (state, expected vs actual)
+- [x] T43 `weeklyReview.ts` — adherence stats + deterministic top-3 focus
+- [x] T44 `travel.ts` — trip ranges, per-day timezone resolution, restaurant tips + prompt note
+- [x] T45 `healthSettings.ts`, `reminders.ts` (schedule, quiet hours, due window, wording, email/push render), `pushConfig.ts`, `photoCleanup.ts`
+
+### Server + API + jobs
+- [x] T46 `p2Server.ts`, `reviewServer.ts`, `reminderDelivery.ts`, `healthServer.effectiveTimezone`
+- [x] T47 Routes: activity, progress-data, progress-photos, adjustments, settings, day-timezones, push; food/estimate restaurant mode
+- [x] T48 Inngest: `health-reminders-cron` + `health-reminders-user`, `health-photo-cleanup`; registered in `/api/inngest`
+- [x] T49 PWA manifest, `public/sw.js`, icon; middleware public paths; `web-push@3.6.7` pinned
+
+### UI
+- [x] T50 Today: travel mode card + day timezone control, adjustment proposal, "This week" (mid-point / milestone / waist), cardio & steps, restaurant mode in Log food, weight units
+- [x] T51 Training: cardio card, travel pre-selection in the player; Log: cardio & steps for the day
+- [x] T52 Progress: proposal / insufficient data, adjustment history, waist, labs, milestones, progress photos, weekly reviews
+- [x] T53 Programme: Health settings panel (units, reminders, quiet hours, training time, review day/time, push)
+
+### Docs / gate
+- [x] T54 plan.md P2 decisions, CLAUDE.md "Current Feature Plan"
+- [x] Q3 `npm run build`, `npm test`, `npm run lint`
+
+### Rule coverage update (P2)
+| §6.1 type | Seed rule | Test |
+|---|---|---|
+| Adjustment | fortnightly 7-day averages (≥5 weigh-ins/week): <0.4 kg → −150; 0.4–1.2 → none; >1.2 → +150; creatine caveat | adjustment.test.ts |
+| Component (week) / cardio | Zone 2 4 × 30 min, HR 104–122, avoid list, intervals from week 5 with recovery OK | cardio.test.ts, painRules.test.ts |
+| Daily movement | 8,000–10,000 steps | cardio.test.ts |
+| Tracking | waist fortnightly + bands; lipids week 1 / 12 + LDL escalation; milestones | measurements.test.ts |
+| Progression (knee, Block 2) | wall sit ≤ 60 s and stronger band only with the pain rule passed | training.test.ts |

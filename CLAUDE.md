@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/029-health-routines/` (spec.md, plan.md, tasks.md — Health module; P1a daily loop and P1b training done; P2/P3 next)
+Active feature spec: `specs/029-health-routines/` (spec.md, plan.md, tasks.md — Health module; P1a daily loop, P1b training and P2 feedback loop done; P3 next)
 <!-- SPECKIT END -->

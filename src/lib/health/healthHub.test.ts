@@ -15,6 +15,6 @@ describe('health hub URLs', () => {
     expect(healthHref()).toBe('/health')
     expect(healthHref({ tab: 'today' })).toBe('/health')
     expect(healthHref({ tab: 'log', date: '2026-11-20' })).toBe('/health?tab=log&date=2026-11-20')
-    expect(HEALTH_AUDIT_FILTER).toBe('(health_consent_given,health_programme_activated)')
+    expect(HEALTH_AUDIT_FILTER).toBe('(health_consent_given,health_programme_activated,health_adjustment_accepted,health_adjustment_declined)')
   })
 })

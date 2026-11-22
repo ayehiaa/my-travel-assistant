@@ -14,6 +14,14 @@ const BANDS = ['Resistance band']
 const DB = ['Dumbbells']
 const BENCH = ['Bench']
 
+/**
+ * Block 2 knee progression (owner's document): only once the pain rule has passed (same condition as the
+ * sit-to-stand unlock) — shallow wall-sit holds may build to 60 s; band terminal knee extension → a stronger band.
+ * Block 1, or the pain rule not passed: the 45 s knee-watched hold cap applies.
+ */
+const WALL_SIT_B2 = { fromBlock: 'b2', requires: 'pain_rule_ok' as const, holdCapSeconds: 60, note: 'Pain rule passed — build the hold up to 60 s (same shallow ~45° angle).' }
+const TKE_B2 = { fromBlock: 'b2', requires: 'pain_rule_ok' as const, note: 'Use a stronger band.' }
+
 /** YouTube search link for a demonstration (the PDF's own links are not in the repo; a search never goes dead). */
 function yt(query: string): string {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' exercise form')}`
@@ -178,9 +186,11 @@ const SEED_INPUT: ProgrammeDefinitionInput = {
           notes: 'Hinge at the hip, soft knees, flat back. Feel it in the hamstrings.', videoUrl: yt('Dumbbell Romanian deadlift'),
           travelSubstitute: { name: 'Single-leg Romanian deadlift' } },
         { key: 'shallow_wall_sit', name: 'Shallow wall sit (hold)', sets: 4, holdSeconds: 45, restSeconds: 60, region: 'lower', jointWatch: true,
-          notes: 'Hold 30–45 s. Slide down only a third of the way: knees bent about 45°, never to a right angle.', videoUrl: yt('Wall sit') },
+          notes: 'Hold 30–45 s. Slide down only a third of the way: knees bent about 45°, never to a right angle.', videoUrl: yt('Wall sit'),
+          blockProgressions: [WALL_SIT_B2] },
         { key: 'band_tke', name: 'Band terminal knee extension', sets: 3, reps: '15-20', restSeconds: 45, region: 'lower', perSide: true, equipment: BANDS, jointWatch: true,
-          notes: 'Band behind the knee, anchored in front. Straighten fully and squeeze the thigh for 2 seconds.', videoUrl: yt('Band terminal knee extension') },
+          notes: 'Band behind the knee, anchored in front. Straighten fully and squeeze the thigh for 2 seconds.', videoUrl: yt('Band terminal knee extension'),
+          blockProgressions: [TKE_B2] },
         { key: 'band_hamstring_curl', name: 'Band seated hamstring curl', sets: 3, reps: '12-15', restSeconds: 60, region: 'lower', equipment: BANDS, jointWatch: true,
           notes: 'Bend to a right angle and no further. Stop if you feel it at the back of the knee.', videoUrl: yt('Band seated hamstring curl') },
         { key: 'band_side_step', name: 'Band side-step', sets: 3, reps: '12 each way', restSeconds: 45, region: 'lower', equipment: BANDS,
@@ -208,7 +218,8 @@ const SEED_INPUT: ProgrammeDefinitionInput = {
         { key: 'single_leg_glute_bridge', name: 'Single-leg glute bridge', sets: 3, reps: '10-12', restSeconds: 60, region: 'lower', perSide: true, jointWatch: true,
           notes: 'Lying on your back, one foot on the floor. Keep the hips level and pause at the top.', videoUrl: yt('Single leg glute bridge') },
         { key: 'c_shallow_wall_sit', name: 'Shallow wall sit (hold)', sets: 3, holdSeconds: 45, restSeconds: 60, region: 'lower', jointWatch: true,
-          notes: 'Hold 30–45 s. Same shallow ~45° angle as Session B.', videoUrl: yt('Wall sit') },
+          notes: 'Hold 30–45 s. Same shallow ~45° angle as Session B.', videoUrl: yt('Wall sit'),
+          blockProgressions: [WALL_SIT_B2] },
         { key: 'arnold_press', name: 'Arnold press', sets: 3, reps: '10-12', restSeconds: 75, region: 'upper', equipment: DB,
           notes: 'Rotate palms as you press. Hits all three delt heads.', videoUrl: yt('Arnold press'),
           travelSubstitute: { name: 'Pike push-up' } },
@@ -336,4 +347,28 @@ export const PROGRAMME_TEMPLATES: readonly ProgrammeTemplate[] = [{ key: SEED_TE
 
 export function findTemplate(key: string): ProgrammeTemplate | null {
   return PROGRAMME_TEMPLATES.find(t => t.key === key) ?? null
+}
+
+/**
+ * Enrolments copy the template into health_programmes, so copies made before a template fix miss it. For the seed
+ * template only, fill `blockProgressions` on exercises that have none (matched by session + exercise key). Pure —
+ * applied on read; never removes or changes anything the user's copy already has.
+ */
+export function upgradeSeedDefinition(def: ProgrammeDefinition, templateKey: string | null): ProgrammeDefinition {
+  if (templateKey !== SEED_TEMPLATE_KEY) return def
+  let changed = false
+  const trainingSessions = def.trainingSessions.map(s => {
+    const seed = SEED_PROGRAMME.trainingSessions.find(t => t.key === s.key)
+    if (!seed) return s
+    return {
+      ...s,
+      exercises: s.exercises.map(ex => {
+        const src = seed.exercises.find(e => e.key === ex.key)
+        if (!src || src.blockProgressions.length === 0 || (ex.blockProgressions ?? []).length > 0) return ex
+        changed = true
+        return { ...ex, blockProgressions: src.blockProgressions.map(p => ({ ...p })) }
+      }),
+    }
+  })
+  return changed ? { ...def, trainingSessions } : def
 }

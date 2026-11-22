@@ -77,3 +77,16 @@ describe('ProgrammeDefinitionSchema', () => {
     expect(parseProgrammeDefinition({ nope: true })).toBeNull()
   })
 })
+
+describe('upgradeSeedDefinition', () => {
+  it('fills blockProgressions on old seed copies only', async () => {
+    const { upgradeSeedDefinition, SEED_PROGRAMME: seed, SEED_TEMPLATE_KEY } = await import('./seedProgramme')
+    const old = structuredClone(seed)
+    for (const s of old.trainingSessions) for (const e of s.exercises) e.blockProgressions = []
+    const up = upgradeSeedDefinition(old, SEED_TEMPLATE_KEY)
+    const wall = up.trainingSessions.find(s => s.key === 'b')!.exercises.find(e => e.key === 'shallow_wall_sit')!
+    expect(wall.blockProgressions[0]).toMatchObject({ fromBlock: 'b2', holdCapSeconds: 60 })
+    expect(upgradeSeedDefinition(old, 'other')).toBe(old)
+    expect(upgradeSeedDefinition(seed, SEED_TEMPLATE_KEY)).toBe(seed)
+  })
+})

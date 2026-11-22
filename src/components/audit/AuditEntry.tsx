@@ -32,6 +32,8 @@ const ACTION_PILLS = {
   customer_invitation_revoked: { bg: 'var(--coral-soft)',   color: 'var(--coral)',     label: 'Invite revoked' },
   health_consent_given:       { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Health consent' },
   health_programme_activated: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme started' },
+  health_adjustment_accepted: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Targets adjusted' },
+  health_adjustment_declined: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Adjustment declined' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -92,7 +94,7 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   if (action === 'user_plan_changed' || action === 'user_features_changed' || action === 'customer_invited' || action === 'customer_invitation_revoked') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Admin · Users</span>
   }
-  if (action === 'health_consent_given' || action === 'health_programme_activated') {
+  if (action.startsWith('health_')) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Health</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {

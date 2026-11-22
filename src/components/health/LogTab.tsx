@@ -6,6 +6,7 @@ import { formatDuration, sleepDurationMinutes } from '@/lib/health/checkin'
 import { healthHref } from '@/lib/health/healthHub'
 import { loadJointChecks, loadWorkouts } from '@/lib/health/trainingServer'
 import FoodEntryCard from './FoodEntryCard'
+import ActivitySection from './ActivitySection'
 import LogDatePicker from './LogDatePicker'
 import HealthNotice from './HealthNotice'
 import { CARD, CARD_TITLE, fmtNum } from './ui'
@@ -72,6 +73,8 @@ export default async function LogTab({ userId, enrolment, date }: { userId: stri
           )
         })}
       </section>
+
+      <ActivitySection userId={userId} enrolment={enrolment} date={date} painPassed={null} checks={[]} title={date === today ? 'Cardio & steps today' : 'Cardio & steps this day'} />
 
       {entries.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--rule)] p-6 text-center text-sm text-[var(--ink-3)]">Nothing logged on this day.</p>

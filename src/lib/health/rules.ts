@@ -344,6 +344,6 @@ export const RULE_COVERAGE: ReadonlyArray<{ type: string; example: string; phase
   { type: 'Schedule', example: 'rest day between lifts; A→B→C; C first if short (training.ts)', phase: 'P1b' },
   { type: 'Progression', example: 'top of range → add load; stall ×2 → add a set; block sets/reps; light weeks; deload (training.ts)', phase: 'P1b' },
   { type: 'Safety', example: 'pain thresholds, red flags, excluded movements, unlocks (painRules.ts, training.ts)', phase: 'P1b' },
-  { type: 'Adjustment', example: 'fortnightly ±150 kcal', phase: 'P2' },
+  { type: 'Adjustment', example: 'fortnightly ±150 kcal from 7-day averages, accept/decline (adjustment.ts)', phase: 'P2' },
   { type: 'Tracking', example: '"don\'t track" metrics are hidden', phase: 'P1a' },
 ]

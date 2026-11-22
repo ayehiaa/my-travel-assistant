@@ -110,6 +110,27 @@ export interface Prescription {
   /** Week 12: retest lifts after the deload. */
   retest: boolean
   notes: string[]
+  /** Hold cap raised by a block progression (e.g. 60 s wall sit from Block 2 once the pain rule passed); null = default. */
+  holdCapSeconds: number | null
+}
+
+export interface PrescriptionOptions {
+  /** Pain rule passed (same condition as the pain-rule unlocks) — enables `blockProgressions`. Default false. */
+  painRulePassed?: boolean
+}
+
+/**
+ * Block progressions that apply in `week` (owner's document, P2): the exercise lists changes from a block onwards
+ * that need the pain rule passed. Never applies before the block, outside the programme, or without the pain rule.
+ */
+export function activeBlockProgressions(def: ProgrammeDefinition, ex: Pick<Exercise, 'blockProgressions'>, week: number | null, painRulePassed: boolean) {
+  if (week === null || week > def.identity.durationWeeks || !painRulePassed) return []
+  const { index } = blockForWeek(def, week)
+  if (index < 0) return []
+  return (ex.blockProgressions ?? []).filter(p => {
+    const from = def.blocks.findIndex(b => b.key === p.fromBlock)
+    return from >= 0 && index >= from && p.requires === 'pain_rule_ok'
+  })
 }
 
 /** Exercise is load-bearing (dumbbells) — drives drop sets and load progression. */
@@ -145,7 +166,7 @@ export function dropSetExerciseKey(session: TrainingSession): string | null {
  * Hold exercises keep their hold time (no failure / drop sets). Session blockOverrides win over block defaults.
  * Without a block (before start / after the programme) the session table applies as written.
  */
-export function effectivePrescription(def: ProgrammeDefinition, session: TrainingSession, ex: Exercise, week: number | null): Prescription {
+export function effectivePrescription(def: ProgrammeDefinition, session: TrainingSession, ex: Exercise, week: number | null, opts: PrescriptionOptions = {}): Prescription {
   const own = parseRepRange(ex.reps)
   const hold = isHold(ex)
   const base: Prescription = {
@@ -161,6 +182,7 @@ export function effectivePrescription(def: ProgrammeDefinition, session: Trainin
     restSeconds: ex.restSeconds ?? null,
     retest: false,
     notes: [],
+    holdCapSeconds: null,
   }
   const block = week !== null && week <= def.identity.durationWeeks ? blockForWeek(def, week).block : null
   if (block && week !== null) {
@@ -202,6 +224,10 @@ export function effectivePrescription(def: ProgrammeDefinition, session: Trainin
   const override = block ? session.blockOverrides[block.key] : undefined
   if (override?.sets) base.sets = override.sets
   if (override?.reps && !hold) base.reps = parseRepRange(override.reps) ?? base.reps
+  for (const p of activeBlockProgressions(def, ex, week, opts.painRulePassed === true)) {
+    if (p.holdCapSeconds !== undefined && hold) base.holdCapSeconds = p.holdCapSeconds
+    if (p.note) base.notes.push(p.note)
+  }
   if (base.lastSetToFailure) base.notes.push('Last set to failure.')
   if (base.dropSetOnFinalSet) base.notes.push('Final set: drop set — to failure, take 30% off the weight, go again.')
   base.target = hold
@@ -249,13 +275,13 @@ export function unlockKey(movement: string): string {
 export const UNLOCK_EXERCISES: Record<string, Exercise> = {
   sit_to_stand: {
     key: 'sit_to_stand', name: 'Sit-to-stand (from a high seat)', sets: 3, reps: '8-10', restSeconds: 60, region: 'lower',
-    jointWatch: true, perSide: false, equipment: [],
+    jointWatch: true, perSide: false, equipment: [], blockProgressions: [],
     notes: 'High chair or bench so the knee bends no further than a right angle. Stand up tall, sit down slowly.',
     videoUrl: youtubeSearchUrl('Sit to stand from high chair'),
   },
   step_ups: {
     key: 'step_ups', name: 'Low step-up (10–15 cm step)', sets: 3, reps: '8-10', restSeconds: 60, region: 'lower',
-    jointWatch: true, perSide: true, equipment: [],
+    jointWatch: true, perSide: true, equipment: [], blockProgressions: [],
     notes: 'Low step only (10–15 cm). Step up and come down slowly with control. Only with your physiotherapist\'s agreement.',
     videoUrl: youtubeSearchUrl('Low step up'),
   },
@@ -352,7 +378,8 @@ export interface ProgressionSuggestion {
 export const HOLD_STEP_SECONDS = 15
 export const HOLD_CAP_SECONDS = 90
 
-export function holdCap(ex: Pick<Exercise, 'jointWatch' | 'holdSeconds'>): number {
+export function holdCap(ex: Pick<Exercise, 'jointWatch' | 'holdSeconds'>, rx?: Pick<Prescription, 'holdCapSeconds'> | null): number {
+  if (rx?.holdCapSeconds) return rx.holdCapSeconds
   return ex.jointWatch ? (ex.holdSeconds ?? HOLD_CAP_SECONDS) : Math.max(HOLD_CAP_SECONDS, ex.holdSeconds ?? 0)
 }
 
@@ -396,7 +423,7 @@ export function progressionSuggestion(
   ex: Exercise,
   rx: Prescription,
   history: readonly ExercisePerformance[],
-  opts: { suppressedReason?: string | null; lightOrDeload?: boolean } = {},
+  opts: { suppressedReason?: string | null; lightOrDeload?: boolean; holdCapSeconds?: number | null } = {},
 ): ProgressionSuggestion {
   const last = history[history.length - 1]
   if (!last || working(last.sets).length === 0) return { kind: 'none', message: 'Log your sets to get a suggestion for next time.' }
@@ -410,7 +437,8 @@ export function progressionSuggestion(
   if (rx.kind === 'hold') {
     const target = rx.holdSeconds ?? ex.holdSeconds ?? 0
     const minHold = Math.min(...sets.map(s => s.holdSeconds ?? 0))
-    const cap = holdCap(ex)
+    // An explicit cap (from today's prescription, even null) wins over the cap of the week the hold was done in.
+    const cap = holdCap(ex, { holdCapSeconds: opts.holdCapSeconds !== undefined ? opts.holdCapSeconds : rx.holdCapSeconds })
     if (enoughSets && minHold >= target && target > 0) {
       if (minHold >= cap) return { kind: 'at_cap', message: `At the ${cap} s cap — keep the hold${ex.jointWatch ? ' (range limit unchanged)' : ''}.` }
       const next = Math.min(minHold + HOLD_STEP_SECONDS, cap)

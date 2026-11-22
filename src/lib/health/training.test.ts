@@ -345,3 +345,42 @@ describe('player helpers', () => {
       .toEqual([{ date: 'a', value: 20 }, { date: 'b', value: 40 }, { date: 'c', value: null }])
   })
 })
+
+describe('Block 2 knee progression (pain rule passed only)', () => {
+  const rxP = (s: string, k: string, week: number, painRulePassed: boolean) => effectivePrescription(def, session(s), ex(s, k), week, { painRulePassed })
+  const holds = (sec: number) => [perf('d', sets(4, { holdSeconds: sec, reps: null, loadKg: null }))]
+
+  it('Block 1: wall-sit cap stays 45 s even with the pain rule passed', () => {
+    const p = rxP('b', 'shallow_wall_sit', 2, true)
+    expect(p.holdCapSeconds).toBeNull()
+    expect(progressionSuggestion(def, ex('b', 'shallow_wall_sit'), p, holds(45)).kind).toBe('at_cap')
+  })
+  it('Block 2 + pain rule passed: wall sits build to 60 s (B and C)', () => {
+    for (const [s, k] of [['b', 'shallow_wall_sit'], ['c', 'c_shallow_wall_sit']] as const) {
+      const p = rxP(s, k, 6, true)
+      expect(p.holdCapSeconds).toBe(60)
+      expect(p.notes.join(' ')).toMatch(/60 s/)
+      expect(progressionSuggestion(def, ex(s, k), p, holds(45))).toMatchObject({ kind: 'add_time', nextHoldSeconds: 60 })
+      expect(progressionSuggestion(def, ex(s, k), p, holds(60)).kind).toBe('at_cap')
+    }
+  })
+  it('Block 2 without the pain rule: 45 s cap, no stronger-band note', () => {
+    const p = rxP('b', 'shallow_wall_sit', 6, false)
+    expect(p.holdCapSeconds).toBeNull()
+    expect(progressionSuggestion(def, ex('b', 'shallow_wall_sit'), p, holds(45)).kind).toBe('at_cap')
+    expect(rxP('b', 'band_tke', 6, false).notes.join(' ')).not.toMatch(/stronger band/)
+  })
+  it('today\'s cap wins over the cap of the week the hold was done', () => {
+    const last = rxP('b', 'shallow_wall_sit', 6, true)
+    expect(progressionSuggestion(def, ex('b', 'shallow_wall_sit'), last, holds(45), { holdCapSeconds: null }).kind).toBe('at_cap')
+  })
+  it('band terminal knee extension shows "use a stronger band" in Block 2 once the pain rule passed', () => {
+    expect(rxP('b', 'band_tke', 6, true).notes).toContain('Use a stronger band.')
+    expect(rxP('b', 'band_tke', 2, true).notes).not.toContain('Use a stronger band.')
+    expect(rxP('b', 'band_hamstring_curl', 6, true).notes).not.toContain('Use a stronger band.')
+  })
+  it('holdCap uses the prescription cap when present', () => {
+    expect(holdCap(ex('b', 'shallow_wall_sit'), { holdCapSeconds: 60 })).toBe(60)
+    expect(holdCap(ex('b', 'shallow_wall_sit'), { holdCapSeconds: null })).toBe(45)
+  })
+})

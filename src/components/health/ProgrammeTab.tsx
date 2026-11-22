@@ -6,6 +6,10 @@ import type { NutritionRule } from '@/lib/health/programmeSchema'
 import { TARGET_KEYS, TARGET_LABELS, TargetOverridesSchema, computeTargets, type TargetKey } from '@/lib/health/targets'
 import { programmeWeek } from '@/lib/health/time'
 import { CARD } from './ui'
+import { createClient } from '@/lib/supabase/server'
+import { loadHealthSettings } from '@/lib/health/p2Server'
+import { readEmailConfig } from '@/lib/notifications/config'
+import HealthSettingsPanel from './HealthSettingsPanel'
 
 const UNITS: Record<TargetKey, string> = { kcal: 'kcal', proteinG: 'g', fatG: 'g', satFatTargetG: 'g', satFatCeilingG: 'g', carbsG: 'g', fibreMinG: 'g' }
 
@@ -39,6 +43,8 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
   const formulas = enrolment.profile ? computeTargets(def, enrolment.profile, overrides.success ? overrides.data : {}).formulas : null
   const aiKey = await getAiKeyStatus(userId, email)
   const block = week !== null ? def.blocks.find(b => week >= b.weeks[0] && week <= b.weeks[1]) : null
+  const { settings, available } = await loadHealthSettings(await createClient(), userId)
+  const computed = enrolment.profile ? computeTargets(def, enrolment.profile, overrides.success ? overrides.data : {}).targets : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +54,7 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
           Started {new Date(`${enrolment.startDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
           {week !== null && <> · week {Math.min(week, def.identity.durationWeeks)} of {def.identity.durationWeeks}</>}
           {block && <> · {block.name} ({block.focus})</>}
-          {' '}· timezone {enrolment.timezone}
+          {' '}· timezone {enrolment.homeTimezone}{enrolment.timezone !== enrolment.homeTimezone && <> (today: {enrolment.timezone})</>}
         </p>
         {def.identity.description && <p className="mt-2 text-sm text-[var(--ink-2)]">{def.identity.description}</p>}
         {def.identity.disclaimer && <p className="mt-2 text-xs text-[var(--ink-3)]">{def.identity.disclaimer}</p>}
@@ -60,6 +66,7 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
             <li key={k}>
               <span className="font-semibold text-[var(--ink)]">{TARGET_LABELS[k]}: {targets[k]} {UNITS[k]}</span>
               {formulas && <span className="block text-xs text-[var(--ink-3)]">{formulas[k]}</span>}
+              {computed && computed[k] !== targets[k] && <span className="block text-xs text-blue-800">Adjusted from {computed[k]} {UNITS[k]} by an accepted fortnightly check.</span>}
             </li>
           ))}
         </ul>
@@ -132,6 +139,8 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
         {def.outcomes?.expectations.map(e => <p key={e} className="mt-2">{e}</p>)}
         {def.outcomes?.escalation.map(e => <p key={e.metric} className="mt-1 text-xs text-[var(--ink-3)]">{e.note}</p>)}
       </Section>
+
+      <HealthSettingsPanel initial={settings} available={available} emailConfigured={readEmailConfig(process.env).ok} />
 
       <div>
         <p className="mb-2 text-sm text-[var(--ink-2)]">AI food estimates use your own Anthropic API key (a few cents per logged meal; text that matches your saved foods needs no AI).</p>
