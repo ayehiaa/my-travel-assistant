@@ -22,7 +22,7 @@ export const metadata = {
   title: 'Sojourn — Health',
 }
 
-/** Health hub: /health?tab=today|log|training|progress|programme (specs/029-health-routines, phase P1a). */
+/** Health hub: /health?tab=today|log|training|progress|programme (specs/029-health-routines, phases P1a + P1b). */
 export default async function HealthPage({
   searchParams,
 }: {
@@ -55,14 +55,17 @@ export default async function HealthPage({
   } else {
     const { enrolment } = state
     const logDate = parseLogDate(params.date, nowFor(enrolment).date)
+    const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+    const training = { session: one(params.session), exercise: one(params.exercise), date: one(params.date) }
+    const suspenseKey = tab === 'log' ? `log:${logDate}` : tab === 'training' ? `training:${training.session ?? ''}:${training.exercise ?? ''}:${training.date ?? ''}` : tab
     body = (
       <>
         <HealthTabs active={tab} />
         <h2 className="sr-only">{HEALTH_TAB_LABELS[tab]}</h2>
-        <Suspense key={`${tab}:${tab === 'log' ? logDate : ''}`} fallback={<HealthTabSkeleton />}>
+        <Suspense key={suspenseKey} fallback={<HealthTabSkeleton />}>
           {tab === 'today' && <TodayTab userId={user.id} enrolment={enrolment} />}
           {tab === 'log' && <LogTab userId={user.id} enrolment={enrolment} date={logDate} />}
-          {tab === 'training' && <TrainingTab enrolment={enrolment} />}
+          {tab === 'training' && <TrainingTab userId={user.id} enrolment={enrolment} session={training.session} exercise={training.exercise} date={training.date} />}
           {tab === 'progress' && <ProgressTab userId={user.id} enrolment={enrolment} />}
           {tab === 'programme' && <ProgrammeTab userId={user.id} email={user.email} enrolment={enrolment} />}
         </Suspense>

@@ -94,3 +94,92 @@ Tested locally against PostgreSQL 16 with Supabase stubs: applies, re-runs clean
 - No browser run here (no Supabase credentials) — UI reviewed by reading markup at 375 px / desktop widths.
 - Programme editing, import, pause/complete, data export/delete, weekly review and the 30-day photo cleanup are later
   phases (P2/P3) per §13.
+
+---
+
+## Phase P1b — Training (session player, block logic, progression, joint/pain rules, unlocks)
+
+### Design
+- **Pure logic** (`src/lib/health/`, all tested):
+  - `training.ts` — week/block position; `effectivePrescription()` per exercise and week; compound/isolation
+    classification; drop-set exercise choice; excluded-movement matching; travel names; conditional-unlock status and
+    the concrete unlock exercises; `progressionSuggestion()` (load / hold / band / bodyweight / stall); schedule
+    (`weekSchedule`, `recommendSession`, `spacingWarning`, `orderWarning`); `preTrainingCoffee()`; workout input
+    schema + `validateWorkoutAgainstProgramme()`; player/history helpers.
+  - `painRules.ts` — per-check outcome (ok / pending / reduce / red_flag), `jointStatus()` for the next session,
+    `painRulePassed()` (last 2 pain-check sessions), `exerciseSafety()`, `nextMorningDue()`, input schemas.
+  - `rules.ts` — optional `training` context: safety findings (red flag → "stop, see your physiotherapist"; reduce on a
+    day with joint-watched work) and the pre-training coffee timing rule. Food rules are unchanged.
+- **Server**: `trainingServer.ts` (loaders for workouts, joint checks, approvals, exercise history; one
+  `loadTrainingContext()` used by Training, Today and the API; every loader maps a missing table to
+  "Training needs a database update"). `healthServer.evaluateDay()` adds training signals best-effort (today only).
+- **API**: `POST /api/health/workouts` (upsert by user + date + session; sets replaced; joint check upserted for
+  pain-check sessions, keeping any next-morning answer), `DELETE /api/health/workouts/[id]`,
+  `POST /api/health/joint-checks` (`next_morning` | `clearance`), `POST /api/health/approvals` (tick / untick).
+  All: auth → Health add-on → Zod → enrolment → programme validation → DB.
+- **UI**: Training tab overview (week/block banner, joint status + clearance, today's recommendation, this week's
+  schedule with statuses, joint & unlocks with the "approved by my physio" tick, recent sessions with delete, exercise
+  history links); session player `?tab=training&session=a[&date=…]` (`SessionPlayer.tsx`); exercise history
+  `?tab=training&exercise=key` (table + top-set chart, reusing the portfolio `LineChart`). Today: next-morning joint
+  check card + "Today's training" card. Log: the day's sessions and joint scores.
+
+### Data model (migration `20261122b_health_p1b.sql`, paste-ready `supabase/apply_health_p1b.sql`)
+`health_workouts` (user, daily log, enrolment, local date, session key, block key, programme week, status
+done|partial|skipped with a required skip reason, travel mode, duration, notes, skipped exercises jsonb; unique per
+user + date + session), `health_workout_sets` (exercise key, set index, load kg, reps or hold seconds, RIR or
+to_failure, drop-set flag, substitution name), `health_joint_checks` (one per workout: date, session, during-session
+pain 0–10, next-morning pain 0–10 + date, swelling, red flags text[], physio clearance flag + date),
+`health_professional_approvals` (unlock key, approved_at; unique per user + key). Owner-only RLS on all four; sets and
+joint checks must also belong to the user's own workout; workouts may only reference the user's own daily log and
+enrolment. Pre-check: P1a tables exist. Tested on local PostgreSQL 16 with Supabase stubs: P1b before P1a stops with
+the message, applies after P1a, re-runs cleanly, skip-without-reason rejected, cross-user reads return 0 rows and
+cross-user child inserts are rejected by RLS.
+
+### Decisions made autonomously (P1b)
+1. **Block 2 set counts** come from the session tables as written ("set counts as in the session tables"), so Session
+   B keeps 4 sets on the shallow wall sit and Session C 4 on the chest-supported row; the parenthetical "4 on the first
+   two exercises" is what the table already gives for Session A. Block 1 = 3 sets everywhere; Block 3 = 4 everywhere.
+2. **Rep ranges**: block ranges replace the table's; a rep suffix is kept ("12 each way" → "10–15 each way" in
+   Block 1). Hold exercises keep their hold time in every block (no failure / drop sets on holds) and have no RIR.
+3. **Compound vs isolation (Block 3)**: name-based — press, row, pulldown, deadlift/RDL, hip thrust, push-up are
+   compounds (6–12); raises, curls, extensions, face pulls, pull-aparts, side-steps, calf raises, knee extensions,
+   bridges and core are isolation (12–20).
+4. **Drop set**: one exercise per session — the last non-core, rep-based, non-joint-watched dumbbell exercise
+   (A: lateral raise, B: standing calf raise, C: overhead triceps extension); fallback the last non-core rep exercise.
+5. **Light / deload weeks**: light week = 2 sets, no failure/drop set; the load factor is read from the block note
+   ("60%" → 0.6, Block 2 week 8 only). Week 12 deload = half the sets (rounded), plus a retest note. No progression
+   suggestions during light/deload weeks; the week after a light week returns to the last normal load.
+6. **Progression**: needs every prescribed set at the top of the range with RIR (or failure) recorded. Increment per
+   dumbbell from the programme (+2 upper / +4 lower; core/full use the upper increment). Bands → "shorter band / step
+   further / thicker band"; unloaded → slower tempo / pause. **Holds**: +15 s when every set reached the target, cap
+   90 s; joint-watched holds (wall sit) are capped at the programme's own hold time (45 s) — range limit unchanged.
+   **Stall** = neither of the last two sessions beat the one before (top load, then reps/seconds at that load) →
+   keep the weight, add one set. Drop-set rows never count as working sets.
+7. **Schedule**: order A → B → C from the weekly schedule. A missed session rolls forward (catch-up on a non-lift day
+   only if nothing was lifted yesterday). Week "cut short" = more sessions left than spaced lifting days left (today,
+   today+2, … to Sunday) → the programme priority (C, A, B) trims the list and C goes first. Lifting yesterday gives a
+   spacing warning on a planned day (never blocks).
+8. **Pain rule**: reduce when during-session pain > 3, next-morning pain > 3, swelling ticked, or pain worse next
+   morning than during the session ("next-day soreness"). Next-morning answer missing → pending (does not count as a
+   pass). Red flags (programme list only — locking, giving way, new swelling) → joint-watched exercises disabled
+   (server also rejects their sets) until the user confirms "my physiotherapist has cleared me"; a cleared red flag
+   still counts as "reduce" until a newer session. The next-morning card shows for sessions 1–2 days old.
+9. **Conditional unlocks**: concrete exercises defined in code because the programme lists only movements —
+   sit-to-stand from a high seat 3 × 8–10 and low step-up (10–15 cm) 3 × 8–10 per side, fixed prescriptions (not
+   block-scaled), joint-watched, appended to the lower-body pain-check session (Session B). Sit-to-stand: Block 2+ and
+   pain rule passed for the last 2 pain-check sessions. Step-ups: Block 3+ and a recorded professional approval. Both
+   locked while a red flag is open. Excluded movements are never offered (travel substitutes or unlocks matching an
+   excluded movement fall back / stay locked).
+10. **Pre-training coffee**: on a day with a recommended session not yet done — before the caffeine cut-off
+   "black coffee ~45 min before if you train before 14:00; evening session → skip it"; after the cut-off "skip the
+   pre-training coffee". Habit group (§6.2 ranking). Today only.
+11. **Not audited**: workouts, joint checks and approvals are personal logs like food and check-ins (P1a decision 10,
+   spec §8) — no audit_log CHECK change in this phase.
+12. **Draft safety**: the player keeps an unsaved draft in this browser's localStorage and offers "Restore / Discard"
+   on return (offline queue/sync is P3). Re-opening a saved session pre-fills its sets; saving replaces them.
+13. Sessions can be logged up to 60 days back (missed-session catch-up via Recent sessions / Log links).
+
+### Risks / limitations
+- No browser or Supabase run here — UI reviewed from markup; API exercised only through types and pure tests.
+- Exercise history reads up to 1,500 recent set rows per query (ample for a 12-week programme).
+- Retest after the deload is a note only (no dedicated retest form); cardio, intervals unlock and Zone 2 are P2.

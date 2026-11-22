@@ -10,7 +10,10 @@ import {
 import { formatDuration, sleepSummary, waterWeightNote, weightTrend } from '@/lib/health/checkin'
 import { addDays, programmeWeek, weekdayOf } from '@/lib/health/time'
 import { healthHref } from '@/lib/health/healthHub'
+import { loadTrainingContext, type TrainingContextResult } from '@/lib/health/trainingServer'
+import { nextMorningDue } from '@/lib/health/painRules'
 import CheckinCard from './CheckinCard'
+import NextMorningCheckCard from './NextMorningCheckCard'
 import QuickLog from './QuickLog'
 import HealthNotice from './HealthNotice'
 import { CARD, CARD_TITLE, fmtNum } from './ui'
@@ -56,10 +59,12 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
 
   let evaluation: Awaited<ReturnType<typeof evaluateDay>>
   let recentCheckins: Awaited<ReturnType<typeof loadCheckins>>
+  let training: TrainingContextResult
   try {
-    ;[evaluation, recentCheckins] = await Promise.all([
+    ;[evaluation, recentCheckins, training] = await Promise.all([
       evaluateDay(supabase, userId, enrolment, date, time),
       loadCheckins(supabase, userId, addDays(date, -20), date),
+      loadTrainingContext(supabase, userId, enrolment),
     ])
   } catch (err) {
     return <HealthNotice title="Could not load today">{err instanceof Error ? err.message : 'Try again shortly.'}</HealthNotice>
@@ -84,6 +89,10 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
   const week = programmeWeek(enrolment.startDate, date)
   const scheduled = def.weeklySchedule?.days.find(d => d.day === weekdayOf(date))
   const componentLabels = Object.fromEntries(def.components.map(c => [c.key, { name: c.name, unit: c.unit }]))
+  const tctx = training.status === 'ok' ? training.ctx : null
+  const morningDue = tctx && def.painRules ? nextMorningDue(def.painRules, tctx.checks, date) : null
+  const sessionNameOf = (k: string) => def.trainingSessions.find(t => t.key === k)?.name ?? k.toUpperCase()
+  const trainedToday = tctx?.weekWorkouts.filter(w => w.date === date) ?? []
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,6 +103,40 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
         typicalBed={sleep.typicalBedTime}
         typicalWake={sleep.typicalWakeTime}
       />
+
+      {morningDue?.id && def.painRules && (
+        <NextMorningCheckCard
+          checkId={morningDue.id}
+          sessionName={sessionNameOf(morningDue.sessionKey)}
+          sessionDate={morningDue.date}
+          duringPain={morningDue.duringPain}
+          threshold={def.painRules.okThreshold}
+          redFlags={def.painRules.redFlags}
+        />
+      )}
+
+      {tctx && (
+        <section className={CARD} aria-labelledby="tr-h">
+          <h2 id="tr-h" className={CARD_TITLE}>Today&apos;s training</h2>
+          {tctx.joint.level === 'stop' && <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900" role="alert">{tctx.joint.message}</p>}
+          {trainedToday.length > 0 ? (
+            <p className="text-sm text-[var(--ink)]">
+              {trainedToday.map(w => `${sessionNameOf(w.sessionKey)} — ${w.status}`).join(' · ')}
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--ink)]">{tctx.recommendation.reason}</p>
+          )}
+          {trainedToday.length === 0 && tctx.recommendation.warnings.map(w => <p key={w} className="mt-1 text-xs text-amber-800">{w}</p>)}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {tctx.recommendation.sessionKey && trainedToday.length === 0 && (
+              <Link href={healthHref({ tab: 'training', session: tctx.recommendation.sessionKey })} className="rounded-full bg-[var(--blue-700)] px-5 py-2 text-sm font-bold text-white">
+                Start {sessionNameOf(tctx.recommendation.sessionKey)}
+              </Link>
+            )}
+            <Link href={healthHref({ tab: 'training' })} className="text-sm font-semibold text-[var(--blue-700)] underline">Training plan</Link>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className={CARD} aria-labelledby="budget-h">

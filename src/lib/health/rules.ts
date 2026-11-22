@@ -2,6 +2,7 @@ import type { MealSlot, ProgrammeDefinition, NutritionRule } from './programmeSc
 import type { EffectiveTargets } from './targets'
 import { mealsRemaining, sumComponents, sumNutrients, type FoodItem } from './nutrition'
 import { daysLeftInWeek, hhmmToMinutes } from './time'
+import { preTrainingCoffee } from './training'
 
 /**
  * Deterministic rules engine for the daily loop (specs/029 §6.1 / §6.2). Pure.
@@ -16,7 +17,7 @@ import { daysLeftInWeek, hhmmToMinutes } from './time'
 export const RECOMMENDATION_GROUPS = ['safety', 'ceiling', 'daily', 'weekly', 'habit'] as const
 export type RecommendationGroup = (typeof RECOMMENDATION_GROUPS)[number]
 
-export type RuleType = 'ceiling' | 'target' | 'component' | 'timing' | 'structure' | 'budget'
+export type RuleType = 'ceiling' | 'target' | 'component' | 'timing' | 'structure' | 'budget' | 'safety'
 
 export interface RuleFinding {
   /** Stable per day, e.g. 'satfat.over_target', 'component.pulses' — used to de-duplicate stored events. */
@@ -47,6 +48,15 @@ export interface RuleContext {
   weekComponents: Record<string, number>
   /** Planned bedtime 'HH:MM' (programme target or typical from check-ins); null = unknown. */
   bedtime: string | null
+  /** Training signals (P1b). Omitted when training data is unavailable — training rules then stay silent. */
+  training?: {
+    /** A lifting session is recommended today (planned, catch-up or short-week priority). */
+    sessionToday: boolean
+    trainedToday: boolean
+    /** Today's session has joint-watched exercises. */
+    jointWatchedToday: boolean
+    joint: { level: 'ok' | 'reduce' | 'stop'; message: string | null }
+  }
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
@@ -290,6 +300,24 @@ export function evaluateRules(ctx: RuleContext): RuleFinding[] {
     }
   }
 
+  // ── Training (P1b): joint safety + pre-training coffee timing ─────────────
+  const tr = ctx.training
+  if (tr) {
+    if (tr.joint.level === 'stop') {
+      out.push({
+        key: 'safety.joint_red_flag', type: 'safety', group: 'safety', priority: 100,
+        message: tr.joint.message ?? 'Stop leg work and see your physiotherapist.',
+      })
+    } else if (tr.joint.level === 'reduce' && tr.sessionToday && tr.jointWatchedToday && !tr.trainedToday) {
+      out.push({
+        key: 'safety.joint_reduce', type: 'safety', group: 'safety', priority: 80,
+        message: tr.joint.message ?? 'Shorten the range or reduce the load on joint-watched exercises today.',
+      })
+    }
+    const coffee = preTrainingCoffee(cutoffTime, now, tr.sessionToday, tr.trainedToday)
+    if (coffee) out.push({ key: coffee.key, type: 'timing', group: 'habit', priority: 26, message: coffee.message })
+  }
+
   return out
 }
 
@@ -312,10 +340,10 @@ export const RULE_COVERAGE: ReadonlyArray<{ type: string; example: string; phase
   { type: 'Timing', example: 'stanols with a meal; caffeine cut-off 14:00; last meal ≥2 h before bed', phase: 'P1a' },
   { type: 'Per-meal structure', example: 'one starch per meal; protein every eating occasion', phase: 'P1a' },
   { type: 'Budget trade-off', example: 'treat uses sat-fat spare; pay calories by dropping starch', phase: 'P1a' },
-  { type: 'Timing (training)', example: 'skip the pre-training coffee before an evening session', phase: 'P1b' },
-  { type: 'Schedule', example: 'rest day between lifts; A→B→C; C first if short', phase: 'P1b' },
-  { type: 'Progression', example: 'top of range → add load; stall ×2 → add a set; deloads', phase: 'P1b' },
-  { type: 'Safety', example: 'pain thresholds, red flags, excluded movements, unlocks', phase: 'P1b' },
+  { type: 'Timing (training)', example: 'pre-training coffee before the cut-off; skip it before an evening session (rules.ts + training.ts)', phase: 'P1b' },
+  { type: 'Schedule', example: 'rest day between lifts; A→B→C; C first if short (training.ts)', phase: 'P1b' },
+  { type: 'Progression', example: 'top of range → add load; stall ×2 → add a set; block sets/reps; light weeks; deload (training.ts)', phase: 'P1b' },
+  { type: 'Safety', example: 'pain thresholds, red flags, excluded movements, unlocks (painRules.ts, training.ts)', phase: 'P1b' },
   { type: 'Adjustment', example: 'fortnightly ±150 kcal', phase: 'P2' },
   { type: 'Tracking', example: '"don\'t track" metrics are hidden', phase: 'P1a' },
 ]

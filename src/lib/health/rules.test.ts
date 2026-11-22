@@ -126,3 +126,28 @@ describe('rules engine', () => {
     expect(RULE_COVERAGE.filter(r => r.phase === 'P1a').length).toBeGreaterThanOrEqual(7)
   })
 })
+
+describe('training rules (P1b)', () => {
+  const training = (over: Partial<NonNullable<RuleContext['training']>> = {}): RuleContext['training'] => ({
+    sessionToday: true, trainedToday: false, jointWatchedToday: true, joint: { level: 'ok', message: null }, ...over,
+  })
+  it('pre-training coffee before the cut-off, skip it in the evening', () => {
+    const am = evaluateRules(ctx({ now: '09:00', training: training() })).find(f => f.key === 'timing.pre_training_coffee')
+    expect(am?.message).toMatch(/45 min before/)
+    const pm = evaluateRules(ctx({ now: '17:00', training: training() })).find(f => f.key === 'timing.pre_training_coffee')
+    expect(pm?.message).toMatch(/skip the pre-training coffee/i)
+    expect(keys(evaluateRules(ctx({ now: '09:00', training: training({ sessionToday: false }) })))).not.toContain('timing.pre_training_coffee')
+    expect(keys(evaluateRules(ctx({ now: '09:00', training: training({ trainedToday: true }) })))).not.toContain('timing.pre_training_coffee')
+    expect(keys(evaluateRules(ctx({ now: '09:00' })))).not.toContain('timing.pre_training_coffee')
+  })
+  it('joint red flag is a safety recommendation ranked first', () => {
+    const f = evaluateRules(ctx({ now: '18:00', training: training({ joint: { level: 'stop', message: 'See your physio' } }) }))
+    expect(rankRecommendations(f)[0].key).toBe('safety.joint_red_flag')
+  })
+  it('reduce shows only on a day with joint-watched work still to do', () => {
+    const reduce = { level: 'reduce' as const, message: 'Shorten the range' }
+    expect(keys(evaluateRules(ctx({ training: training({ joint: reduce }) })))).toContain('safety.joint_reduce')
+    expect(keys(evaluateRules(ctx({ training: training({ joint: reduce, jointWatchedToday: false }) })))).not.toContain('safety.joint_reduce')
+    expect(keys(evaluateRules(ctx({ training: training({ joint: reduce, sessionToday: false }) })))).not.toContain('safety.joint_reduce')
+  })
+})

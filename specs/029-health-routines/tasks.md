@@ -46,3 +46,38 @@
 | Tracking | "don't track" morning temperature (never offered as an input) | P1a | — |
 | Timing (training coffee), schedule, progression, safety | — | P1b | — |
 | Adjustment | fortnightly ±150 kcal | P2 | — |
+
+## Phase P1b — Training
+
+### Data
+- [x] T22 Migration `supabase/migrations/20261122b_health_p1b.sql` (workouts, sets, joint checks, professional approvals; owner-only RLS + parent checks) + `supabase/apply_health_p1b.sql` (P1a pre-check, verify); tested on local PostgreSQL 16 (pre-check, apply ×2, constraint, RLS cross-user)
+
+### Pure logic (tested)
+- [x] T23 `training.ts` — week/block, effective prescription (B1 / light wk4 / B2 table sets + failure / light wk8 60% / B3 4 sets, compound/isolation, drop set / wk12 deload + retest) (+ tests)
+- [x] T24 `training.ts` — progression (+2/+4 kg, holds +15 s to cap, bands, bodyweight, stall → add set, suppression) (+ tests)
+- [x] T25 `training.ts` — schedule (A→B→C, spacing, missed, week cut short → C first), order warning, coffee timing (+ tests)
+- [x] T26 `training.ts` — excluded movements, travel names, unlocks, workout input validation, player helpers (+ tests)
+- [x] T27 `painRules.ts` — check outcome, joint status, pain-rule streak, exercise safety, next-morning due, inputs (+ tests)
+- [x] T28 `rules.ts` — training context: joint safety findings + pre-training coffee (+ tests)
+
+### Server + API
+- [x] T29 `trainingServer.ts` loaders + `loadTrainingContext`; `evaluateDay` training signals (best effort, today only)
+- [x] T30 Routes: `POST /api/health/workouts`, `DELETE /api/health/workouts/[id]`, `POST /api/health/joint-checks`, `POST /api/health/approvals`
+
+### UI
+- [x] T31 Training tab overview (banner, joint status + clearance, today, week schedule, unlocks + physio approval, recent sessions, history links)
+- [x] T32 Session player (prescriptions, notes, video, last time, per-set load/reps/seconds, RIR 0–4 + failure, rest timer, supersets, drop-set prompt, travel mode, pain score, done/partial/skip with reason, local draft)
+- [x] T33 Exercise history (table + top-set chart)
+- [x] T34 Today: next-morning joint check card + "Today's training" card; Log: the day's sessions + joint scores
+
+### Docs / gate
+- [x] T35 plan.md P1b decisions, CLAUDE.md "Current Feature Plan"
+- [x] Q2 `npm run build`, `npm test`, `npm run lint`
+
+### Rule coverage update (P1b)
+| §6.1 type | Seed rule | Test |
+|---|---|---|
+| Timing (training) | pre-training coffee before 14:00; skip it for evening sessions | rules.test.ts, training.test.ts |
+| Schedule | ≥1 day between lifts; A→B→C; C first if short; missed sessions roll forward | training.test.ts |
+| Progression | top of range → +2/+4 kg; stall ×2 → add a set; holds +15 s; bands; block sets/reps; light weeks; deload | training.test.ts |
+| Safety | pain ≤3 & settled; >3 / next-day soreness / swelling → reduce; red flags → disabled until clearance; excluded movements; sit-to-stand / step-up unlocks | painRules.test.ts, training.test.ts |

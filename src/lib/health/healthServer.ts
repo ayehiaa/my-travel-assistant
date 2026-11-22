@@ -7,10 +7,12 @@ import { parseProgrammeDefinition, type ProgrammeDefinition } from './programmeS
 import { readEffectiveTargets, ProfileSchema, type EffectiveTargets, type Profile } from './targets'
 import { FoodItemSchema, type FoodItem } from './nutrition'
 import { normalizeFoodName, per100FromItem, readLibraryRow, type LibraryFood } from './foodLibrary'
-import { evaluateRules, type RuleFinding } from './rules'
+import { evaluateRules, type RuleContext, type RuleFinding } from './rules'
 import { sleepSummary, type SleepNight, type WeighIn } from './checkin'
 import { addDays, localDate, localTime, weekStart } from './time'
 import { HEALTH_MIGRATION_MESSAGE } from './healthHub'
+import { recommendSession, type WorkoutSummary } from './training'
+import { jointStatus, rowToJointCheck } from './painRules'
 
 /**
  * Server-only Health data access (specs/029). Uses the user's own session client, so the owner-only RLS policies
@@ -276,6 +278,36 @@ export function plannedBedtime(def: ProgrammeDefinition, checkins: StoredCheckin
   return def.sleep?.targetBedtime ?? sleepSummary(sleepNightsOf(checkins), date, def).typicalBedTime
 }
 
+/**
+ * Training signals for the rules engine (P1b). Best effort: undefined when the P1b tables are missing or a query
+ * fails, so the food rules never depend on training data.
+ */
+export async function loadTrainingSignals(supabase: ServerClient, userId: string, def: ProgrammeDefinition, date: string): Promise<RuleContext['training']> {
+  try {
+    const monday = weekStart(date)
+    const [w, j] = await Promise.all([
+      supabase.from('health_workouts').select('local_date, session_key, status').eq('user_id', userId)
+        .gte('local_date', addDays(monday, -1)).lte('local_date', addDays(monday, 6)),
+      supabase.from('health_joint_checks')
+        .select('id, workout_id, local_date, session_key, during_pain, next_morning_pain, swelling, red_flags, physio_cleared, cleared_on')
+        .eq('user_id', userId).order('local_date', { ascending: false }).limit(20),
+    ])
+    if (w.error || j.error) return undefined
+    const workouts: WorkoutSummary[] = (w.data ?? []).map(r => ({ date: String(r.local_date), sessionKey: String(r.session_key), status: r.status as WorkoutSummary['status'] }))
+    const rec = recommendSession(def, date, workouts)
+    const joint = jointStatus(def.painRules, (j.data ?? []).map(r => rowToJointCheck(r as Record<string, unknown>)))
+    const session = def.trainingSessions.find(s => s.key === rec.sessionKey)
+    return {
+      sessionToday: rec.sessionKey !== null,
+      trainedToday: workouts.some(x => x.date === date && x.status !== 'skipped'),
+      jointWatchedToday: !!session?.exercises.some(e => e.jointWatch),
+      joint: { level: joint.level, message: joint.message },
+    }
+  } catch {
+    return undefined
+  }
+}
+
 /** Evaluate all P1a rules for a date. `now` = local time for today, '23:59' for a past day. */
 export async function evaluateDay(
   supabase: ServerClient,
@@ -285,9 +317,11 @@ export async function evaluateDay(
   now: string,
 ): Promise<DayEvaluation> {
   const monday = weekStart(date)
-  const [weekEntries, checkins] = await Promise.all([
+  const [weekEntries, checkins, training] = await Promise.all([
     loadEntries(supabase, userId, monday, date),
     loadCheckins(supabase, userId, addDays(date, -7), date),
+    // Training rules only matter for today (a past day's coffee timing is moot).
+    date === nowFor(enrolment).date ? loadTrainingSignals(supabase, userId, enrolment.def, date) : Promise.resolve(undefined),
   ])
   const entries = weekEntries.filter(e => e.date === date)
   const weekComponents: Record<string, number> = {}
@@ -300,6 +334,7 @@ export async function evaluateDay(
     entries: entries.map(e => ({ time: e.time, slot: e.slot, items: e.items })),
     weekComponents,
     bedtime: plannedBedtime(enrolment.def, checkins, date),
+    training,
   })
   return { findings, entries, weekEntries, checkins }
 }
