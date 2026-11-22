@@ -124,3 +124,50 @@
 | Daily movement | 8,000–10,000 steps | cardio.test.ts |
 | Tracking | waist fortnightly + bands; lipids week 1 / 12 + LDL escalation; milestones | measurements.test.ts |
 | Progression (knee, Block 2) | wall sit ≤ 60 s and stronger band only with the pain rule passed | training.test.ts |
+
+---
+
+## Phase P3 — Convenience
+
+### Data
+- [x] T55 Migration `supabase/migrations/20261122d_health_p3.sql` (programme versions columns, 3 tables, set sync columns, owner-only RLS, audit CHECK full list) + `supabase/apply_health_p3.sql` (P1a/P1b/P2 pre-checks, verify); tested on local PostgreSQL 16 (pre-checks, apply ×2, CHECKs, RLS cross-user)
+- [x] T56 Audit actions `health_programme_imported` / `health_programme_updated` / `health_data_exported` / `health_data_deleted` (type, pills, health filter)
+
+### Pure logic (tested)
+- [x] T57 `programmeImport.ts` — sections, normalisation, per-section status, parse, assemble, replace, diff, templates, upload paths
+- [x] T58 `programmeEdit.ts` — retarget after edit (adjustments kept), targets for switch
+- [x] T59 `mealPlan.ts` — week plan, swaps within a slot, ingredient dictionary + parsing, aggregation by aisle, share text, AI split parsing
+- [x] T60 `clinicianExport.ts` + `clinicianPdf.ts` — report assembly, CSV, PDF (pdf-lib 1.17.1)
+- [x] T61 `offlineQueue.ts` — queue ops, LWW merge per set index, grouping, server merge, idempotent replay
+- [x] T62 `barcode.ts` — GS1 validation, OFF barcode mapping, portions, scaling
+- [x] T63 `dataRights.ts` — table list (checked against migrations), confirmation, export document
+
+### Server + API
+- [x] T64 `callClaude` PDF document blocks; AI roles `health_import`, `health_ingredients`
+- [x] T65 `p3Server.ts`, `workoutWrite.ts` (shared with POST /workouts), `dataRightsServer.ts`, `lookupBarcode`
+- [x] T66 Routes: programme/import (+ upload-url, [id], [id]/save), programme (versions / edit / restore), programme/switch
+- [x] T67 Routes: meal-plan, meal-plan/ingredients, export/clinician, foods/barcode, workouts/sync, data/export, data/delete
+- [x] T68 Photo cleanup job also removes import uploads older than an hour
+
+### UI
+- [x] T69 Programme tab sub-views + nav; generic `SectionValueEditor`
+- [x] T70 Import upload + step-by-step review (status chips, AI notes, confirm per section, save / save & start)
+- [x] T71 Edit by section, version history with diff summaries + restore, programme switcher
+- [x] T72 Meal plan week view with swaps, shopping list (aisles, ticks, copy/share, AI split); Today link
+- [x] T73 Clinician export form; Your data (export JSON, typed delete); link from Health settings
+- [x] T74 Barcode scanner (BarcodeDetector + manual entry) in Log food and the item editor
+- [x] T75 Offline set queue in the session player + "Offline — n sets queued" banner with auto-sync (player + Training tab)
+
+### Docs / gate
+- [x] T76 plan.md P3 decisions, CLAUDE.md "Current Feature Plan"
+- [x] Q4 `npm run build`, `npm test`, `npm run lint`
+
+### Acceptance coverage (P3)
+| Story | Acceptance | Where |
+|---|---|---|
+| US1.2 | draft with extracted / needs review / not found; nothing activates until every section is confirmed | programmeImport.test.ts, import/[id]/save |
+| US1.4 | edit any field later; versioned with what changed and when | programmeImport.test.ts (diff), programme PATCH, Version history |
+| US13 | week rotation with swaps within a slot; shopping list from the planned week | mealPlan.test.ts, Meal plan view |
+| US14 | PDF/CSV of weight & waist trend, labs, adherence, training for a date range | clinicianExport.test.ts, export/clinician |
+| §9 | set logging works with intermittent connectivity (queue and sync) | offlineQueue.test.ts, workouts/sync |
+| §8 | export (JSON + photo links) and hard delete in Settings | dataRights.test.ts, data/export, data/delete |

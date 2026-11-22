@@ -34,6 +34,10 @@ const ACTION_PILLS = {
   health_programme_activated: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme started' },
   health_adjustment_accepted: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Targets adjusted' },
   health_adjustment_declined: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Adjustment declined' },
+  health_programme_imported:  { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme imported' },
+  health_programme_updated:   { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme edited' },
+  health_data_exported:       { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Health data exported' },
+  health_data_deleted:        { bg: 'var(--coral-soft)',    color: 'var(--coral)',     label: 'Health data deleted' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])

@@ -7,7 +7,7 @@ import { AI_KEY_REJECTED_MESSAGE, isKeyRejectedStatus, redactSecrets } from '@/l
 
 /**
  * Server only. One code path for every Claude call made with a user's own key (portfolio analysis, Health food
- * estimation). Optional `images` are sent as base64 image content blocks before the text.
+ * estimation, programme import). Optional `documents` (PDF) and `images` are sent as base64 content blocks before the text.
  * Sends only model / max_tokens / output_config.effort / system / messages: adaptive thinking is the model default,
  * and sampling params, disabled thinking and forced tool_choice are rejected by Claude Sonnet 5.5.
  */
@@ -27,6 +27,8 @@ export async function callClaude(params: {
   user: string
   /** Optional images (base64, no data: prefix) sent before the user text — e.g. Health food photos. */
   images?: Array<{ mediaType: 'image/jpeg' | 'image/png' | 'image/webp'; data: string }>
+  /** Optional PDF documents (base64) sent before the images and text — e.g. a Health programme import. */
+  documents?: Array<{ mediaType: 'application/pdf'; data: string }>
   /**
    * The run owner's Anthropic API key (specs/026 — each user pays for their own runs), resolved inside the calling
    * Inngest step via requireRunApiKey(). Required: there is no silent fallback to the app key.
@@ -45,9 +47,13 @@ export async function callClaude(params: {
       system:        params.system,
       messages:      [{
         role: 'user',
-        content: params.images && params.images.length > 0
+        content: (params.images?.length ?? 0) + (params.documents?.length ?? 0) > 0
           ? [
-              ...params.images.map(img => ({
+              ...(params.documents ?? []).map(doc => ({
+                type: 'document' as const,
+                source: { type: 'base64' as const, media_type: doc.mediaType, data: doc.data },
+              })),
+              ...(params.images ?? []).map(img => ({
                 type: 'image' as const,
                 source: { type: 'base64' as const, media_type: img.mediaType, data: img.data },
               })),

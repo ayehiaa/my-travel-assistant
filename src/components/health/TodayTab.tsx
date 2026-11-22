@@ -344,7 +344,10 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
             <li className="text-sm text-[var(--ink-2)]">Other: {sumNutrients(entries.filter(e => !e.slot).flatMap(e => e.items)).kcal} kcal</li>
           )}
         </ol>
-        <Link href={healthHref({ tab: 'log', date })} className="mt-3 inline-block text-sm font-semibold text-[var(--blue-700)] underline">Edit today&apos;s log</Link>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+          <Link href={healthHref({ tab: 'log', date })} className="text-sm font-semibold text-[var(--blue-700)] underline">Edit today&apos;s log</Link>
+          <Link href={healthHref({ tab: 'programme', view: 'meals' })} className="text-sm font-semibold text-[var(--blue-700)] underline">Meal plan & shopping list</Link>
+        </div>
       </section>
     </div>
   )
