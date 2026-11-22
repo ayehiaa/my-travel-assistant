@@ -6,7 +6,8 @@ import {
 
 const butter: Assumption = { key: 'butter', label: 'butter on toast', kind: 'added_fat', addsKcal: 50, addsSatFatG: 3.6, addsProteinG: 0, addsCarbsG: 0, addsFatG: 5.7, kept: true, grams: 7, refId: 'usda-sr28:01001' }
 const bigger: Assumption = { key: 'large_portion', label: 'larger slice', kind: 'portion', addsKcal: 40, addsSatFatG: 0.1, addsProteinG: 1.5, addsCarbsG: 7.5, addsFatG: 0.3, kept: true }
-const toast = { kcal: 204, proteinG: 8.1, carbsG: 37.3, fatG: 1.8, satFatG: 0.4 }
+type TestItem = { kcal: number; proteinG: number; carbsG: number; fatG: number; satFatG: number; assumptions?: Assumption[] }
+const toast: TestItem = { kcal: 204, proteinG: 8.1, carbsG: 37.3, fatG: 1.8, satFatG: 0.4 }
 
 describe('assumptions', () => {
   it('stable keys from labels', () => {
