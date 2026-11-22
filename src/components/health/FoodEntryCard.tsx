@@ -10,6 +10,7 @@ import AssumptionChips from './AssumptionChips'
 import NoAddedFatToggle from './NoAddedFatToggle'
 import { preparePhoto } from './resizePhoto'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, INPUT, LABEL, fmtNum } from './ui'
+import { imageFilesFrom, hasTextPayload } from '@/lib/health/pastedImages'
 
 const MAX_PHOTOS = 4
 
@@ -39,6 +40,7 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
   const toast = useToast()
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
   const initialItems = () => toEditable(entry.items).map(i => ({ ...i, remember: false }))
   const [editing, setEditing] = useState(false)
   const [items, setItems] = useState<EditableItem[]>(initialItems)
@@ -72,13 +74,28 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
     setAdded([]); setRecalcPaths(null); setRecalculated(false); setEditing(false)
   }
 
-  function addFiles(list: FileList | null) {
+  function addFiles(list: FileList | File[] | null) {
     if (!list) return
     const room = MAX_PHOTOS - kept.length - added.length
     if (list.length > room) toast(`Up to ${MAX_PHOTOS} photos`, 'info')
     setAdded([...added, ...Array.from(list).slice(0, Math.max(0, room)).map(file => ({ file, url: URL.createObjectURL(file) }))])
     setRecalcPaths(null)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  /** Paste (⌘/Ctrl+V, long-press → Paste) or drop a screenshot / photo: images are added, text still pastes. */
+  function onPasteImages(e: React.ClipboardEvent) {
+    const files = imageFilesFrom(e.clipboardData)
+    if (files.length === 0) return
+    if (!hasTextPayload(e.clipboardData)) e.preventDefault()
+    addFiles(files)
+  }
+
+  function onDropImages(e: React.DragEvent) {
+    const files = imageFilesFrom(e.dataTransfer)
+    if (files.length === 0) return
+    e.preventDefault()
+    addFiles(files)
   }
 
   async function recalculate() {
@@ -169,7 +186,8 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
         <>
           <label className="mb-3 block">
             <span className={LABEL}>What you ate</span>
-            <textarea className={`${INPUT} min-h-[64px]`} value={text} maxLength={1000} onChange={e => { setText(e.target.value); setRecalculated(false) }} />
+            <textarea className={`${INPUT} min-h-[64px]`} value={text} maxLength={1000} onChange={e => { setText(e.target.value); setRecalculated(false) }} onPaste={onPasteImages} onDragOver={e => e.preventDefault()} onDrop={onDropImages} />
+            <span className="mt-1 block text-xs text-[var(--ink-3)]">You can paste or drop a screenshot here too.</span>
           </label>
           <div className="mb-3 flex flex-wrap gap-2">
             {kept.map((p, i) => (
@@ -189,8 +207,12 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
               </div>
             ))}
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => addFiles(e.target.files)} />
+            <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
             {kept.length + added.length < MAX_PHOTOS && (
-              <button type="button" className={BUTTON_SECONDARY} onClick={() => fileRef.current?.click()}>Add photo</button>
+              <>
+                <button type="button" className={BUTTON_SECONDARY} onClick={() => fileRef.current?.click()}>Take photo</button>
+                <button type="button" className={BUTTON_SECONDARY} onClick={() => libraryRef.current?.click()}>Upload image / screenshot</button>
+              </>
             )}
           </div>
           <div className="mb-3 grid grid-cols-2 gap-3 sm:max-w-md">

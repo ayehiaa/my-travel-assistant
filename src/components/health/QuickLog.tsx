@@ -10,6 +10,7 @@ import BarcodeScanner from './BarcodeScanner'
 import NoAddedFatToggle from './NoAddedFatToggle'
 import { preparePhoto } from './resizePhoto'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
+import { imageFilesFrom, hasTextPayload } from '@/lib/health/pastedImages'
 
 const MAX_PHOTOS = 4
 
@@ -27,6 +28,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
   const toast = useToast()
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState('')
   const [photos, setPhotos] = useState<Array<{ file: File; url: string }>>([])
   const [time, setTime] = useState(nowTime)
@@ -46,12 +48,27 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
     if (s) setSlot(s.key)
   }
 
-  function addFiles(list: FileList | null) {
+  function addFiles(list: FileList | File[] | null) {
     if (!list) return
     const room = MAX_PHOTOS - photos.length
     if (list.length > room) toast(`Up to ${MAX_PHOTOS} photos`, 'info')
     const added = Array.from(list).slice(0, Math.max(0, room)).map(file => ({ file, url: URL.createObjectURL(file) }))
     setPhotos([...photos, ...added])
+  }
+
+  /** Paste (⌘/Ctrl+V, long-press → Paste) or drop a screenshot / photo: images are added, text still pastes. */
+  function onPasteImages(e: React.ClipboardEvent) {
+    const files = imageFilesFrom(e.clipboardData)
+    if (files.length === 0) return
+    if (!hasTextPayload(e.clipboardData)) e.preventDefault()
+    addFiles(files)
+  }
+
+  function onDropImages(e: React.DragEvent) {
+    const files = imageFilesFrom(e.dataTransfer)
+    if (files.length === 0) return
+    e.preventDefault()
+    addFiles(files)
   }
 
   function reset() {
@@ -109,7 +126,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
   }
 
   return (
-    <div className={CARD} id="log-food">
+    <div className={CARD} id="log-food" onPaste={onPasteImages} onDragOver={e => e.preventDefault()} onDrop={onDropImages}>
       <h2 className={CARD_TITLE}>Log food</h2>
       {items === null ? (
         <>
@@ -120,6 +137,9 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
             onChange={e => setText(e.target.value)}
             maxLength={1000}
           />
+          <p className="mt-1 text-xs text-[var(--ink-3)]">
+            Tip: paste or drop a screenshot (⌘/Ctrl+V) — a delivery order, receipt, menu or nutrition label is read too.
+          </p>
           {photos.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {photos.map(({ url: src }, i) => (
@@ -159,8 +179,12 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => addFiles(e.target.files)} />
+            <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
             <button type="button" className={BUTTON_SECONDARY} disabled={photos.length >= MAX_PHOTOS} onClick={() => fileRef.current?.click()}>
-              Add photo{photos.length > 0 ? ` (${photos.length}/${MAX_PHOTOS})` : ''}
+              Take photo{photos.length > 0 ? ` (${photos.length}/${MAX_PHOTOS})` : ''}
+            </button>
+            <button type="button" className={BUTTON_SECONDARY} disabled={photos.length >= MAX_PHOTOS} onClick={() => libraryRef.current?.click()}>
+              Upload image / screenshot
             </button>
             <button type="button" className={BUTTON_SECONDARY} onClick={() => setItems(toEditable([{
               name: text.trim().slice(0, 120), quantityG: 100, kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, satFatG: 0, fibreG: 0,
