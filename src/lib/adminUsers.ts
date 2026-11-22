@@ -77,6 +77,8 @@ export interface AdminUserRow {
   /** Assistants: the member accounts they are actively linked to. */
   linkedMainAccounts: { id: string; displayName: string }[]
   portfolio: PortfolioStatus
+  /** Health add-on: the admin sees ONLY whether it is on (features) and the last log date — never content. */
+  health: { lastLogDate: string | null }
   /** 'legacy_role' until migration 20261121b is applied. */
   source: 'columns' | 'legacy_role'
 }
@@ -91,6 +93,8 @@ export interface AdminUserInputs {
   aiKeyAdded: boolean | null
   lastRun: { at: string; status: string } | null
   settingsRow: Record<string, unknown> | null
+  /** Latest health_daily_logs.local_date (null = none or table missing). */
+  healthLastLogDate?: string | null
 }
 
 /** One table row. Settings defaults mirror readSafetySettings / readAutopilotSettings (dry run ON, autopilot off). */
@@ -118,8 +122,18 @@ export function buildAdminUserRow(input: AdminUserInputs): AdminUserRow {
       dryRun:          s.dry_run === false ? false : true,
       tradingPaused:   s.trading_paused === true,
     },
+    health: { lastLogDate: input.healthLastLogDate ?? null },
     source: fields.source,
   }
+}
+
+/** Latest log date per user from rows sorted newest first (dates only — no health content). */
+export function latestDateByUser(rows: { user_id: string; local_date: string }[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const row of rows) {
+    if (!map.has(row.user_id)) map.set(row.user_id, row.local_date)
+  }
+  return map
 }
 
 /** Latest run per user from rows sorted newest first. */

@@ -7,6 +7,7 @@ describe('aiModels', () => {
     expect(getRoleConfig('agent')).toEqual({ model: 'claude-sonnet-5-5', maxTokens: 8000, effort: 'medium' })
     expect(getRoleConfig('synthesizer')).toEqual({ model: 'claude-sonnet-5-5', maxTokens: 16000, effort: 'high' })
     expect(getRoleConfig('shariah_reviewer')).toEqual({ model: 'claude-sonnet-5-5', maxTokens: 16000, effort: 'high' })
+    expect(getRoleConfig('health_food')).toEqual({ model: 'claude-sonnet-5-5', maxTokens: 6000, effort: 'low' })
   })
 
   it('has a price for every configured model', () => {

@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/028-portfolio-hub-ux-cleanup/spec.md` (Portfolio hub UX restructure, presentation only: global status strip, slimmer Overview, reordered Rebalance, sectioned Settings `?tab=settings&section=…`, mobile polish)
+Active feature spec: `specs/029-health-routines/spec.md` (Health & Daily Routines; plan/tasks per phase in the same dir — P1a daily loop done: /health hub, add-on `health`, migration `supabase/apply_health_p1a.sql`)
 <!-- SPECKIT END -->

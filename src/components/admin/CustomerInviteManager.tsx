@@ -29,7 +29,7 @@ const STATUS_CHIP: Record<CustomerInvitationStatus, string> = {
   expired:  'bg-red-100 text-red-800',
 }
 
-/** Admin-only customer invitations: invite form (name, email, plan, Portfolio add-on) + list with resend / revoke. */
+/** Admin-only customer invitations: invite form (name, email, plan, Portfolio / Health add-ons) + list with resend / revoke. */
 export default function CustomerInviteManager() {
   const toast = useToast()
   const [invitations, setInvitations] = useState<InvitationRow[]>([])
@@ -38,6 +38,7 @@ export default function CustomerInviteManager() {
   const [email, setEmail] = useState('')
   const [plan, setPlan] = useState<Plan>('free')
   const [portfolio, setPortfolio] = useState(false)
+  const [health, setHealth] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -56,12 +57,12 @@ export default function CustomerInviteManager() {
       const res = await fetch('/api/customer-invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, invitedName: name, plan, features: portfolio ? ['portfolio'] : [] }),
+        body: JSON.stringify({ email, invitedName: name, plan, features: [...(portfolio ? ['portfolio'] : []), ...(health ? ['health'] : [])] }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast(data.error ?? 'Something went wrong', 'error'); return }
       setInvitations(prev => [data as InvitationRow, ...prev])
-      setName(''); setEmail(''); setPlan('free'); setPortfolio(false)
+      setName(''); setEmail(''); setPlan('free'); setPortfolio(false); setHealth(false)
       toast(`Invitation sent to ${email}`, 'success')
     } catch {
       toast('Network error — the invitation was not sent', 'error')
@@ -137,6 +138,10 @@ export default function CustomerInviteManager() {
           <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--ink)]">
             <input type="checkbox" checked={portfolio} onChange={e => setPortfolio(e.target.checked)} className="mt-1" />
             <span><strong>{FEATURE_INFO.portfolio.label}</strong> <span className="text-xs text-[var(--ink-2)]">— {FEATURE_INFO.portfolio.description}</span></span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--ink)]">
+            <input type="checkbox" checked={health} onChange={e => setHealth(e.target.checked)} className="mt-1" />
+            <span><strong>{FEATURE_INFO.health.label}</strong> <span className="text-xs text-[var(--ink-2)]">— {FEATURE_INFO.health.description}</span></span>
           </label>
         </fieldset>
         <div className="flex justify-end sm:col-span-2">

@@ -40,11 +40,12 @@ export default function Nav() {
     { href: '/audit',    label: 'Audit log'  },
     ...(isMember(user.access) ? [{ href: '/settings', label: 'Settings' }] : []),
     ...(hasFeature(user.access, 'portfolio') ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
+    ...(hasFeature(user.access, 'health') ? [{ href: '/health', label: 'Health' }] : []),
     ...(user.access.isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ]
 
   // The Portfolio hub owns every /portfolio/* page (tabs, recommendation detail)
-  const isActive = (href: string) => pathname === href || ((href === '/portfolio' || href === '/admin') && pathname.startsWith(`${href}/`))
+  const isActive = (href: string) => pathname === href || ((href === '/portfolio' || href === '/admin' || href === '/health') && pathname.startsWith(`${href}/`))
 
   const initials = user.displayName
     .split(' ')

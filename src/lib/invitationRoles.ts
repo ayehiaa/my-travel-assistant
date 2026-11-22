@@ -89,6 +89,12 @@ export function invitationFeatureBullets(access: InvitationAccess): string[] {
       ? `Travel planning on the Plus plan: unlimited trips, expenses and assistants${GMAIL_IMPORT_ENABLED ? ', plus Gmail trip import' : ''}`
       : 'Travel planning on the Free plan (beta limits): up to 10 trips, 10 expenses and 1 assistant',
   ]
+  if (normalizeFeatures(access.features).includes('health')) {
+    bullets.push(
+      'Health (beta): follow a programme with daily food, weight and sleep tracking. AI food estimates from text or ' +
+        'photos use your OWN Anthropic API key (a few cents per logged meal). Your health data is private to you.',
+    )
+  }
   if (normalizeFeatures(access.features).includes('portfolio')) {
     bullets.push(
       'Portfolio (beta, for testing): AI analysis of a US stock portfolio. It needs your OWN Alpaca account ' +
@@ -108,3 +114,11 @@ export function isMissingSchemaError(error: { code?: string | null; message?: st
   if (error.code && ['42703', '42P01', 'PGRST204', 'PGRST205'].includes(error.code)) return true
   return /does not exist|schema cache/i.test(error.message ?? '')
 }
+
+/** True for a CHECK-constraint violation (23514) — e.g. the 'health' add-on before apply_health_p1a.sql. */
+export function isCheckViolation(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === '23514'
+}
+
+export const HEALTH_ADDON_MIGRATION_MESSAGE =
+  'The Health add-on needs a database update — apply supabase/apply_health_p1a.sql first'

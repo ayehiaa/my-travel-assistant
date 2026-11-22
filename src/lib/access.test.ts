@@ -199,5 +199,11 @@ describe('helpers', () => {
     expect(accessBadge(deriveAccess({ role: 'premium_plus' }))).toBe('Plus · Portfolio')
     expect(accessBadge(deriveAccess({ account_type: 'member', plan: 'free', features: ['portfolio'] }))).toBe('Free · Portfolio')
     expect(accessBadge(deriveAccess({ role: 'assistant' }))).toBe('Assistant')
+    expect(accessBadge(deriveAccess({ account_type: 'member', plan: 'plus', features: ['portfolio', 'health'] }))).toBe('Plus · Portfolio · Health')
+    // Health is personal: an assistant linked to a Health member never gets it
+    const assistant = deriveAccess({ account_type: 'assistant' }, { linkedMain: { account_type: 'member', plan: 'free', features: ['health'] } })
+    expect(hasFeature(assistant, 'health')).toBe(false)
+    expect(hasFeature(deriveAccess({ account_type: 'member', features: ['health'] }), 'health')).toBe(true)
+    expect(isRepresentableAsLegacyRole({ accountType: 'member', plan: 'plus', features: ['health'] })).toBe(false)
   })
 })
