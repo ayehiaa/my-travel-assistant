@@ -4,6 +4,7 @@ import { signedPhotoUrls } from '@/lib/health/healthPhotos'
 import { sumNutrients, uncertaintyBand } from '@/lib/health/nutrition'
 import { formatDuration, sleepDurationMinutes } from '@/lib/health/checkin'
 import { healthHref } from '@/lib/health/healthHub'
+import { loadJointChecks, loadWorkouts } from '@/lib/health/trainingServer'
 import FoodEntryCard from './FoodEntryCard'
 import LogDatePicker from './LogDatePicker'
 import HealthNotice from './HealthNotice'
@@ -21,6 +22,10 @@ export default async function LogTab({ userId, enrolment, date }: { userId: stri
     return <HealthNotice title="Could not load this day">{err instanceof Error ? err.message : 'Try again shortly.'}</HealthNotice>
   }
   const urls = await signedPhotoUrls(entries.flatMap(e => e.photoPaths))
+  // Training for the day (best effort: empty when the P1b migration is not applied).
+  let workouts: Awaited<ReturnType<typeof loadWorkouts>> = []
+  let joint: Awaited<ReturnType<typeof loadJointChecks>> = []
+  try { [workouts, joint] = await Promise.all([loadWorkouts(supabase, userId, date, date), loadJointChecks(supabase, userId)]) } catch { /* not available */ }
   const checkin = checkins[0] ?? null
   const totals = sumNutrients(entries.flatMap(e => e.items))
   const band = uncertaintyBand(totals.kcal)
@@ -51,6 +56,21 @@ export default async function LogTab({ userId, enrolment, date }: { userId: stri
             </>
           ) : 'No morning check-in this day.'}
         </p>
+        {workouts.map(w => {
+          const check = joint.find(c => c.workoutId === w.id)
+          return (
+            <p key={w.id} className="mt-2 text-sm text-[var(--ink-2)]">
+              Training:{' '}
+              <a className="font-semibold text-[var(--ink)] underline" href={healthHref({ tab: 'training', session: w.sessionKey, date: w.date })}>
+                {def.trainingSessions.find(t => t.key === w.sessionKey)?.name ?? w.sessionKey}
+              </a>{' '}
+              — {w.status}{w.skipReason ? ` (${w.skipReason})` : ''}{w.durationMinutes ? ` · ${w.durationMinutes} min` : ''}
+              {check && (check.duringPain !== null || check.nextMorningPain !== null) && (
+                <> · joint {check.duringPain ?? '–'}/10 during{check.nextMorningPain !== null && `, ${check.nextMorningPain}/10 next morning`}{check.swelling && ', swelling'}{check.redFlags.length > 0 && `, red flags: ${check.redFlags.join(', ')}`}</>
+              )}
+            </p>
+          )
+        })}
       </section>
 
       {entries.length === 0 ? (
