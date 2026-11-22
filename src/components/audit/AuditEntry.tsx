@@ -30,6 +30,8 @@ const ACTION_PILLS = {
   user_features_changed:      { bg: 'var(--blue-100)',      color: 'var(--blue-700)',  label: 'Add-ons changed' },
   customer_invited:           { bg: 'var(--blue-100)',      color: 'var(--blue-700)',  label: 'Customer invited' },
   customer_invitation_revoked: { bg: 'var(--coral-soft)',   color: 'var(--coral)',     label: 'Invite revoked' },
+  health_consent_given:       { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Health consent' },
+  health_programme_activated: { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme started' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -89,6 +91,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'user_plan_changed' || action === 'user_features_changed' || action === 'customer_invited' || action === 'customer_invitation_revoked') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Admin · Users</span>
+  }
+  if (action === 'health_consent_given' || action === 'health_programme_activated') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Health</span>
   }
   if (ASSISTANT_ACTIONS.has(action)) {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Account</span>

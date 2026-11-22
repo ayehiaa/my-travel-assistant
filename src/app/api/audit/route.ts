@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
+import { HEALTH_AUDIT_FILTER } from '@/lib/health/healthHub'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 
@@ -16,10 +18,13 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
 
-  const { data: entries, error, count } = await supabase
+  let auditQuery = supabase
     .from('audit_log')
     .select('*', { count: 'exact' })
     .or(`performed_by.eq.${activeMainAccountId},on_behalf_of.eq.${activeMainAccountId}`)
+  // Health is personal (specs/029): assistants never see the member's health_* audit entries.
+  if (isAssistant(user.access)) auditQuery = auditQuery.not('action', 'in', HEALTH_AUDIT_FILTER)
+  const { data: entries, error, count } = await auditQuery
     .order('created_at', { ascending: false })
     .range(from, to)
 

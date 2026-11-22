@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AdminUserPatchSchema, buildAdminUserRow, latestRunByUser, planUserPatch, sortAdminUserRows } from './adminUsers'
+import { AdminUserPatchSchema, buildAdminUserRow, latestDateByUser, latestRunByUser, planUserPatch, sortAdminUserRows } from './adminUsers'
 
 describe('AdminUserPatchSchema (admin PATCH validation)', () => {
   it('accepts plan and/or the full add-on list', () => {
@@ -88,5 +88,24 @@ describe('latestRunByUser / sortAdminUserRows', () => {
       buildAdminUserRow({ email: '', isAdmin, linkedMainAccounts: [], termsAcceptedAt: null, alpacaIsPaper: null, aiKeyAdded: null, lastRun: null, settingsRow: null, roleRow: { user_id: id, display_name: name, role } })
     const sorted = sortAdminUserRows([mk('1', 'Zed', 'assistant'), mk('2', 'Bob', 'main'), mk('3', 'Amy', 'main'), mk('4', 'Owner', 'premium_plus', true)])
     expect(sorted.map(r => r.displayName)).toEqual(['Owner', 'Amy', 'Bob', 'Zed'])
+  })
+})
+
+describe('health on the admin page (dates only)', () => {
+  it('latest log date per user and the row field', () => {
+    const m = latestDateByUser([
+      { user_id: 'a', local_date: '2026-11-22' },
+      { user_id: 'b', local_date: '2026-11-20' },
+      { user_id: 'a', local_date: '2026-11-01' },
+    ])
+    expect(m.get('a')).toBe('2026-11-22')
+    expect(m.get('b')).toBe('2026-11-20')
+    const row = buildAdminUserRow({
+      roleRow: { user_id: 'a', account_type: 'member', plan: 'free', features: ['health'] },
+      email: 'a@example.com', isAdmin: false, linkedMainAccounts: [], termsAcceptedAt: null, alpacaIsPaper: null,
+      aiKeyAdded: null, lastRun: null, settingsRow: null, healthLastLogDate: '2026-11-22',
+    })
+    expect(row.features).toEqual(['health'])
+    expect(row.health).toEqual({ lastLogDate: '2026-11-22' })
   })
 })

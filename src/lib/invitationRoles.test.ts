@@ -8,6 +8,7 @@ import {
   legacyInvitationRole,
   readInvitationAccess,
   resolveSignupAccess,
+  isCheckViolation,
 } from './invitationRoles'
 
 describe('CustomerInviteSchema (invite validation)', () => {
@@ -102,5 +103,16 @@ describe('isMissingSchemaError', () => {
   it('ignores other errors and null', () => {
     expect(isMissingSchemaError(null)).toBe(false)
     expect(isMissingSchemaError({ code: '23505', message: 'duplicate key value' })).toBe(false)
+  })
+})
+
+describe('health add-on (specs/029)', () => {
+  it('invitation bullets and CHECK violations', () => {
+    const b = invitationFeatureBullets({ plan: 'free', features: ['health'] })
+    expect(b).toHaveLength(2)
+    expect(b[1]).toMatch(/Health \(beta\)/)
+    expect(isCheckViolation({ code: '23514' })).toBe(true)
+    expect(isCheckViolation({ code: '23505' })).toBe(false)
+    expect(isCheckViolation(null)).toBe(false)
   })
 })

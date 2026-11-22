@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
+import { isAssistant } from '@/lib/access'
+import { HEALTH_AUDIT_FILTER } from '@/lib/health/healthHub'
 import { getActiveMainAccountId } from '@/lib/activeAccount'
 import { createClient } from '@/lib/supabase/server'
 import AuditEntry from '@/components/audit/AuditEntry'
@@ -29,10 +31,13 @@ export default async function AuditPage({
 
   const supabase = await createClient()
 
-  const { data: entries, count } = await supabase
+  let auditQuery = supabase
     .from('audit_log')
     .select('*', { count: 'exact' })
     .or(`performed_by.eq.${activeMainAccountId},on_behalf_of.eq.${activeMainAccountId}`)
+  // Health is personal (specs/029): assistants never see the member's health_* audit entries.
+  if (isAssistant(user.access)) auditQuery = auditQuery.not('action', 'in', HEALTH_AUDIT_FILTER)
+  const { data: entries, count } = await auditQuery
     .order('created_at', { ascending: false })
     .range(from, to)
 

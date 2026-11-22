@@ -74,6 +74,13 @@ export default function AdminUsersTable({ initial, currentUserId }: { initial: A
     }
   }
 
+  function toggleHealth(user: AdminUserRow) {
+    const on = user.features.includes('health')
+    if (on && !window.confirm(`Remove Health (beta) from ${user.displayName}? Their health data is kept but hidden until it is turned back on.`)) return
+    const features: FeatureKey[] = on ? user.features.filter(f => f !== 'health') : [...user.features, 'health']
+    void patchUser(user, { features })
+  }
+
   function togglePortfolio(user: AdminUserRow) {
     const on = user.features.includes('portfolio')
     if (on && !window.confirm(
@@ -89,7 +96,7 @@ export default function AdminUsersTable({ initial, currentUserId }: { initial: A
 
   return (
     <div className="-mx-5 overflow-x-auto sm:mx-0">
-      <table className="w-full min-w-[960px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-[var(--rule)] text-[11px] uppercase tracking-wide text-[var(--ink-3)]">
             <th className="px-3 py-2 font-bold">User</th>
@@ -97,6 +104,7 @@ export default function AdminUsersTable({ initial, currentUserId }: { initial: A
             <th className="px-3 py-2 font-bold">Plan</th>
             <th className="px-3 py-2 font-bold">Portfolio (beta)</th>
             <th className="px-3 py-2 font-bold">Portfolio status</th>
+            <th className="px-3 py-2 font-bold">Health (beta)</th>
             <th className="px-3 py-2 font-bold">Created</th>
           </tr>
         </thead>
@@ -163,6 +171,25 @@ export default function AdminUsersTable({ initial, currentUserId }: { initial: A
                   {isMember && (u.features.includes('portfolio') || u.portfolio.alpaca !== null || u.portfolio.lastRun)
                     ? <PortfolioDetails p={u.portfolio} />
                     : <span className="text-xs text-[var(--ink-3)]">—</span>}
+                </td>
+                <td className="px-3 py-3">
+                  {isMember ? (
+                    <>
+                      <label className="inline-flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={u.features.includes('health')}
+                          disabled={saving}
+                          onChange={() => toggleHealth(u)}
+                          className="h-4 w-4 accent-[var(--blue-700)]"
+                        />
+                        <span className="text-xs text-[var(--ink-2)]">{u.features.includes('health') ? 'Health enabled' : 'Off'}</span>
+                      </label>
+                      <div className="mt-1 text-xs text-[var(--ink-3)]">Last log: {u.health.lastLogDate ? fmtDate(u.health.lastLogDate) : '—'}</div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-[var(--ink-3)]">Not available</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 text-xs text-[var(--ink-2)]">{fmtDate(u.createdAt)}</td>
               </tr>

@@ -6,6 +6,8 @@ import { logAudit } from '@/lib/auditLogger'
 import { sendCustomerInvitationEmail } from '@/lib/email'
 import {
   CustomerInviteSchema,
+  HEALTH_ADDON_MIGRATION_MESSAGE,
+  isCheckViolation,
   isMissingSchemaError,
   isRepresentableInvitation,
   legacyInvitationRole,
@@ -83,6 +85,9 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (insertError || !invitation) {
+    if (isCheckViolation(insertError) && access.features.includes('health')) {
+      return NextResponse.json({ error: HEALTH_ADDON_MIGRATION_MESSAGE }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

@@ -5,12 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/auditLogger'
 import { isRepresentableAsLegacyRole, legacyRoleFor } from '@/lib/access'
 import { AdminUserPatchSchema, PORTFOLIO_REMOVED_REASON, planUserPatch } from '@/lib/adminUsers'
+import { HEALTH_ADDON_MIGRATION_MESSAGE, isCheckViolation } from '@/lib/invitationRoles'
 import { cancelInFlightExecutions, setTradingPause } from '@/lib/tradingSafety'
 
 const ParamsSchema = z.object({ id: z.string().uuid() })
 
 const MIGRATION_NEEDED_MESSAGE =
-  'Free + Portfolio needs a database update — apply supabase/apply_plans_addons_admin.sql first'
+  'This plan / add-on combination needs a database update — apply supabase/apply_plans_addons_admin.sql first'
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 // Change a member's plan and/or add-ons (admins only). Admin status itself is env-based and cannot be changed here.
@@ -66,7 +67,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const { error: writeError } = await admin.from('user_roles').update(update).eq('user_id', targetId)
-  if (writeError) return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (writeError) {
+    // The 'health' add-on is rejected by the features CHECK until apply_health_p1a.sql is applied.
+    if (isCheckViolation(writeError) && next.features.includes('health')) {
+      return NextResponse.json({ error: HEALTH_ADDON_MIGRATION_MESSAGE }, { status: 409 })
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 
   // Portfolio removed → nothing may keep trading: pause (kill-switch flag), cancel in-flight executions, autopilot off.
   let tradingPaused: boolean | null = null

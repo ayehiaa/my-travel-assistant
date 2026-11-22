@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveSignupAccess } from '@/lib/invitationRoles'
+import { isCheckViolation, resolveSignupAccess } from '@/lib/invitationRoles'
 import { accessColumns, isAdminEmail, legacyRoleFor } from '@/lib/access'
 
 const schema = z.object({
@@ -73,11 +73,19 @@ export async function POST(request: NextRequest) {
     .from('user_roles')
     .insert({ user_id: newUser.user.id, role: legacyRoleFor(fields), display_name: fullName.trim() })
 
-  // … then the new columns, best effort (missing columns → access is derived from the legacy role)
-  await admin
+  // … then the new columns, best effort (missing columns → access is derived from the legacy role). If the
+  // features CHECK does not allow 'health' yet (apply_health_p1a.sql not applied), retry without it so the plan
+  // and the other add-ons are still granted.
+  const { error: columnsError } = await admin
     .from('user_roles')
     .update(accessColumns(fields))
     .eq('user_id', newUser.user.id)
+  if (columnsError && isCheckViolation(columnsError) && fields.features.includes('health')) {
+    await admin
+      .from('user_roles')
+      .update(accessColumns({ ...fields, features: fields.features.filter(f => f !== 'health') }))
+      .eq('user_id', newUser.user.id)
+  }
 
   // Consume the invitation token
   await admin

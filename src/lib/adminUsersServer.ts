@@ -1,6 +1,6 @@
 import { createAdminClient } from './supabase/admin'
 import { isAdminEmail } from './access'
-import { buildAdminUserRow, latestRunByUser, sortAdminUserRows, type AdminUserRow } from './adminUsers'
+import { buildAdminUserRow, latestDateByUser, latestRunByUser, sortAdminUserRows, type AdminUserRow } from './adminUsers'
 
 /**
  * Server-only loader for the admin users table (service role). Every secondary query is best effort: a missing
@@ -10,7 +10,7 @@ export async function loadAdminUsers(): Promise<AdminUserRow[]> {
   const admin = createAdminClient()
   const adminEmails = process.env.APP_ADMIN_EMAILS ?? ''
 
-  const [rolesRes, authRes, linksRes, profilesRes, alpacaRes, aiRes, runsRes, settingsRes] = await Promise.all([
+  const [rolesRes, authRes, linksRes, profilesRes, alpacaRes, aiRes, runsRes, settingsRes, healthRes] = await Promise.all([
     admin.from('user_roles').select('*').order('created_at', { ascending: true }),
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from('account_links').select('main_user_id, assistant_user_id').eq('status', 'active'),
@@ -19,6 +19,8 @@ export async function loadAdminUsers(): Promise<AdminUserRow[]> {
     admin.from('user_ai_credentials').select('user_id'),
     admin.from('recommendations').select('user_id, run_at, status').order('run_at', { ascending: false }).limit(2000),
     admin.from('portfolio_settings').select('*'),
+    // Health: dates only (specs/029 — the admin never sees health content). Missing table → no dates.
+    admin.from('health_daily_logs').select('user_id, local_date').order('local_date', { ascending: false }).limit(5000),
   ])
 
   if (rolesRes.error) throw new Error('Failed to load users')
@@ -36,6 +38,7 @@ export async function loadAdminUsers(): Promise<AdminUserRow[]> {
   const alpaca = new Map((alpacaRes.data ?? []).map(c => [c.user_id as string, c.is_paper !== false]))
   const aiKeys = aiRes.error ? null : new Set((aiRes.data ?? []).map(r => r.user_id as string))
   const runs = latestRunByUser((runsRes.data ?? []) as { user_id: string; run_at: string; status: string }[])
+  const healthDates = latestDateByUser(healthRes.error ? [] : ((healthRes.data ?? []) as { user_id: string; local_date: string }[]))
   const settings = new Map((settingsRes.data ?? []).map(s => [s.user_id as string, s as Record<string, unknown>]))
 
   return sortAdminUserRows(roleRows.map(row => {
@@ -51,6 +54,7 @@ export async function loadAdminUsers(): Promise<AdminUserRow[]> {
       aiKeyAdded:         aiKeys === null ? null : aiKeys.has(id),
       lastRun:            runs.get(id) ?? null,
       settingsRow:        settings.get(id) ?? null,
+      healthLastLogDate:  healthDates.get(id) ?? null,
     })
   }))
 }

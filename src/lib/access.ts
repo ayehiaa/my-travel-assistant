@@ -7,7 +7,7 @@ import { z } from 'zod'
  * Four independent dimensions replace the overloaded legacy `user_roles.role`:
  *   • account type  member | assistant   (assistant = acts on a linked member account)
  *   • plan          free | plus          (free = beta limits; plus = unlimited + Gmail import)
- *   • add-ons       feature keys         (only 'portfolio' for now — Portfolio (beta))
+ *   • add-ons       feature keys         ('portfolio' — Portfolio (beta); 'health' — Health (beta), specs/029)
  *   • admin         derived from env APP_ADMIN_EMAILS — never stored in the database
  *
  * `role` is LEGACY: it is still written (see legacyRoleFor) so old code paths and manual SQL keep working, but the app
@@ -21,7 +21,7 @@ export const PLANS = ['free', 'plus'] as const
 export type Plan = (typeof PLANS)[number]
 export const PlanSchema = z.enum(PLANS)
 
-export const FEATURE_KEYS = ['portfolio'] as const
+export const FEATURE_KEYS = ['portfolio', 'health'] as const
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
 export const FeatureKeySchema = z.enum(FEATURE_KEYS)
 
@@ -59,6 +59,10 @@ export const FEATURE_INFO: Record<FeatureKey, { label: string; description: stri
   portfolio: {
     label: 'Portfolio (beta)',
     description: 'AI portfolio analysis and trading — needs their own Alpaca account and own Anthropic API key.',
+  },
+  health: {
+    label: 'Health (beta)',
+    description: 'Programme-based daily food, weight and sleep tracking — AI food estimates use their own Anthropic API key.',
   },
 }
 
@@ -161,7 +165,7 @@ export function isMember(access: Pick<Access, 'accountType'>): boolean {
   return access.accountType === 'member'
 }
 
-/** Add-on check. Add-ons are personal: assistants never get them (no Portfolio for assistants). */
+/** Add-on check. Add-ons are personal: assistants never get them (no Portfolio or Health for assistants). */
 export function hasFeature(access: AccessLike, key: FeatureKey): boolean {
   return access.accountType === 'member' && access.effectiveFeatures.includes(key)
 }
@@ -203,8 +207,8 @@ export function canInviteCustomers(access: Pick<Access, 'isAdmin'>): boolean {
 }
 
 /**
- * Legacy `role` written alongside the new columns. Free + Portfolio has no legacy equivalent, so it is written as
- * 'main' and only the new columns carry the add-on.
+ * Legacy `role` written alongside the new columns. Free + Portfolio and any Health add-on have no legacy equivalent:
+ * the role carries only plan + Portfolio, and the new columns carry the rest.
  */
 export function legacyRoleFor(fields: AccessFields): LegacyRole {
   if (fields.accountType === 'assistant') return 'assistant'
@@ -228,9 +232,13 @@ export function planLabel(plan: Plan): string {
   return PLAN_INFO[plan].label
 }
 
-/** Short badge text, e.g. "Plus · Portfolio", "Free", "Assistant". */
+/** Short badge text, e.g. "Plus · Portfolio", "Free · Health", "Free", "Assistant". */
 export function accessBadge(access: Pick<Access, 'accountType' | 'plan' | 'features'>): string {
   if (access.accountType === 'assistant') return 'Assistant'
   const plan = access.plan === 'plus' ? 'Plus' : 'Free'
-  return access.features.includes('portfolio') ? `${plan} · Portfolio` : plan
+  const addOns = [
+    access.features.includes('portfolio') ? 'Portfolio' : null,
+    access.features.includes('health') ? 'Health' : null,
+  ].filter(Boolean)
+  return addOns.length ? `${plan} · ${addOns.join(' · ')}` : plan
 }
