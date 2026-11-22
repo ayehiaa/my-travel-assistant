@@ -333,12 +333,20 @@ target loss band. Output: proposal (no change / −150 kcal / +150 kcal) with re
 
 ---
 
-## 12. Open questions for the owner
-1. **Photo storage**: keep food photos indefinitely, or auto-delete after N days and keep only the estimates?
-2. **Steps**: manual entry acceptable for P1, or is Apple Health / Google Fit sync needed earlier?
-3. **Reminders**: email is available now; do you want push notifications (requires a PWA / app setup) in P2?
-4. **Food database**: AI estimation + personal library only, or also integrate a nutrition database (e.g. UK CoFID /
-   Open Food Facts) for better accuracy on packaged foods?
-5. **Friends**: should the seed programme be available to friends as a template, or only programmes they import
-   themselves (it is personalised to you)?
-6. **Units**: kg/cm and mmol/L by default with lb/in and mg/dL as options — OK?
+## 12. Owner decisions (2026-11-22)
+1. **Photo storage**: food photos are auto-deleted after **30 days**; the estimates and items are kept.
+2. **Steps**: **manual entry** (no wearable sync).
+3. **Reminders**: **both email and push** (Web Push via a PWA service worker) in P2.
+4. **Food database**: integrate a **nutrition database** to improve estimates (packaged foods via Open Food Facts;
+   generic foods via a bundled reference dataset such as UK CoFID where licence/access allows), with the AI matching
+   items to database entries before estimating.
+5. **Seed programme**: available to friends as a **template** (they personalise targets from their own profile).
+6. **Units**: kg/cm and mmol/L by default; lb/in and mg/dL as options.
+
+## 13. Build phases (autonomous run)
+| Phase | Scope |
+|---|---|
+| **P1a** | Data model + migrations, Health add-on + consent, seed template + enrolment, morning check-in + 7-day average, food logging (text + photo) with AI, personal food library and nutrition database lookup, Today screen with targets, components and deterministic rules/recommendations |
+| **P1b** | Training: session player, block/week logic, progression suggestions, deloads, travel variants, excluded movements, joint/pain rules and conditional unlocks |
+| **P2** | Cardio + manual steps, fortnightly adjustment engine, measurements/labs/milestones, weekly review, restaurant & travel modes (Trips integration), email + Web Push reminders, 30-day photo auto-delete |
+| **P3** | Programme import from PDF, meal-plan rotation + shopping list, clinician export (PDF/CSV), offline set logging, barcode scanning (Open Food Facts) |
