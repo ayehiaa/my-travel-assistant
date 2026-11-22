@@ -3,6 +3,7 @@ import { callClaude } from '@/lib/aiCall'
 import { parseAgentResponse } from '@/lib/aiResponse'
 import { fetchSentimentArticles } from '@/inngest/dataSources/newsapi'
 import { withIslamicMandate } from '@/lib/islamicMandate'
+import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 export interface SentimentAgentInput {
@@ -11,6 +12,8 @@ export interface SentimentAgentInput {
   target_horizon: 'monthly' | 'annual'
   holdings_tickers: string[]
   is_new_portfolio?: boolean
+  /** Effective screening config (specs/030); missing → full Islamic screening. */
+  screening?: EffectiveScreeningConfig
   /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
   apiKey: string
 }
@@ -50,7 +53,7 @@ export async function runSentimentAgent(input: SentimentAgentInput): Promise<Age
   const { text, stopReason, usage } = await callClaude({
     role:   'agent',
     name:   'sentiment',
-    system: withIslamicMandate(SYSTEM_PROMPT),
+    system: withIslamicMandate(SYSTEM_PROMPT, input.screening),
     user:   userContent,
     apiKey: input.apiKey,
   })

@@ -4,8 +4,9 @@ import HoldingsList, { type HoldingView } from './HoldingsList'
 import PerformanceSection from './PerformanceSection'
 import RefreshButton from './RefreshButton'
 import { ChartSkeleton } from './HubSkeletons'
-import { getLatestCompleteRecommendation, getLiveState, getRecentExecutions } from '@/lib/portfolioHubData'
+import { getLatestCompleteRecommendation, getLiveState, getRecentExecutions, getSettingsRow } from '@/lib/portfolioHubData'
 import { readShariahScreening } from '@/lib/shariahRules'
+import { effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import {
   computeDayChange,
   formatSignedPct,
@@ -45,8 +46,9 @@ function toHoldingView(
   screening: ShariahScreeningResult | null,
   recommendationId: string | null,
   executions: Awaited<ReturnType<typeof getRecentExecutions>>,
+  current: EffectiveScreeningConfig,
 ): HoldingView {
-  const badge = shariahBadgeFor(h.ticker, screening)
+  const badge = shariahBadgeFor(h.ticker, screening, current)
   return {
     ticker:           h.ticker,
     company_name:     h.company_name,
@@ -58,8 +60,8 @@ function toHoldingView(
     cost_basis:       h.cost_basis ?? null,
     unrealized_pl:    h.unrealized_pl ?? null,
     unrealized_plpc:  h.unrealized_plpc ?? null,
-    shariah: badge.kind === 'unscreened'
-      ? { kind: 'unscreened', reason: null, ratios: [], ratioSource: null, nonPermissibleIncomePct: null, screenedAt: null, recommendationId }
+    shariah: badge.kind === 'unscreened' || badge.kind === 'off'
+      ? { kind: badge.kind, reason: null, ratios: [], ratioSource: null, nonPermissibleIncomePct: null, screenedAt: null, recommendationId }
       : {
           kind:   badge.kind,
           reason: badge.reason,
@@ -85,10 +87,11 @@ const CARD = 'rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5'
  * autopilot, approvals, setup) is in the hub's status strip; allocation vs target lives in Rebalance.
  */
 export default async function OverviewTab({ userId, period }: Props) {
-  const [live, latestRec, executions] = await Promise.all([
+  const [live, latestRec, executions, settingsRow] = await Promise.all([
     getLiveState(userId),
     getLatestCompleteRecommendation(userId),
     getRecentExecutions(userId, 50),
+    getSettingsRow(userId).catch(() => null),
   ])
 
   if (!live.connected) {
@@ -124,7 +127,8 @@ export default async function OverviewTab({ userId, period }: Props) {
   const accountValue = p.equity_usd ?? p.total_value_usd
   const dayChange = computeDayChange(p.equity_usd, p.last_equity_usd)
   const screening = latestRec ? readShariahScreening(latestRec as Parameters<typeof readShariahScreening>[0]) : null
-  const holdings = p.holdings.map(h => toHoldingView(h, p.total_value_usd, screening, (latestRec?.id as string) ?? null, executions))
+  const currentScreening = effectiveScreeningConfig(readScreeningSettings(settingsRow))
+  const holdings = p.holdings.map(h => toHoldingView(h, p.total_value_usd, screening, (latestRec?.id as string) ?? null, executions, currentScreening))
   const flagged = holdings.filter(h => h.shariah.kind === 'flagged')
   const totalPl = p.holdings.reduce((s, h) => s + (h.unrealized_pl ?? 0), 0)
   const hasPl = p.holdings.some(h => h.unrealized_pl !== undefined)

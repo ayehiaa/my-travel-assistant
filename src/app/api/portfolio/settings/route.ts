@@ -14,6 +14,16 @@ import {
   readAutopilotSettings,
   AUTOPILOT_MIGRATION_WARNING,
 } from '@/lib/schedule'
+import {
+  ScreeningSettingsSchema,
+  readScreeningSettings,
+  screeningWeakenings,
+  type ScreeningSettings,
+} from '@/lib/screeningConfig'
+
+const SCREENING_MIGRATION_WARNING =
+  'Screening settings could not be saved — the database migration 20261122e_screening_settings has not been applied yet. ' +
+  'Islamic screening stays fully on.'
 
 const SettingsUpdateSchema = z.object({
   target_return_pct: z.number().positive().optional(),
@@ -30,8 +40,12 @@ const SettingsUpdateSchema = z.object({
   dry_run:           z.boolean().optional(),
   /** Required (= LIVE_TRADING_CONFIRM_TEXT) when dry_run is set to false. */
   confirm_text:      z.string().max(100).optional(),
+  // ── Screening settings (migration 20261122e; written best-effort) — specs/030 ──
+  screening_settings: ScreeningSettingsSchema.optional(),
+  /** Required (true) when the change turns off any screening check (confirmed in the UI dialog). */
+  screening_confirm:  z.boolean().optional(),
 }).refine(
-  data => Object.keys(data).some(k => k !== 'confirm_text' && k !== 'autopilot_confirm_text'),
+  data => Object.keys(data).some(k => k !== 'confirm_text' && k !== 'autopilot_confirm_text' && k !== 'screening_confirm'),
   { message: 'At least one field required' },
 )
 
@@ -105,9 +119,33 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  const { autopilot_mode, autopilot_confirm_text, run_interval_days } = parsed.data
+  const { autopilot_mode, autopilot_confirm_text, run_interval_days, screening_settings, screening_confirm } = parsed.data
 
   const supabase = await createClient()
+
+  // Screening: read the current values first so a weakening is confirmed before anything is written.
+  let screeningBefore: ScreeningSettings | null = null
+  if (screening_settings !== undefined) {
+    const { data: row } = await supabase
+      .from('portfolio_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const state = readScreeningSettings(row as Record<string, unknown> | null)
+    screeningBefore = {
+      islamic_enabled:  state.islamic_enabled,
+      business_screen:  state.business_screen,
+      financial_screen: state.financial_screen,
+      stocks_only:      state.stocks_only,
+    }
+    const weakened = screeningWeakenings(screeningBefore, screening_settings)
+    if (weakened.length > 0 && screening_confirm !== true) {
+      return NextResponse.json(
+        { error: `Confirm the change: buys will no longer be checked for ${weakened.join('; ')}` },
+        { status: 400 },
+      )
+    }
+  }
 
   // Autopilot: read the current values first so the 'auto' confirmation is checked before anything is written.
   const scheduleChange = autopilot_mode !== undefined || run_interval_days !== undefined
@@ -213,6 +251,29 @@ export async function PUT(request: NextRequest) {
     }
   }
 
+  let screeningWarning: string | null = null
+  if (screening_settings !== undefined && screeningBefore) {
+    const { data: written, error: screeningError } = await supabase
+      .from('portfolio_settings')
+      .update({ screening_settings, updated_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+      .select('user_id')
+
+    if (screeningError || !written || written.length === 0) {
+      screeningWarning = SCREENING_MIGRATION_WARNING
+    } else {
+      const changedFields: Record<string, { before: unknown; after: unknown }> = {}
+      for (const key of Object.keys(screening_settings) as Array<keyof ScreeningSettings>) {
+        if (screeningBefore[key] !== screening_settings[key]) {
+          changedFields[key] = { before: screeningBefore[key], after: screening_settings[key] }
+        }
+      }
+      if (Object.keys(changedFields).length > 0) {
+        await logAudit({ performedBy: user.id, action: 'screening_settings_updated', tripId: null, changedFields })
+      }
+    }
+  }
+
   const { data, error } = await supabase
     .from('portfolio_settings')
     .select('*')
@@ -225,5 +286,6 @@ export async function PUT(request: NextRequest) {
     settings:                   data,
     safety_settings_warning:    safetyWarning,
     autopilot_settings_warning: autopilotWarning,
+    screening_settings_warning: screeningWarning,
   })
 }

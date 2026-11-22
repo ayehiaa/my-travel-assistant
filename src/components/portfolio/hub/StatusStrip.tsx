@@ -7,6 +7,7 @@ import {
 } from '@/lib/portfolioHubData'
 import { readSafetySettings } from '@/lib/riskLimits'
 import { readAutopilotSettings } from '@/lib/schedule'
+import { effectiveScreeningConfig, readScreeningSettings } from '@/lib/screeningConfig'
 import { buildStatusChips, type StatusChip, type StatusChipTone } from '@/lib/portfolioStatusStrip'
 
 const TONE_CLASS: Record<StatusChipTone, string> = {
@@ -17,6 +18,8 @@ const TONE_CLASS: Record<StatusChipTone, string> = {
   live:      'bg-emerald-100 text-emerald-800',
   dry_run:   'bg-purple-600 text-white font-mono',
   autopilot: 'bg-[var(--paper-3)] text-[var(--ink-2)]',
+  shariah_on:      'bg-emerald-50 text-emerald-800',
+  shariah_reduced: 'bg-amber-100 text-amber-900',
 }
 
 /** Resolve a loader, falling back when it throws (a missing piece of data just hides its chip). */
@@ -63,6 +66,7 @@ export default async function StatusStrip({ userId, email }: { userId: string; e
     nextRunAt:       autopilot.next_run_at,
     pendingApproval: pending,
     setup:           checklist ? { doneCount: checklist.doneCount, total: checklist.items.length, complete: checklist.complete } : null,
+    screening:       effectiveScreeningConfig(readScreeningSettings(settingsRow)),
   })
   if (chips.length === 0) return null
 

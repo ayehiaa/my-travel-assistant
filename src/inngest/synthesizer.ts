@@ -3,6 +3,7 @@ import { normaliseTo100 } from '@/lib/allocationUtils'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
 import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
 import { withIslamicMandate } from '@/lib/islamicMandate'
+import { FULL_SCREENING_CONFIG, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { MAX_STOCK_WEIGHT_PCT } from '@/lib/shariahRules'
 import { callClaude } from '@/lib/aiCall'
 import { assertCompleteResponse } from '@/lib/aiResponse'
@@ -20,6 +21,8 @@ export interface SynthesizerParams {
   candidateTickers?: string[]
   /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
   apiKey: string
+  /** Effective screening config (specs/030); missing → full Islamic screening + stocks only. */
+  screening?: EffectiveScreeningConfig
 }
 
 export interface SynthesizerOutput {
@@ -67,11 +70,48 @@ const TICKER_RULES =
   'Never use ETFs, funds, bonds or preferred shares.\n' +
   '  2. Never invent tickers or use sector labels as tickers (e.g. "Tech_Stocks" is invalid).\n'
 
+const TICKER_RULES_ANY_SECURITY =
+  '  1. Use only real, valid US-traded ticker symbols (e.g. "MSFT", "AAPL", or a listed ETF). Never use bonds or preferred shares.\n' +
+  '  2. Never invent tickers or use sector labels as tickers (e.g. "Tech_Stocks" is invalid).\n'
+
+/** Wording that depends on the screening config (specs/030). Full config = the spec-019 wording. Pure; exported for tests. */
+export function synthesizerWording(cfg: EffectiveScreeningConfig): {
+  tickerRules: string
+  newPortfolioRules: string
+  newHoldingsLine: string
+} {
+  const compliant = cfg.islamic ? 'Shariah-compliant ' : ''
+  if (cfg.stocks_only) {
+    return {
+      tickerRules: TICKER_RULES,
+      newPortfolioRules:
+        `  - Allocate across 6–10 individual ${compliant}common stocks sized for the risk profile; no single stock may exceed ${MAX_STOCK_WEIGHT_PCT}%.\n` +
+        '  - No ETFs, funds, bonds or preferred shares — diversify across sectors with individual stocks instead.\n',
+      newHoldingsLine:
+        `You may recommend new individual ${compliant}common stocks not currently in the portfolio if they would help close the gap. ` +
+        `No single stock may exceed ${MAX_STOCK_WEIGHT_PCT}% of the portfolio. Holdings that are ETFs, funds, bonds or otherwise ` +
+        `${cfg.islamic ? 'non-compliant' : 'not individual common stocks'} should be given 0%.\n`,
+    }
+  }
+  return {
+    tickerRules: TICKER_RULES_ANY_SECURITY,
+    newPortfolioRules:
+      `  - Allocate across 6–10 ${compliant}positions sized for the risk profile; no single position may exceed ${MAX_STOCK_WEIGHT_PCT}%.\n` +
+      '  - Prefer individual common stocks; a broad ETF is allowed. No bonds or preferred shares.\n',
+    newHoldingsLine:
+      `You may recommend new ${compliant}stocks or ETFs not currently in the portfolio if they would help close the gap. ` +
+      `No single position may exceed ${MAX_STOCK_WEIGHT_PCT}% of the portfolio.` +
+      (cfg.islamic ? ' Holdings that are non-compliant should be given 0%.\n' : '\n'),
+  }
+}
+
 function buildNewPortfolioPrompt(
   settings:         PortfolioSettings,
   snapshot:         PortfolioSnapshot,
   candidateTickers: string[],
+  cfg:              EffectiveScreeningConfig,
 ): string {
+  const wording = synthesizerWording(cfg)
   const horizonLabel = settings.target_horizon === 'annual' ? 'annually' : 'per month'
   return (
     OUTPUT_HEADER +
@@ -82,14 +122,13 @@ function buildNewPortfolioPrompt(
     `Cash available to invest: $${snapshot.cash_usd.toFixed(2)}\n` +
     `Candidate stocks the agents researched: ${candidateTickers.join(', ')}\n\n` +
     'Construction rules:\n' +
-    `  - Allocate across 6–10 individual Shariah-compliant common stocks sized for the risk profile; no single stock may exceed ${MAX_STOCK_WEIGHT_PCT}%.\n` +
-    '  - No ETFs, funds, bonds or preferred shares — diversify across sectors with individual stocks instead.\n' +
-    '  - Prefer the researched candidates, but you may use other valid US-listed common stocks if the agent analysis supports it.\n' +
+    wording.newPortfolioRules +
+    `  - Prefer the researched candidates, but you may use other valid US-listed ${cfg.stocks_only ? 'common stocks' : 'securities'} if the agent analysis supports it.\n` +
     '  - Orders are whole shares, so very small positions may not be executable for small accounts.\n' +
     '  - There is no performance history yet: do not describe a performance gap; explain how the allocation is ' +
     'positioned to reach the target return.\n\n' +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
-    TICKER_RULES +
+    wording.tickerRules +
     '  3. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
     'Output format — return a JSON object with exactly these three keys:\n' +
     '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
@@ -103,7 +142,9 @@ function buildSystemPrompt(
   settings:      PortfolioSettings,
   snapshot:      PortfolioSnapshot,
   returnMetrics: PortfolioReturnMetrics,
+  cfg:           EffectiveScreeningConfig,
 ): string {
+  const wording = synthesizerWording(cfg)
   const holdingsText   = snapshot.holdings
     .map(h => `  ${h.ticker} (${h.company_name}): $${h.total_value_usd.toFixed(2)}`)
     .join('\n')
@@ -136,10 +177,9 @@ function buildSystemPrompt(
         'Reduce or eliminate positions whose recent momentum is too weak to contribute to the target.\n\n'
       : `  The portfolio is ahead of its target. Assess whether to maintain positioning or reduce risk ` +
         'to lock in gains while preserving the ability to stay on target.\n\n') +
-    'You may recommend new individual Shariah-compliant common stocks not currently in the portfolio if they would help close the gap. ' +
-    `No single stock may exceed ${MAX_STOCK_WEIGHT_PCT}% of the portfolio. Holdings that are ETFs, funds, bonds or otherwise non-compliant should be given 0%.\n` +
+    wording.newHoldingsLine +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
-    TICKER_RULES +
+    wording.tickerRules +
     '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
     '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
     'Output format — return a JSON object with exactly these three keys:\n' +
@@ -176,9 +216,10 @@ function buildUserPrompt(
 export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerRunResult> {
   const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers } = params
 
+  const cfg = params.screening ?? FULL_SCREENING_CONFIG
   const systemPrompt = withIslamicMandate(isNewPortfolio
-    ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [])
-    : buildSystemPrompt(settings, snapshot, returnMetrics))
+    ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [], cfg)
+    : buildSystemPrompt(settings, snapshot, returnMetrics, cfg), cfg)
 
   const { text: raw, stopReason, usage } = await callClaude({
     role:   'synthesizer',

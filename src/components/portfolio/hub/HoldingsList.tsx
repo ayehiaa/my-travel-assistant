@@ -6,7 +6,7 @@ import { formatSignedPct, formatSignedUsd, type TickerTrade } from '@/lib/portfo
 import { formatUsd } from '@/lib/portfolioCalculator'
 
 export interface HoldingShariahView {
-  kind: 'compliant' | 'flagged' | 'unscreened'
+  kind: 'compliant' | 'flagged' | 'unscreened' | 'off'
   reason: string | null
   /** Pre-formatted ratio rows (label, value text, pass/fail/unknown, source). */
   ratios: Array<{ label: string; value: string; status: 'pass' | 'fail' | 'unknown'; source: string }>
@@ -170,7 +170,11 @@ export default function HoldingsList({ holdings }: { holdings: HoldingView[] }) 
                 <h4 className="text-sm font-semibold text-[var(--ink)]">Shariah screening</h4>
                 <ShariahChip shariah={holding.shariah} />
               </div>
-              {holding.shariah.kind === 'unscreened' ? (
+              {holding.shariah.kind === 'off' ? (
+                <p className="text-sm text-[var(--ink-3)]">
+                  Islamic screening is off — holdings are not screened. Turn it on in Settings → Strategy.
+                </p>
+              ) : holding.shariah.kind === 'unscreened' ? (
                 <p className="text-sm text-[var(--ink-3)]">
                   Not in the latest screening. The next analysis run screens every holding.
                 </p>

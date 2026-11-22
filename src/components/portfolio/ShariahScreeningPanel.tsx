@@ -1,8 +1,25 @@
-import { RATIO_LABELS, SHARIAH_RATIO_LIMIT_PCT } from '@/lib/shariahRules'
-import type { RatioKey, ScreeningRatio, ShariahScreeningResult } from '@/types/shariah'
+import { RATIO_LABELS, SHARIAH_RATIO_LIMIT_PCT, screeningCoversConfig } from '@/lib/shariahRules'
+import { FULL_SCREENING_CONFIG, describeScreeningConfig, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
+import type { RatioKey, ScreeningRatio, ShariahScreeningResult, TickerScreening } from '@/types/shariah'
 
 interface Props {
   screening: ShariahScreeningResult | null
+  /** The user's CURRENT screening config (specs/030); defaults to full screening. */
+  current?: EffectiveScreeningConfig
+}
+
+const CHECK_LABEL = { stocks_only: 'stocks only', business: 'business activity', financial: 'financial ratios' } as const
+
+/** "Not applied: financial ratios (would fail)" — disabled checks are shown for information only (specs/030). */
+export function notAppliedSummary(t: TickerScreening): string | null {
+  if (!t.checks) return null
+  const parts = (Object.keys(CHECK_LABEL) as Array<keyof typeof CHECK_LABEL>)
+    .filter(k => !t.checks![k].applied)
+    .map(k => {
+      const o = t.checks![k].outcome
+      return `${CHECK_LABEL[k]}${o === 'fail' ? ' (would fail)' : o === 'pass' ? ' (would pass)' : ''}`
+    })
+  return parts.length > 0 ? `Not applied: ${parts.join(', ')}` : null
 }
 
 const RATIO_KEYS: RatioKey[] = ['debt', 'cash_and_securities', 'receivables']
@@ -25,7 +42,17 @@ function ratioColour(r: ScreeningRatio): string {
   return 'text-gray-500'
 }
 
-export default function ShariahScreeningPanel({ screening }: Props) {
+export default function ShariahScreeningPanel({ screening, current = FULL_SCREENING_CONFIG }: Props) {
+  if (!screening && !current.islamic) {
+    return (
+      <p className="rounded-lg border border-[var(--rule)] bg-[var(--paper-2)] px-4 py-3 text-sm text-[var(--ink-2)]">
+        {current.stocks_only
+          ? 'Islamic screening is off. This recommendation has no screening data, so buys are blocked until the analysis is ' +
+            're-run to confirm each ticker is an individual common stock. Sells are still allowed.'
+          : 'Screening is off — buys from this recommendation are not checked.'}
+      </p>
+    )
+  }
   if (!screening) {
     return (
       <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -36,12 +63,26 @@ export default function ShariahScreeningPanel({ screening }: Props) {
   }
 
   const screenedAt = new Date(screening.screened_at)
+  const runConfig = screening.config ?? FULL_SCREENING_CONFIG
+  const covered = screeningCoversConfig(screening, current)
 
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-xs font-semibold text-[var(--ink-2)]">{describeScreeningConfig(runConfig)} (this recommendation)</p>
+      {!covered && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Your current settings ({describeScreeningConfig(current).replace('Screening: ', '')}) include checks this
+          recommendation was not screened for. Buys from it are blocked — re-run the analysis. Sells are still allowed.
+        </p>
+      )}
       <p className="text-sm text-gray-600">
-        Individual common stocks only. Each ratio must be under {SHARIAH_RATIO_LIMIT_PCT}% of market cap and
-        non-permissible income under 5% of revenue. Screened{' '}
+        {runConfig.stocks_only ? 'Individual common stocks only. ' : ''}
+        {runConfig.financial
+          ? `Each ratio must be under ${SHARIAH_RATIO_LIMIT_PCT}% of market cap and non-permissible income under 5% of revenue. `
+          : ''}
+        {runConfig.islamic && !runConfig.financial ? 'Financial ratios are shown for information only (not applied). ' : ''}
+        {!runConfig.islamic ? 'Islamic screening was off for this run — ratios are not applied. ' : ''}
+        Screened{' '}
         {Number.isNaN(screenedAt.getTime()) ? '' : screenedAt.toLocaleString('en-GB')}.
       </p>
 
@@ -62,10 +103,11 @@ export default function ShariahScreeningPanel({ screening }: Props) {
                     : 'shrink-0 rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700'
                 }
               >
-                {t.verdict === 'compliant' ? 'Compliant' : 'Not compliant'}
+                {t.verdict === 'compliant' ? (runConfig.islamic ? 'Compliant' : 'Eligible') : (runConfig.islamic ? 'Not compliant' : 'Excluded')}
               </span>
             </div>
             <p className="mt-1 break-words text-gray-700">{t.reasons[0] ?? '—'}</p>
+            {notAppliedSummary(t) && <p className="text-xs text-gray-500">{notAppliedSummary(t)}</p>}
             {t.non_permissible_income_pct !== null && (
               <p className="text-xs text-gray-500">Non-permissible income ≈ {t.non_permissible_income_pct.toFixed(1)}%</p>
             )}
@@ -117,11 +159,12 @@ export default function ShariahScreeningPanel({ screening }: Props) {
                         : 'inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700'
                     }
                   >
-                    {t.verdict === 'compliant' ? 'Compliant' : 'Not compliant'}
+                    {t.verdict === 'compliant' ? (runConfig.islamic ? 'Compliant' : 'Eligible') : (runConfig.islamic ? 'Not compliant' : 'Excluded')}
                   </span>
                 </td>
                 <td className="py-2 pr-3 text-gray-700">
                   {t.reasons[0] ?? '—'}
+                  {notAppliedSummary(t) && <div className="text-xs text-gray-500">{notAppliedSummary(t)}</div>}
                   {t.non_permissible_income_pct !== null && (
                     <div className="text-xs text-gray-500">
                       Non-permissible income ≈ {t.non_permissible_income_pct.toFixed(1)}%

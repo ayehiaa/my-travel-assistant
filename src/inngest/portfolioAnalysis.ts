@@ -20,8 +20,11 @@ import {
   applyShariahScreening,
   buildShariahScreeningResult,
   annotateActionList,
+  NOT_COMPLIANT_SKIP_REASON,
+  SCREENING_EXCLUDED_NOTE_PREFIX,
 } from '@/lib/shariahRules'
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
+import { FULL_SCREENING_CONFIG, effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { isTradeableAsset } from '@/lib/alpacaClient'
 import { getStarterUniverse } from '@/lib/starterUniverse'
@@ -99,6 +102,8 @@ interface FetchPortfolioResult {
   tickers: string[]
   isNewPortfolio: boolean
   snapshot: PortfolioSnapshot
+  /** Effective screening config read from the settings row at the start of the run (specs/030). */
+  screening: EffectiveScreeningConfig
 }
 
 export const portfolioAnalysis = inngest.createFunction(
@@ -140,7 +145,7 @@ export const portfolioAnalysis = inngest.createFunction(
     const { run_id, user_id, trigger } = parseResult.data
 
     // Step 1: Fetch portfolio data
-    const { settings, tickers, isNewPortfolio, snapshot } = await step.run(
+    const { settings, tickers, isNewPortfolio, snapshot, screening: storedScreeningConfig } = await step.run(
       'fetch-portfolio',
       async (): Promise<FetchPortfolioResult> => {
         // No cookie session in Inngest — admin client used intentionally.
@@ -206,9 +211,13 @@ export const portfolioAnalysis = inngest.createFunction(
           tickers:        analysisTickers,
           isNewPortfolio,
           snapshot:       portfolioSnapshot,
+          // Missing column / null → everything on (spec-019 behaviour)
+          screening:      effectiveScreeningConfig(readScreeningSettings(settingsRow as Record<string, unknown> | null)),
         }
       },
     )
+    // A run memoised before specs/030 has no config → full screening.
+    const screeningConfig: EffectiveScreeningConfig = storedScreeningConfig ?? FULL_SCREENING_CONFIG
 
     // Step 2: Pre-fetch Polygon.io OHLCV data (once per run — rate-limit safe)
     const priceData = await step.run(
@@ -246,6 +255,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err, [apiKey])
@@ -279,6 +289,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err, [apiKey])
@@ -312,6 +323,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err, [apiKey])
@@ -345,6 +357,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err, [apiKey])
@@ -378,6 +391,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
           })
         } catch (err) {
           const errorMessage = sanitizeErrorMessage(err, [apiKey])
@@ -411,6 +425,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
             priceData,
           })
         } catch (err) {
@@ -445,6 +460,7 @@ export const portfolioAnalysis = inngest.createFunction(
             target_horizon:    settings.target_horizon,
             holdings_tickers:  tickers,
             is_new_portfolio:  isNewPortfolio,
+            screening:         screeningConfig,
             priceData,
             tickerDetails,
           })
@@ -575,7 +591,7 @@ export const portfolioAnalysis = inngest.createFunction(
           settings.target_horizon,
         )
         await setStage('synthesizer', 'running')
-        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [], apiKey })
+        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [], apiKey, screening: screeningConfig })
         await setStage('synthesizer', 'complete')
         return result
       } catch (err) {
@@ -619,7 +635,8 @@ export const portfolioAnalysis = inngest.createFunction(
       await setStage('shariah_screening', 'running')
       const missing = screeningTickers.filter(t => !tickerDetails[t])
       const extraDetails = await fetchTickerDetails(missing)
-      const financials = await fetchLatestFinancials(screeningTickers)
+      // Financials only feed the Islamic screens — not fetched when Islamic screening is off (specs/030).
+      const financials: FinancialsMap = screeningConfig.islamic ? await fetchLatestFinancials(screeningTickers) : {}
       const details: TickerDetailsMap = {}
       for (const t of screeningTickers) details[t] = tickerDetails[t] ?? extraDetails[t]
       return { details, financials }
@@ -643,10 +660,12 @@ export const portfolioAnalysis = inngest.createFunction(
       }
     })
 
-    // Step 10: Separate, strict AI business-activity review of every ticker
+    // Step 10: Separate, strict AI review of every ticker (tailored to the enabled parts). Skipped with no AI call when
+    // Islamic screening is off — the stocks-only check then uses the Polygon type only (unknown type fails).
     const { verdicts: reviewerVerdicts, usage: reviewerUsage } = await step.run('shariah-review', async (): Promise<ReviewerRunResult> => {
+      if (!screeningConfig.islamic) return { verdicts: {}, usage: null }
       try {
-        return await runShariahReviewer(reviewerInputs, await requireRunApiKey(user_id))
+        return await runShariahReviewer(reviewerInputs, await requireRunApiKey(user_id), screeningConfig)
       } catch (err) {
         await markRunError(err)
         throw err
@@ -670,17 +689,18 @@ export const portfolioAnalysis = inngest.createFunction(
         reviewer:        reviewerVerdicts[input.ticker] ?? null,
         is_holding:      input.is_holding,
         screened_at:     now,
-      }))
+      }, screeningConfig))
 
       let screened
       try {
-        screened = applyShariahScreening(validatedAllocation, screenings)
+        screened = applyShariahScreening(validatedAllocation, screenings, undefined, screeningConfig.islamic)
       } catch (err) {
         // Keep the screening visible on the failed run, then fail it.
         const failed = buildShariahScreeningResult(
           screenings,
           screenings.filter(s => s.verdict !== 'compliant').map(s => ({ ticker: s.ticker, reasons: s.reasons })),
           now,
+          screeningConfig,
         )
         await admin
           .from('recommendations')
@@ -690,10 +710,11 @@ export const portfolioAnalysis = inngest.createFunction(
         throw err
       }
 
-      const screening  = buildShariahScreeningResult(screenings, screened.excluded, now)
+      const screening  = buildShariahScreeningResult(screenings, screened.excluded, now, screeningConfig)
       const actionList = annotateActionList(
         computeActionList(snapshot.holdings, snapshot.cash_usd, screened.kept),
         screened.excluded,
+        screeningConfig.islamic ? NOT_COMPLIANT_SKIP_REASON : SCREENING_EXCLUDED_NOTE_PREFIX,
       )
 
       const { error } = await admin

@@ -74,3 +74,32 @@ describe('detectDivestments', () => {
     ])
   })
 })
+
+describe('detectDivestments with configurable screening (specs/030)', () => {
+  const check = (applied: boolean, outcome: 'pass' | 'fail' | 'unknown', reasons: string[] = []) => ({ applied, outcome, reasons })
+  const withChecks = (ticker: string, checks: TickerScreening['checks'], reasons: string[]): TickerScreening => ({
+    ...t(ticker, 'non_compliant', true, reasons), checks,
+  })
+  const prev = screening([t('AAPL', 'compliant'), t('VOO', 'compliant')])
+
+  it('no alerts when the current run screened with Islamic screening off', () => {
+    const curr: ShariahScreeningResult = {
+      ...screening([withChecks('AAPL', { stocks_only: check(true, 'pass'), business: check(false, 'fail'), financial: check(false, 'pass') }, ['x'])]),
+      config: { islamic: false, business: false, financial: false, stocks_only: true },
+    }
+    expect(detectDivestments(prev, curr, [sell('AAPL')])).toEqual([])
+  })
+
+  it('only failures of APPLIED Islamic parts alert; a stocks-only failure does not', () => {
+    const curr: ShariahScreeningResult = {
+      ...screening([
+        withChecks('AAPL', { stocks_only: check(true, 'pass'), business: check(true, 'pass'), financial: check(true, 'fail', ['Debt 45%']) }, ['Debt 45%']),
+        withChecks('VOO', { stocks_only: check(true, 'fail', ['Not a common stock']), business: check(true, 'pass'), financial: check(true, 'pass') }, ['Not a common stock']),
+      ]),
+      config: { islamic: true, business: true, financial: true, stocks_only: true },
+    }
+    expect(detectDivestments(prev, curr, [])).toEqual([
+      { ticker: 'AAPL', name: 'AAPL Inc', reasons: ['Debt 45%'], has_sell: false },
+    ])
+  })
+})

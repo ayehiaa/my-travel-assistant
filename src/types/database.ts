@@ -48,6 +48,7 @@ export type AuditAction =
   | 'health_programme_updated'
   | 'health_data_exported'
   | 'health_data_deleted'
+  | 'screening_settings_updated'
 
 export interface UserRoleRecord {
   user_id: string

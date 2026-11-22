@@ -3,6 +3,7 @@ import { callClaude } from '@/lib/aiCall'
 import { parseAgentResponse } from '@/lib/aiResponse'
 import { fetchFedRatesData } from '@/inngest/dataSources/fred'
 import { withIslamicMandate } from '@/lib/islamicMandate'
+import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 export interface FedRatesAgentInput {
@@ -11,6 +12,8 @@ export interface FedRatesAgentInput {
   target_horizon: 'monthly' | 'annual'
   holdings_tickers: string[]
   is_new_portfolio?: boolean
+  /** Effective screening config (specs/030); missing → full Islamic screening. */
+  screening?: EffectiveScreeningConfig
   /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
   apiKey: string
 }
@@ -46,7 +49,7 @@ export async function runFedRatesAgent(input: FedRatesAgentInput): Promise<Agent
   const { text, stopReason, usage } = await callClaude({
     role:   'agent',
     name:   'fed_rates',
-    system: withIslamicMandate(SYSTEM_PROMPT),
+    system: withIslamicMandate(SYSTEM_PROMPT, input.screening),
     user:   userContent,
     apiKey: input.apiKey,
   })

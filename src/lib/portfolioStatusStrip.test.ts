@@ -87,3 +87,22 @@ describe('buildStatusChips', () => {
     expect(chips.map(c => c.key)).toEqual(['paused', 'approval', 'setup', 'account', 'dry_run', 'autopilot'])
   })
 })
+
+describe('screening chip (specs/030)', () => {
+  const input: StatusStripInput = {
+    connection: null, dryRun: false, tradingPaused: false, pausedReason: null, autopilotMode: 'off',
+    nextRunAt: null, pendingApproval: null, setup: null,
+  }
+  it('shows the active mode and links to Strategy settings', () => {
+    const full = buildStatusChips({ ...input, screening: { islamic: true, business: true, financial: true, stocks_only: true } })
+    expect(full).toEqual([expect.objectContaining({ key: 'shariah', label: 'Shariah: on', tone: 'shariah_on' })])
+    expect(full[0].href).toContain('strategy')
+    const biz = buildStatusChips({ ...input, screening: { islamic: true, business: true, financial: false, stocks_only: true } })
+    expect(biz[0]).toMatchObject({ label: 'Shariah: business only', tone: 'shariah_reduced' })
+    const off = buildStatusChips({ ...input, screening: { islamic: false, business: false, financial: false, stocks_only: false } })
+    expect(off[0]).toMatchObject({ label: 'Shariah: off', title: 'Screening: Islamic screening off · ETFs / funds allowed' })
+  })
+  it('no chip when the config is not provided', () => {
+    expect(buildStatusChips(input)).toEqual([])
+  })
+})

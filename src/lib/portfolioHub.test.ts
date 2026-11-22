@@ -214,6 +214,13 @@ describe('shariahBadgeFor', () => {
     expect(shariahBadgeFor('XYZ', screening)).toEqual({ kind: 'unscreened' })
     expect(shariahBadgeFor('AAPL', null)).toEqual({ kind: 'unscreened' })
   })
+
+  it('shows "off" (not screened) when Islamic screening is off now or was off for the run (specs/030)', () => {
+    const off = { islamic: false, business: false, financial: false, stocks_only: true }
+    expect(shariahBadgeFor('BAC', screening, off)).toEqual({ kind: 'off' })
+    expect(shariahBadgeFor('BAC', { ...screening, config: off })).toEqual({ kind: 'off' })
+    expect(shariahBadgeFor('BAC', screening, { ...off, islamic: true, business: true })).toMatchObject({ kind: 'flagged' })
+  })
 })
 
 describe('formatting', () => {

@@ -38,6 +38,7 @@ const ACTION_PILLS = {
   health_programme_updated:   { bg: 'var(--mint-soft)',     color: '#1a6b4a',          label: 'Programme edited' },
   health_data_exported:       { bg: 'var(--sky-soft)',      color: '#1a8fc2',          label: 'Health data exported' },
   health_data_deleted:        { bg: 'var(--coral-soft)',    color: 'var(--coral)',     label: 'Health data deleted' },
+  screening_settings_updated: { bg: 'var(--lavender-soft)', color: 'var(--lavender)', label: 'Screening settings' },
 } as const
 
 const TRIP_ACTIONS = new Set(['created', 'updated', 'deleted'])
@@ -91,6 +92,9 @@ function Subject({ action, snapshot }: { action: string; snapshot: AuditLogEntry
   }
   if (action === 'recommendation_approved' || action === 'recommendation_rejected' || action === 'autopilot_mode_changed') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Autopilot</span>
+  }
+  if (action === 'screening_settings_updated') {
+    return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Islamic screening</span>
   }
   if (action === 'notification_test_sent') {
     return <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Portfolio · Notifications</span>

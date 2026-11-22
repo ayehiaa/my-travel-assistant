@@ -246,6 +246,19 @@ describe('planOrders — buys', () => {
     expect(noScreen).toMatchObject({ status: 'skipped', error_message: NO_SCREENING_SKIP_REASON })
   })
 
+  it('applies the buy guard with the CURRENT screening config (specs/030)', () => {
+    const off = { islamic: false, business: false, financial: false, stocks_only: false }
+    const [allowed] = planOrders(input({
+      items: [item('XOM', 'buy', 500)], screeningConfig: off,
+      assets: { XOM: { tradable: true, fractionable: true } }, quotes: { XOM: 100 },
+    }))
+    expect(allowed.status).toBe('planned')
+    const [noScreenOff] = planOrders(input({ items: [item('AAPL', 'buy', 500)], screening: null, screeningConfig: off }))
+    expect(noScreenOff.status).toBe('planned')
+    const [noScreenFull] = planOrders(input({ items: [item('AAPL', 'buy', 500)], screening: null }))
+    expect(noScreenFull).toMatchObject({ status: 'skipped', error_message: NO_SCREENING_SKIP_REASON })
+  })
+
   it('skips untradeable assets and missing quotes', () => {
     const [a] = planOrders(input({ items: [item('AAPL', 'buy', 500)], assets: { AAPL: { tradable: false, fractionable: true } } }))
     expect(a.error_message).toBe(SKIP_REASONS.notTradeable('AAPL'))

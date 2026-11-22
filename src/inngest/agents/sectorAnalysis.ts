@@ -4,6 +4,7 @@ import { parseAgentResponse } from '@/lib/aiResponse'
 import type { PriceHistory } from '@/inngest/dataSources/polygon'
 import type { TickerDetailsMap } from '@/inngest/dataSources/polygon'
 import { withIslamicMandate } from '@/lib/islamicMandate'
+import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { describeTickers } from '@/inngest/agents/portfolioContext'
 
 export interface SectorAnalysisAgentInput {
@@ -12,6 +13,8 @@ export interface SectorAnalysisAgentInput {
   target_horizon:    'monthly' | 'annual'
   holdings_tickers:  string[]
   is_new_portfolio?: boolean
+  /** Effective screening config (specs/030); missing → full Islamic screening. */
+  screening?: EffectiveScreeningConfig
   /** The run owner's Anthropic API key (resolved inside the Inngest step; never stored). */
   apiKey: string
   priceData:         PriceHistory
@@ -77,7 +80,7 @@ export async function runSectorAnalysisAgent(
   const { text, stopReason, usage } = await callClaude({
     role:   'agent',
     name:   'sector_analysis',
-    system: withIslamicMandate(SYSTEM_PROMPT),
+    system: withIslamicMandate(SYSTEM_PROMPT, input.screening),
     user:   userContent,
     apiKey: input.apiKey,
   })

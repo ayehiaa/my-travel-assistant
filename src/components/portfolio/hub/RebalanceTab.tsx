@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getLatestCompleteRecommendation, getLiveState, getSettingsRow } from '@/lib/portfolioHubData'
 import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
 import { readSafetySettings } from '@/lib/riskLimits'
+import { effectiveScreeningConfig, readScreeningSettings } from '@/lib/screeningConfig'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { AUTOPILOT_MODE_LABEL, formatNextRunShort } from '@/lib/portfolioStatusStrip'
 import { computeAllocationDrift, inProgressRunId, settingsHref } from '@/lib/portfolioHub'
@@ -61,6 +62,7 @@ export default async function RebalanceTab({ userId }: { userId: string }) {
           execution={execRes.data ? normalizeExecution(execRes.data) : null}
           hasBlockingExecution={execRes.data !== null && executionBlocksNewRequest(execRes.data.orders)}
           safety={safety}
+          currentScreening={effectiveScreeningConfig(readScreeningSettings(settingsRow))}
           liveAllocation={liveAllocation}
         />
       ) : (

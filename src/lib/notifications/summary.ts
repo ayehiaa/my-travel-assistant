@@ -66,6 +66,8 @@ export function computeWeeklyChange(equity: Array<number | null>): WeeklySummary
 /** Current Shariah status of HOLDINGS from the latest complete recommendation's screening. */
 export function shariahHoldingsStatus(screening: ShariahScreeningResult | null): WeeklySummaryPayload['shariah'] {
   if (!screening) return null
+  // No Shariah section when the latest screening ran with Islamic screening off (specs/030).
+  if (screening.config && !screening.config.islamic) return null
   const holdings = screening.tickers.filter(t => t.is_holding)
   return {
     screened_at:   screening.screened_at,

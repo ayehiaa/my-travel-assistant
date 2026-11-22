@@ -7,6 +7,7 @@ import RebalanceView from '@/components/portfolio/hub/RebalanceView'
 import { Recommendation } from '@/types/database'
 import { executionBlocksNewRequest, normalizeExecution } from '@/lib/tradeExecution'
 import { readSafetySettings } from '@/lib/riskLimits'
+import { effectiveScreeningConfig, readScreeningSettings } from '@/lib/screeningConfig'
 import { hubHref } from '@/lib/portfolioHub'
 
 export const metadata = { title: 'Sojourn — Portfolio Recommendation' }
@@ -95,6 +96,7 @@ export default async function RecommendationDetailPage({
         execution={executionResult.data ? normalizeExecution(executionResult.data) : null}
         hasBlockingExecution={executionResult.data !== null && executionBlocksNewRequest(executionResult.data.orders)}
         safety={readSafetySettings(settingsResult.data as Record<string, unknown> | null)}
+        currentScreening={effectiveScreeningConfig(readScreeningSettings(settingsResult.data as Record<string, unknown> | null))}
       />
     </main>
   )
