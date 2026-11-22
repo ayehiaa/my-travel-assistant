@@ -40,7 +40,7 @@ export default function Nav() {
     { href: '/audit',    label: 'Audit log'  },
     ...(isMember(user.access) ? [{ href: '/settings', label: 'Settings' }] : []),
     ...(hasFeature(user.access, 'portfolio') ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
-    ...(hasFeature(user.access, 'health') ? [{ href: '/health', label: 'Health' }] : []),
+    ...(hasFeature(user.access, 'health') ? [{ href: '/health', label: 'Lifestyle' }] : []),
     ...(user.access.isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ]
 
