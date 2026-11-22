@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getBuyBlockReason } from '@/lib/shariahRules'
+import { FULL_SCREENING_CONFIG, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import {
   applyRiskLimits,
   forcedSellTickers,
@@ -207,6 +208,8 @@ export interface PlanInput {
   executionId: string
   items: ActionItem[]
   screening: ShariahScreeningResult | null
+  /** The user's CURRENT effective screening config for the buy guard (specs/030). Missing → everything on. */
+  screeningConfig?: EffectiveScreeningConfig
   /** null / missing → not tradeable */
   assets: Record<string, AssetInfo | null>
   /** ticker → ask price */
@@ -251,7 +254,7 @@ export function planOrders(input: PlanInput): AlpacaOrderResult[] {
     }
 
     if (side === 'buy') {
-      const block = getBuyBlockReason(item.ticker, input.screening)
+      const block = getBuyBlockReason(item.ticker, input.screening, input.screeningConfig ?? FULL_SCREENING_CONFIG)
       if (block) { buys.push(skipped({ ...base, price_at_execution: 0 }, block)); continue }
       if (!asset || !asset.tradable) { buys.push(skipped(base, SKIP_REASONS.notTradeable(item.ticker))); continue }
       if (!(ask > 0)) { buys.push(skipped(base, SKIP_REASONS.noQuote)); continue }
@@ -496,10 +499,11 @@ export async function loadPlanInputs(
   items: ActionItem[],
   screening: ShariahScreeningResult | null,
   now: Date = new Date(),
-): Promise<Omit<PlanInput, 'executionId' | 'items' | 'screening'>> {
+  screeningConfig: EffectiveScreeningConfig = FULL_SCREENING_CONFIG,
+): Promise<Omit<PlanInput, 'executionId' | 'items' | 'screening' | 'screeningConfig'>> {
   const { keyId, secret, isPaper } = creds
   const relevant = items.filter(i =>
-    i.action === 'sell' || (i.action === 'buy' && getBuyBlockReason(i.ticker, screening) === null))
+    i.action === 'sell' || (i.action === 'buy' && getBuyBlockReason(i.ticker, screening, screeningConfig) === null))
   const tickers = [...new Set(relevant.map(i => i.ticker))]
   const sellTickers = [...new Set(relevant.filter(i => i.action === 'sell').map(i => i.ticker))]
 
@@ -559,14 +563,21 @@ export interface RiskCheckedPlan {
  */
 export async function buildRiskCheckedPlan(
   creds: TradingCredentials,
-  params: { executionId: string; items: ActionItem[]; screening: ShariahScreeningResult | null; limits: RiskLimits },
+  params: {
+    executionId: string
+    items: ActionItem[]
+    screening: ShariahScreeningResult | null
+    /** Required: the user's CURRENT screening config, loaded at preview / execution time (specs/030). */
+    screeningConfig: EffectiveScreeningConfig
+    limits: RiskLimits
+  },
   now: Date = new Date(),
 ): Promise<RiskCheckedPlan> {
   const [inputs, account] = await Promise.all([
-    loadPlanInputs(creds, params.items, params.screening, now),
+    loadPlanInputs(creds, params.items, params.screening, now, params.screeningConfig),
     loadRiskAccount(creds),
   ])
-  const planned = planOrders({ executionId: params.executionId, items: params.items, screening: params.screening, ...inputs })
+  const planned = planOrders({ executionId: params.executionId, items: params.items, screening: params.screening, screeningConfig: params.screeningConfig, ...inputs })
   return applyRiskLimits(
     { orders: planned, items: params.items, forcedSellTickers: forcedSellTickers(params.items, params.screening) },
     account,

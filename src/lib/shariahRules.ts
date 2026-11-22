@@ -1,11 +1,14 @@
 import { z } from 'zod'
 import { renormaliseAllocation, capAllocation } from '@/lib/allocationUtils'
 import type { ActionItem, TargetAllocationItem } from '@/types/database'
+import { FULL_SCREENING_CONFIG, EffectiveScreeningConfigSchema, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import type {
   CompanyFinancials,
   RatioKey,
   ReviewerConfidence,
   ReviewerVerdict,
+  ScreeningCheck,
+  ScreeningCheckOutcome,
   ScreeningRatio,
   ShariahScreeningResult,
   TickerScreening,
@@ -24,6 +27,11 @@ export const MAX_STOCK_WEIGHT_PCT = 20
 export const NOT_COMPLIANT_SKIP_REASON = 'Not Shariah-compliant'
 export const NO_SCREENING_SKIP_REASON =
   'Not Shariah-compliant — re-run the analysis (this recommendation predates Shariah screening)'
+export const NOT_COMMON_STOCK_SKIP_REASON = 'Not an individual common stock'
+export const UNKNOWN_TYPE_SKIP_REASON =
+  'Security type unknown — re-run the analysis to confirm it is an individual common stock'
+/** Sell-note prefix for exclusions when Islamic screening is off (stocks-only exclusions). */
+export const SCREENING_EXCLUDED_NOTE_PREFIX = 'Excluded by screening'
 
 export const RATIO_LABELS: Record<RatioKey, string> = {
   debt:                'Interest-bearing debt / market cap',
@@ -174,7 +182,8 @@ export function resolveRatio(
 export type ReviewerInstrumentType = 'common_stock' | 'etf_or_fund' | 'adr' | 'preferred' | 'other'
 
 export interface ReviewerTickerVerdict {
-  verdict:                    ReviewerVerdict
+  /** null only in financial-only mode, where the business verdict is not requested. */
+  verdict:                    ReviewerVerdict | null
   /** The reviewer's view of the security type — used only when Polygon could not supply it. */
   instrument_type?:           ReviewerInstrumentType | null
   reason:                     string
@@ -196,67 +205,126 @@ export interface TickerScreeningInput {
   screened_at:     string
 }
 
+interface CheckBuild {
+  check:   ScreeningCheck
+  /** Reasons that go into the combined list when the check is applied. */
+  listed:  string[]
+}
+
+function outcomeOf(applied: boolean, reasons: string[], decisive: ScreeningCheckOutcome): ScreeningCheckOutcome {
+  if (applied) return reasons.length === 0 ? 'pass' : 'fail'
+  return decisive
+}
+
 /**
- * A ticker is compliant only if it is a common stock, its SIC code is not blocked,
- * the reviewer says "compliant", non-permissible income is under 5%, and every ratio passes.
+ * Decide one ticker under the effective screening config (specs/030). Three checks are built:
+ * - stocks_only: a common stock (Polygon type, reviewer instrument type as fallback; unknown fails);
+ * - business:    SIC not on the blocklist AND the reviewer says "compliant";
+ * - financial:   non-permissible income < 5% AND every AAOIFI ratio passes (Polygon, AI estimate fallback).
+ * A ticker is compliant only if every APPLIED check passes. Disabled checks are still recorded (pass / fail / unknown
+ * from the data available) but are never a failure reason. With the full config the result equals spec 019.
  */
-export function decideTickerVerdict(input: TickerScreeningInput): TickerScreening {
-  const reasons: string[] = []
+export function decideTickerVerdict(
+  input: TickerScreeningInput,
+  config: EffectiveScreeningConfig = FULL_SCREENING_CONFIG,
+): TickerScreening {
   const r = input.reviewer
 
+  // ── Stocks only ──
   const secType = resolveSecurityType(input.security_type, r)
-  if (!isCommonStock(secType.type)) {
-    reasons.push(secType.type
-      ? `Not an individual common stock (type ${secType.type}${secType.source === 'reviewer' ? ', per reviewer' : ''})`
-      : 'Security type unknown — cannot confirm it is a common stock')
+  const stockReasons = isCommonStock(secType.type) ? [] : [secType.type
+    ? `Not an individual common stock (type ${secType.type}${secType.source === 'reviewer' ? ', per reviewer' : ''})`
+    : 'Security type unknown — cannot confirm it is a common stock']
+  const stocks: CheckBuild = {
+    check:  { applied: config.stocks_only, outcome: stockReasons.length === 0 ? 'pass' : 'fail', reasons: stockReasons },
+    listed: stockReasons,
   }
 
+  // ── Business activity ──
+  const businessReasons: string[] = []
   const blocked = findBlockedSic(input.sic_code)
-  if (blocked) reasons.push(`Impermissible business activity: ${blocked} (SIC ${input.sic_code})`)
-
-  if (!r) {
-    reasons.push('Shariah reviewer gave no valid verdict')
-  } else if (r.verdict !== 'compliant') {
-    reasons.push(`Shariah reviewer: ${r.verdict === 'uncertain' ? 'uncertain' : 'non-compliant'} — ${r.reason}`)
-  } else if (r.non_permissible_income_pct === null || r.non_permissible_income_pct >= 5) {
-    reasons.push(r.non_permissible_income_pct === null
-      ? 'Non-permissible income share unknown'
-      : `Non-permissible income ${r.non_permissible_income_pct.toFixed(1)}% (limit 5%)`)
+  if (blocked) businessReasons.push(`Impermissible business activity: ${blocked} (SIC ${input.sic_code})`)
+  const verdict = r?.verdict ?? null
+  if (!r || verdict === null) {
+    businessReasons.push('Shariah reviewer gave no valid verdict')
+  } else if (verdict !== 'compliant') {
+    businessReasons.push(`Shariah reviewer: ${verdict === 'uncertain' ? 'uncertain' : 'non-compliant'} — ${r.reason}`)
   }
+  const businessDecisive: ScreeningCheckOutcome =
+    blocked || verdict === 'non_compliant' ? 'fail' : verdict === 'compliant' ? 'pass' : 'unknown'
+  const business: CheckBuild = {
+    check:  { applied: config.business, outcome: outcomeOf(config.business, businessReasons, businessDecisive), reasons: businessReasons },
+    listed: businessReasons,
+  }
+
+  // ── Financial ratios + non-permissible income ──
+  const financialReasons: string[] = []
+  const npi = r?.non_permissible_income_pct ?? null
+  const npiReason = npi === null
+    ? 'Non-permissible income share unknown'
+    : npi >= 5 ? `Non-permissible income ${npi.toFixed(1)}% (limit 5%)` : null
+  if (npiReason) financialReasons.push(npiReason)
 
   const est = r?.ratio_estimates
+  const conf = r?.confidence ?? null
+  const ratioFor = (polygon: ScreeningRatio, estimate: number | null | undefined): ScreeningRatio => {
+    // Not applied and nothing to estimate with → keep the raw Polygon value (unknown stays unknown, never a fail).
+    if (!config.financial && polygon.status === 'unknown' && (estimate === null || estimate === undefined)) return polygon
+    return resolveRatio(polygon, estimate ?? null, conf)
+  }
   const ratios: Record<RatioKey, ScreeningRatio> = {
-    debt:                resolveRatio(input.polygonRatios.debt, est?.debt_pct ?? null, r?.confidence ?? null),
-    cash_and_securities: resolveRatio(input.polygonRatios.cash_and_securities, est?.cash_and_securities_pct ?? null, r?.confidence ?? null),
-    receivables:         resolveRatio(input.polygonRatios.receivables, est?.receivables_pct ?? null, r?.confidence ?? null),
+    debt:                ratioFor(input.polygonRatios.debt, est?.debt_pct),
+    cash_and_securities: ratioFor(input.polygonRatios.cash_and_securities, est?.cash_and_securities_pct),
+    receivables:         ratioFor(input.polygonRatios.receivables, est?.receivables_pct),
   }
   for (const key of Object.keys(ratios) as RatioKey[]) {
     const ratio = ratios[key]
     if (ratio.status === 'pass') continue
-    reasons.push(ratio.value_pct === null
+    financialReasons.push(ratio.value_pct === null
       ? `${RATIO_LABELS[key]} could not be determined`
       : `${RATIO_LABELS[key]} ${ratio.value_pct.toFixed(1)}% (limit ${SHARIAH_RATIO_LIMIT_PCT}%${ratio.source === 'ai_estimate' ? ', AI estimate' : ''})`)
   }
+  const ratioStatuses = Object.values(ratios).map(x => x.status)
+  const financialDecisive: ScreeningCheckOutcome =
+    (npi !== null && npi >= 5) || ratioStatuses.includes('fail')
+      ? 'fail'
+      : npi !== null && ratioStatuses.every(x => x === 'pass') ? 'pass' : 'unknown'
+  // With the business check applied, a failed / missing reviewer verdict already explains the income share
+  // (spec 019 listed the income reason only for a "compliant" verdict) — keep the combined list unchanged.
+  const npiSubsumed = config.business && verdict !== 'compliant'
+  const financial: CheckBuild = {
+    check:  { applied: config.financial, outcome: outcomeOf(config.financial, financialReasons, financialDecisive), reasons: financialReasons },
+    listed: npiSubsumed && npiReason ? financialReasons.filter(x => x !== npiReason) : financialReasons,
+  }
 
-  const compliant = reasons.length === 0
+  const reasons: string[] = []
+  for (const part of [stocks, business, financial]) {
+    if (!part.check.applied) continue
+    for (const reason of part.listed) if (!reasons.includes(reason)) reasons.push(reason)
+  }
+  const compliant = [stocks, business, financial].every(p => !p.check.applied || p.check.outcome === 'pass')
   const usedEstimate = Object.values(ratios).some(x => x.source === 'ai_estimate')
+  const passReason = config.islamic
+    ? r?.reason ?? 'Passed all screens'
+    : config.stocks_only ? 'Individual common stock (Islamic screening off)' : 'Not screened (screening off)'
 
   return {
     ticker:                     input.ticker,
     name:                       input.name,
     verdict:                    compliant ? 'compliant' : 'non_compliant',
-    reasons:                    compliant ? [r?.reason ?? 'Passed all screens'] : reasons,
+    reasons:                    compliant ? [passReason] : reasons,
     security_type:              secType.type,
     sic_code:                   input.sic_code,
     sic_description:            input.sic_description,
-    reviewer_verdict:           r?.verdict ?? null,
+    reviewer_verdict:           verdict,
     reviewer_reason:            r?.reason ?? null,
-    non_permissible_income_pct: r?.non_permissible_income_pct ?? null,
+    non_permissible_income_pct: npi,
     ratios,
     ratio_source:               usedEstimate ? 'ai_estimate' : 'polygon',
     is_holding:                 input.is_holding,
     excluded:                   !compliant,
     screened_at:                input.screened_at,
+    checks:                     { stocks_only: stocks.check, business: business.check, financial: financial.check },
   }
 }
 
@@ -277,6 +345,7 @@ export function applyShariahScreening(
   allocation: TargetAllocationItem[],
   screenings: TickerScreening[],
   capPct: number = MAX_STOCK_WEIGHT_PCT,
+  islamic: boolean = true,
 ): ScreenedAllocation {
   const byTicker = new Map(screenings.map(s => [s.ticker, s]))
   const excludedMap = new Map<string, string[]>()
@@ -294,7 +363,9 @@ export function applyShariahScreening(
   const positive = compliantItems.filter(a => a.target_pct > 0)
   if (positive.length === 0) {
     throw new Error(
-      'Shariah screening: no compliant stocks remain in the recommendation — nothing to invest in. ' +
+      (islamic
+        ? 'Shariah screening: no compliant stocks remain in the recommendation — nothing to invest in. '
+        : 'Screening: no eligible stocks remain in the recommendation — nothing to invest in. ') +
       `Main reasons: ${summariseExclusionReasons(Array.from(excludedMap.values()))}`,
     )
   }
@@ -311,6 +382,7 @@ export function buildShariahScreeningResult(
   screenings: TickerScreening[],
   excluded: Array<{ ticker: string; reasons: string[] }>,
   screenedAt: string,
+  config?: EffectiveScreeningConfig,
 ): ShariahScreeningResult {
   const excludedSet = new Set(excluded.map(e => e.ticker))
   return {
@@ -318,6 +390,7 @@ export function buildShariahScreeningResult(
     screened_at: screenedAt,
     tickers:     screenings.map(s => ({ ...s, excluded: s.excluded || excludedSet.has(s.ticker) })),
     excluded,
+    ...(config ? { config } : {}),
   }
 }
 
@@ -325,12 +398,13 @@ export function buildShariahScreeningResult(
 export function annotateActionList(
   actions: ActionItem[],
   excluded: Array<{ ticker: string; reasons: string[] }>,
+  notePrefix: string = NOT_COMPLIANT_SKIP_REASON,
 ): ActionItem[] {
   const reasons = new Map(excluded.map(e => [e.ticker, e.reasons]))
   return actions.map(a => {
     const r = reasons.get(a.ticker)
     return r && a.action === 'sell'
-      ? { ...a, note: `Not Shariah-compliant: ${r.join('; ')}` }
+      ? { ...a, note: `${notePrefix}: ${r.join('; ')}` }
       : a
   })
 }
@@ -338,13 +412,57 @@ export function annotateActionList(
 // ── Execution guard ──────────────────────────────────────────────────────────
 
 /**
- * Returns a skip reason when a BUY of `ticker` must be refused, or null when allowed.
- * Without screening data on the recommendation every buy is refused.
+ * True when a stored screening applied every Islamic part that `current` enables (legacy screenings without a stored
+ * config applied all parts). Stocks-only is not required: it can be re-checked from the stored security type.
  */
-export function getBuyBlockReason(ticker: string, screening: ShariahScreeningResult | null): string | null {
-  if (!screening) return NO_SCREENING_SKIP_REASON
-  const s = screening.tickers.find(t => t.ticker === ticker)
-  return s && s.verdict === 'compliant' && !s.excluded ? null : NOT_COMPLIANT_SKIP_REASON
+export function screeningCoversConfig(screening: ShariahScreeningResult | null, current: EffectiveScreeningConfig): boolean {
+  if (!current.islamic) return true
+  if (!screening) return false
+  const stored = screening.config ?? FULL_SCREENING_CONFIG
+  return stored.islamic && (!current.business || stored.business) && (!current.financial || stored.financial)
+}
+
+function stocksOnlyBlock(s: TickerScreening | null): string | null {
+  if (!s || !s.security_type) return UNKNOWN_TYPE_SKIP_REASON
+  return isCommonStock(s.security_type) ? null : NOT_COMMON_STOCK_SKIP_REASON
+}
+
+function passed(s: TickerScreening, key: 'business' | 'financial'): boolean {
+  const c = s.checks?.[key]
+  return !!c && c.applied && c.outcome === 'pass'
+}
+
+/**
+ * Returns a skip reason when a BUY of `ticker` must be refused, or null when allowed. `current` is the user's
+ * CURRENT effective screening config (read at preview / execution time — specs/030):
+ * - Islamic off and stocks-only off → never blocks.
+ * - Stocks-only only → blocks anything that is not a common stock per the stored screening type (no type → block).
+ * - Islamic on → the stored screening must have applied every part enabled now (else the re-run message, e.g. a
+ *   recommendation created while screening was off), and the ticker must pass every enabled part. Legacy screenings
+ *   (no stored config) were fully screened and keep the spec-019 rule: stored compliant verdict and not excluded.
+ */
+export function getBuyBlockReason(
+  ticker: string,
+  screening: ShariahScreeningResult | null,
+  current: EffectiveScreeningConfig = FULL_SCREENING_CONFIG,
+): string | null {
+  if (!current.islamic && !current.stocks_only) return null
+  const s = screening?.tickers.find(t => t.ticker === ticker) ?? null
+  if (!current.islamic) return stocksOnlyBlock(s)
+
+  if (!screening || !screeningCoversConfig(screening, current)) return NO_SCREENING_SKIP_REASON
+  if (!s) return NOT_COMPLIANT_SKIP_REASON
+  if (!screening.config || !s.checks) {
+    return s.verdict === 'compliant' && !s.excluded ? null : NOT_COMPLIANT_SKIP_REASON
+  }
+  if (current.business && !passed(s, 'business')) return NOT_COMPLIANT_SKIP_REASON
+  if (current.financial && !passed(s, 'financial')) return NOT_COMPLIANT_SKIP_REASON
+  if (current.stocks_only) {
+    const c = s.checks.stocks_only
+    if (c.applied) return c.outcome === 'pass' ? null : NOT_COMMON_STOCK_SKIP_REASON
+    return stocksOnlyBlock(s)
+  }
+  return null
 }
 
 // ── Reading stored screening data ────────────────────────────────────────────
@@ -354,6 +472,12 @@ const RatioSchema = z.object({
   status:    z.enum(['pass', 'fail', 'unknown']),
   source:    z.enum(['polygon', 'ai_estimate', 'unavailable']),
   basis:     z.enum(['exact', 'upper_bound']).nullable(),
+})
+
+const CheckSchema = z.object({
+  applied: z.boolean(),
+  outcome: z.enum(['pass', 'fail', 'unknown']),
+  reasons: z.array(z.string()),
 })
 
 const TickerScreeningSchema = z.object({
@@ -372,6 +496,7 @@ const TickerScreeningSchema = z.object({
   is_holding:                 z.boolean(),
   excluded:                   z.boolean(),
   screened_at:                z.string(),
+  checks:                     z.object({ stocks_only: CheckSchema, business: CheckSchema, financial: CheckSchema }).optional(),
 })
 
 export const ShariahScreeningResultSchema = z.object({
@@ -379,6 +504,7 @@ export const ShariahScreeningResultSchema = z.object({
   screened_at: z.string(),
   tickers:     z.array(TickerScreeningSchema),
   excluded:    z.array(z.object({ ticker: z.string(), reasons: z.array(z.string()) })),
+  config:      EffectiveScreeningConfigSchema.optional(),
 })
 
 /**

@@ -13,7 +13,7 @@ import {
 } from '@/lib/alpacaClient'
 import { getBuyBlockReason, readShariahScreening } from '@/lib/shariahRules'
 import { bufferedBuyingCapacity } from '@/lib/riskLimits'
-import { checkLossStops, loadSafetySettings, setTradingPause } from '@/lib/tradingSafety'
+import { checkLossStops, loadSafetySettings, loadScreeningConfig, setTradingPause } from '@/lib/tradingSafety'
 import {
   ORDER_POLL_INTERVAL,
   ORDER_POLL_INTERVAL_MS,
@@ -336,9 +336,9 @@ export const executeTrades = inngest.createFunction(
       if (!rec) throw new NonRetriableError('Recommendation not found')
       const items = ((rec.action_list ?? []) as ActionItem[]).filter(i => i.action !== 'hold')
       const screening = readShariahScreening(rec)
-      const safety = await loadSafetySettings(user_id)
-      // Shared planner: Shariah guard, settlement, sizing, then the hard risk limits.
-      const plan = await buildRiskCheckedPlan(creds, { executionId: execution_id, items, screening, limits: safety.limits })
+      const [safety, screeningConfig] = await Promise.all([loadSafetySettings(user_id), loadScreeningConfig(user_id)])
+      // Shared planner: Shariah guard (CURRENT screening settings), settlement, sizing, then the hard risk limits.
+      const plan = await buildRiskCheckedPlan(creds, { executionId: execution_id, items, screening, screeningConfig, limits: safety.limits })
       await save('executing', plan.orders)
       return plan.orders
     }) as AlpacaOrderResult[]
@@ -372,7 +372,7 @@ export const executeTrades = inngest.createFunction(
             const admin = createAdminClient()
             const { data: rec } = await admin
               .from('recommendations').select('*').eq('id', recommendation_id).eq('user_id', user_id).maybeSingle()
-            const block = getBuyBlockReason(order.ticker, readShariahScreening(rec))
+            const block = getBuyBlockReason(order.ticker, readShariahScreening(rec), await loadScreeningConfig(user_id))
             if (block) {
               const skippedOrder: AlpacaOrderResult = { ...order, qty: 0, notional: null, estimated_value: 0, status: 'skipped', error_message: block }
               await save('executing', replaceOrder(snapshot, skippedOrder))

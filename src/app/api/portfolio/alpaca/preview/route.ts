@@ -7,9 +7,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { decryptCredential } from '@/lib/alpacaCrypto'
 import { fetchClock } from '@/lib/alpacaClient'
 import { isNYSEOpen } from '@/lib/alpacaOrderCalculator'
-import { readShariahScreening, NO_SCREENING_SKIP_REASON } from '@/lib/shariahRules'
+import { readShariahScreening, screeningCoversConfig, NO_SCREENING_SKIP_REASON, UNKNOWN_TYPE_SKIP_REASON } from '@/lib/shariahRules'
 import { buildRiskCheckedPlan, executionBlocksNewRequest } from '@/lib/tradeExecution'
-import { checkLossStops, loadSafetySettings } from '@/lib/tradingSafety'
+import { checkLossStops, loadSafetySettings, loadScreeningConfig } from '@/lib/tradingSafety'
 import type { LossStopResult, RiskAdjustment, RiskSummary } from '@/lib/riskLimits'
 import type { ActionItem } from '@/types/database'
 
@@ -108,13 +108,13 @@ export async function POST(request: NextRequest) {
   const items = ((rec.action_list ?? []) as ActionItem[]).filter((item) => item.action !== 'hold')
   const screening = readShariahScreening(rec)
 
-  const safety = await loadSafetySettings(user.id)
+  const [safety, screeningConfig] = await Promise.all([loadSafetySettings(user.id), loadScreeningConfig(user.id)])
 
   // Same planner as the execution engine (Shariah guard, notional buys, settlement check on sells, risk limits).
   // The engine sizes buys again to settled cash (minus the cash buffer) after the sells have filled.
   let plan
   try {
-    plan = await buildRiskCheckedPlan(creds, { executionId: 'preview', items, screening, limits: safety.limits })
+    plan = await buildRiskCheckedPlan(creds, { executionId: 'preview', items, screening, screeningConfig, limits: safety.limits })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch quotes from Alpaca' }, { status: 502 })
   }
@@ -153,7 +153,10 @@ export async function POST(request: NextRequest) {
     is_market_open: isMarketOpen,
     is_paper:       cred.is_paper,
     preview:        previewItems,
-    shariah_notice: screening ? null : NO_SCREENING_SKIP_REASON,
+    // Buys are blocked when the stored screening does not cover the CURRENT screening settings (specs/030).
+    shariah_notice: !screeningCoversConfig(screening, screeningConfig)
+      ? NO_SCREENING_SKIP_REASON
+      : !screening && screeningConfig.stocks_only ? UNKNOWN_TYPE_SKIP_REASON : null,
     safety:         previewSafety,
   })
 }

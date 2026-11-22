@@ -1,3 +1,5 @@
+import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
+
 export type RatioKey = 'debt' | 'cash_and_securities' | 'receivables'
 export type RatioStatus = 'pass' | 'fail' | 'unknown'
 export type RatioSource = 'polygon' | 'ai_estimate' | 'unavailable'
@@ -12,6 +14,19 @@ export interface ScreeningRatio {
 }
 
 export type ReviewerVerdict = 'compliant' | 'non_compliant' | 'uncertain'
+
+export type ScreeningCheckKey = 'stocks_only' | 'business' | 'financial'
+export type ScreeningCheckOutcome = 'pass' | 'fail' | 'unknown'
+
+/**
+ * One part of the screen for one ticker (specs/030). `applied: false` → the part was disabled for that run: it is
+ * recorded for display only and never a failure reason. An applied check is always pass or fail (unknown fails).
+ */
+export interface ScreeningCheck {
+  applied: boolean
+  outcome: ScreeningCheckOutcome
+  reasons: string[]
+}
 export type ReviewerConfidence = 'low' | 'medium' | 'high'
 
 /** Final, code-decided screening result for one ticker. */
@@ -34,6 +49,8 @@ export interface TickerScreening {
   /** True when the ticker was removed from the allocation (or set to 0% if held). */
   excluded:                   boolean
   screened_at:                string
+  /** Per-part results (specs/030). Absent on screenings created before configurable screening. */
+  checks?:                    Record<ScreeningCheckKey, ScreeningCheck>
 }
 
 export interface ShariahScreeningResult {
@@ -41,6 +58,8 @@ export interface ShariahScreeningResult {
   screened_at: string
   tickers:     TickerScreening[]
   excluded:    Array<{ ticker: string; reasons: string[] }>
+  /** The effective screening config the run used (specs/030). Absent → legacy: every part applied. */
+  config?:     EffectiveScreeningConfig
 }
 
 /** Latest reported financials (USD) used for the AAOIFI ratio screen. Any field may be unknown. */

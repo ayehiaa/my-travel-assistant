@@ -16,6 +16,13 @@ import {
   type TradingCredentials,
 } from '@/lib/tradeExecution'
 
+import {
+  FULL_SCREENING_CONFIG,
+  effectiveScreeningConfig,
+  readScreeningSettings,
+  type EffectiveScreeningConfig,
+} from '@/lib/screeningConfig'
+
 /**
  * Server-only I/O for the safety layer (kill switch, loss stops, safety settings).
  * Every function tolerates the 20261120c migration not being applied. See specs/021-risk-limits-kill-switch.
@@ -23,6 +30,24 @@ import {
 
 export const MIGRATION_MISSING_WARNING =
   'Safety settings could not be saved — the database migration 20261120c_risk_limits_kill_switch has not been applied yet.'
+
+/**
+ * The user's CURRENT effective screening config (specs/030) for the buy guard. Missing row / column / a read error →
+ * everything on (the most conservative config).
+ */
+export async function loadScreeningConfig(userId: string): Promise<EffectiveScreeningConfig> {
+  try {
+    const { data, error } = await createAdminClient()
+      .from('portfolio_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) return FULL_SCREENING_CONFIG
+    return effectiveScreeningConfig(readScreeningSettings(data as Record<string, unknown> | null))
+  } catch {
+    return FULL_SCREENING_CONFIG
+  }
+}
 
 /** Safety settings for a user (admin client). Missing row / columns → defaults (dry run ON, not paused). */
 export async function loadSafetySettings(userId: string): Promise<SafetySettings> {
