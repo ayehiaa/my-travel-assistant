@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { SEED_PROGRAMME } from './seedProgramme'
 import {
-  evaluateJointCheck, exerciseSafety, jointStatus, JointCheckInputSchema, knownRedFlags, nextMorningDue, painRulePassed,
+  evaluateJointCheck, exerciseSafety, jointStatus, JointCheckInputSchema, knownRedFlags, nextMorningDue, painRulePassed, recoveryOk,
   type JointCheck,
 } from './painRules'
 
@@ -96,5 +96,18 @@ describe('inputs', () => {
   })
   it('keeps only programme red flags', () => {
     expect(knownRedFlags(rules, ['Locking', 'made up', 'Locking'])).toEqual(['Locking'])
+  })
+})
+
+describe('recoveryOk (intervals unlock)', () => {
+  it('needs ≥2 of the last 3 sessions OK and no red flags', () => {
+    expect(recoveryOk(rules, [])).toBe(false)
+    expect(recoveryOk(rules, [check({ date: '2026-11-10' }), check({ date: '2026-11-12' })])).toBe(true)
+    expect(recoveryOk(rules, [check({ date: '2026-11-10' }), check({ date: '2026-11-12', duringPain: 5 }), check({ date: '2026-11-14', nextMorningPain: null })])).toBe(false)
+    expect(recoveryOk(rules, [check({ date: '2026-11-10' }), check({ date: '2026-11-12', duringPain: 5 }), check({ date: '2026-11-14' })])).toBe(true)
+  })
+  it('any red flag in the window, or an uncleared one, blocks it', () => {
+    expect(recoveryOk(rules, [check({ date: '2026-11-10', redFlags: ['Locking'], physioCleared: true }), check({ date: '2026-11-12' }), check({ date: '2026-11-14' })])).toBe(false)
+    expect(recoveryOk(rules, [check({ date: '2026-11-01', redFlags: ['Locking'] }), check({ date: '2026-11-10' }), check({ date: '2026-11-12' }), check({ date: '2026-11-14' })])).toBe(false)
   })
 })

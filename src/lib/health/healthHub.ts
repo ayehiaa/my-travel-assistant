@@ -48,7 +48,7 @@ export const HEALTH_CONSENT_VERSION = '2026-11-22'
 export const HEALTH_MIGRATION_MESSAGE = 'Health needs a database update — apply supabase/apply_health_p1a.sql'
 
 /** Health audit actions (hidden from assistants on the audit log). */
-export const HEALTH_AUDIT_ACTIONS = ['health_consent_given', 'health_programme_activated'] as const
+export const HEALTH_AUDIT_ACTIONS = ['health_consent_given', 'health_programme_activated', 'health_adjustment_accepted', 'health_adjustment_declined'] as const
 
 /** PostgREST `in` list for `.not('action', 'in', …)`. */
 export const HEALTH_AUDIT_FILTER = `(${HEALTH_AUDIT_ACTIONS.join(',')})`

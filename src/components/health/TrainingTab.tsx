@@ -14,6 +14,9 @@ import {
   type TrainingContext,
 } from '@/lib/health/trainingServer'
 import LineChart from '@/components/portfolio/hub/LineChart'
+import { loadTripRanges } from '@/lib/health/p2Server'
+import { tripOn } from '@/lib/health/travel'
+import ActivitySection from './ActivitySection'
 import HealthNotice from './HealthNotice'
 import SessionPlayer, { type PlayerExercise } from './SessionPlayer'
 import { ApprovalToggle, DeleteWorkoutButton, JointClearanceButton } from './TrainingActions'
@@ -51,12 +54,14 @@ function sessionName(enrolment: ActiveEnrolment, key: string): string {
 }
 
 /** Training (specs/029 US5/US6): overview, guided session player (?session=) and exercise history (?exercise=). */
-export default async function TrainingTab({ userId, enrolment, session, exercise, date }: {
+export default async function TrainingTab({ userId, enrolment, session, exercise, date, travel }: {
   userId: string
   enrolment: ActiveEnrolment
   session?: string
   exercise?: string
   date?: string
+  /** ?travel=1 from Today's travel mode. */
+  travel?: boolean
 }) {
   const supabase = await createClient()
   const loaded = await loadTrainingContext(supabase, userId, enrolment)
@@ -70,7 +75,7 @@ export default async function TrainingTab({ userId, enrolment, session, exercise
   const s = session ? enrolment.def.trainingSessions.find(t => t.key === session) : undefined
   if (s) {
     const d = date && isValidDate(date) && date <= ctx.today && date >= addDays(ctx.today, -BACKDATE_DAYS) ? date : ctx.today
-    return <PlayerLoader userId={userId} enrolment={enrolment} ctx={ctx} session={s} date={d} />
+    return <PlayerLoader userId={userId} enrolment={enrolment} ctx={ctx} session={s} date={d} travel={travel === true} />
   }
   return <Overview userId={userId} enrolment={enrolment} ctx={ctx} />
 }
@@ -213,6 +218,8 @@ async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment:
         )}
       </section>
 
+      <ActivitySection userId={userId} enrolment={enrolment} date={ctx.today} painPassed={ctx.painPassed} checks={ctx.checks} title="Cardio (Zone 2) & steps" />
+
       <section className={CARD} aria-labelledby="hist-h">
         <h2 id="hist-h" className={CARD_TITLE}>Exercise history</h2>
         <div className="grid gap-4 md:grid-cols-3">
@@ -234,8 +241,8 @@ async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment:
 
 // ── Player ──────────────────────────────────────────────────────────────────
 
-async function PlayerLoader({ userId, enrolment, ctx, session, date }: {
-  userId: string; enrolment: ActiveEnrolment; ctx: TrainingContext; session: TrainingSession; date: string
+async function PlayerLoader({ userId, enrolment, ctx, session, date, travel }: {
+  userId: string; enrolment: ActiveEnrolment; ctx: TrainingContext; session: TrainingSession; date: string; travel: boolean
 }) {
   const def = enrolment.def
   const supabase = await createClient()
@@ -249,10 +256,12 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date }: {
 
   let history: Awaited<ReturnType<typeof loadExerciseHistory>>
   let workouts: Awaited<ReturnType<typeof loadWorkouts>>
+  let trips: Awaited<ReturnType<typeof loadTripRanges>>
   try {
-    ;[history, workouts] = await Promise.all([
+    ;[history, workouts, trips] = await Promise.all([
       loadExerciseHistory(supabase, userId, all.map(e => e.key)),
       loadWorkouts(supabase, userId, addDays(date, -7), addDays(date, 1)),
+      loadTripRanges(supabase, userId, enrolment),
     ])
   } catch {
     return <HealthNotice title="Could not load the session">Try again shortly.</HealthNotice>
@@ -267,14 +276,14 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date }: {
 
   const exercises: PlayerExercise[] = all.map(ex => {
     const isUnlock = !session.exercises.some(e => e.key === ex.key)
-    const rx = prescriptionFor(enrolment, session.key, ex.key, week)!
+    const rx = prescriptionFor(enrolment, session.key, ex.key, week, ctx.painPassed)!
     const entries = history[ex.key] ?? []
     const prior = entries.filter(e => e.date < date)
     const last = prior[prior.length - 1] ?? null
     const safety = exerciseSafety(ex, ctx.joint)
     let suggestion: ProgressionSuggestion | null = null
     if (last) {
-      const rxLast = prescriptionFor(enrolment, session.key, ex.key, isUnlock ? null : last.week) ?? rx
+      const rxLast = prescriptionFor(enrolment, session.key, ex.key, isUnlock ? null : last.week, ctx.painPassed) ?? rx
       if (!currentLight && isLight(last.week)) {
         suggestion = { kind: 'keep', message: 'Back to your normal load after the lighter week.' }
       } else {
@@ -282,6 +291,8 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date }: {
         suggestion = progressionSuggestion(def, ex, rxLast, prior.filter(p => !isLight(p.week)).slice(-3), {
           suppressedReason: safety.suppressProgression ? 'Progression paused for this exercise by the joint rule.' : null,
           lightOrDeload: currentLight,
+          // Hold cap from TODAY's prescription (Block 2+ wall sit → 60 s only while the pain rule is passed).
+          holdCapSeconds: rx.holdCapSeconds,
         })
       }
     }
@@ -343,6 +354,7 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date }: {
       exercises={exercises}
       saved={Object.keys(saved).length > 0 ? saved : null}
       savedTravel={savedWorkout?.travelMode ?? false}
+      defaultTravel={travel || tripOn(trips, date) !== null}
       savedPain={savedCheck?.duringPain ?? null}
     />
   )

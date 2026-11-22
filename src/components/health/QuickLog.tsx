@@ -16,10 +16,12 @@ interface Props {
   nowTime: string
   slots: MealSlot[]
   componentLabels: Record<string, { name: string; unit: string }>
+  /** Programme eating-out rules, shown in restaurant mode (P2). */
+  eatingOut?: string[]
 }
 
 /** Quick food log (specs/029 US3): words and/or 1–4 photos → AI estimate → edit → save. */
-export default function QuickLog({ date, nowTime, slots, componentLabels }: Props) {
+export default function QuickLog({ date, nowTime, slots, componentLabels, eatingOut = [] }: Props) {
   const toast = useToast()
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -30,6 +32,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
   const [restaurant, setRestaurant] = useState(false)
   const [items, setItems] = useState<EditableItem[] | null>(null)
   const [photoPaths, setPhotoPaths] = useState<string[]>([])
+  const [tips, setTips] = useState<string[]>([])
   const [busy, setBusy] = useState<'estimate' | 'save' | null>(null)
 
 
@@ -49,7 +52,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
 
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.url))
-    setText(''); setPhotos([]); setItems(null); setPhotoPaths([]); setRestaurant(false)
+    setText(''); setPhotos([]); setItems(null); setPhotoPaths([]); setRestaurant(false); setTips([])
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -62,12 +65,14 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
       if (slot) form.set('slot', slot)
       form.set('date', date)
       form.set('time', time)
+      if (restaurant) form.set('restaurant', 'true')
       for (const p of photos) form.append('photos', await preparePhoto(p.file), 'photo.jpg')
       const res = await fetch('/api/health/food/estimate', { method: 'POST', body: form })
       const data = await res.json().catch(() => ({}))
       if (Array.isArray(data.photoPaths)) setPhotoPaths(data.photoPaths)
       if (!res.ok) { toast(data.error ?? 'Could not estimate the food', 'error'); return }
       setItems(toEditable(data.items as FoodItem[]))
+      setTips(Array.isArray(data.tips) ? (data.tips as string[]).slice(0, 5) : [])
     } catch {
       toast('Network error — try again', 'error')
     } finally {
@@ -105,7 +110,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
         <>
           <textarea
             className={`${INPUT} min-h-[72px]`}
-            placeholder="e.g. 2 flat whites with soya and half a cinnamon roll"
+            placeholder={restaurant ? 'Describe the dish or snap the menu — e.g. "grilled sea bass, new potatoes, salad"' : 'e.g. 2 flat whites with soya and half a cinnamon roll'}
             value={text}
             onChange={e => setText(e.target.value)}
             maxLength={1000}
@@ -133,6 +138,12 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
               <input type="checkbox" checked={restaurant} onChange={e => setRestaurant(e.target.checked)} /> Eating out
             </label>
           </div>
+          {restaurant && eatingOut.length > 0 && (
+            <div className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900">
+              <p className="font-semibold">Restaurant mode — estimate from the dish or a menu photo.</p>
+              <ul className="mt-1 list-disc pl-5 text-xs">{eatingOut.map(r => <li key={r}>{r}</li>)}</ul>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => addFiles(e.target.files)} />
             <button type="button" className={BUTTON_SECONDARY} disabled={photos.length >= MAX_PHOTOS} onClick={() => fileRef.current?.click()}>
@@ -151,6 +162,12 @@ export default function QuickLog({ date, nowTime, slots, componentLabels }: Prop
         </>
       ) : (
         <>
+          {tips.length > 0 && (
+            <div className="mb-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900">
+              <p className="font-semibold">When you order</p>
+              <ul className="mt-1 list-disc pl-5 text-xs">{tips.map(t => <li key={t}>{t}</li>)}</ul>
+            </div>
+          )}
           <FoodItemsEditor items={items} onChange={setItems} componentLabels={componentLabels} />
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" className={BUTTON_SECONDARY} onClick={() => setItems(null)}>Back</button>

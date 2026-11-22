@@ -42,6 +42,8 @@ export type AuditAction =
   | 'customer_invitation_revoked'
   | 'health_consent_given'
   | 'health_programme_activated'
+  | 'health_adjustment_accepted'
+  | 'health_adjustment_declined'
 
 export interface UserRoleRecord {
   user_id: string

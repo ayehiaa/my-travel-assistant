@@ -11,6 +11,8 @@ import { evaluateRules, type RuleContext, type RuleFinding } from './rules'
 import { sleepSummary, type SleepNight, type WeighIn } from './checkin'
 import { addDays, localDate, localTime, weekStart } from './time'
 import { HEALTH_MIGRATION_MESSAGE } from './healthHub'
+import { upgradeSeedDefinition } from './seedProgramme'
+import { resolveTimezone } from './travel'
 import { recommendSession, type WorkoutSummary } from './training'
 import { jointStatus, rowToJointCheck } from './painRules'
 
@@ -49,7 +51,10 @@ export interface ActiveEnrolment {
   programmeName: string
   templateKey: string | null
   startDate: string
+  /** Timezone for day boundaries NOW: the per-day override (travel) when one applies, else the enrolment timezone. */
   timezone: string
+  /** The enrolment's own timezone (default for every day without an override). */
+  homeTimezone: string
   profile: Profile | null
   overrides: Record<string, unknown>
   targets: EffectiveTargets
@@ -85,10 +90,13 @@ export async function loadHealthState(supabase: ServerClient, userId: string): P
   if (!data) return { status: 'needs_enrolment' }
 
   const prog = (data as Record<string, unknown>).health_programmes as Record<string, unknown> | null
-  const def = parseProgrammeDefinition(prog?.definition)
+  const parsedDef = parseProgrammeDefinition(prog?.definition)
+  const def = parsedDef ? upgradeSeedDefinition(parsedDef, (prog?.template_key as string | null) ?? null) : null
   const targets = readEffectiveTargets(data.effective_targets)
   if (!def || !targets) return { status: 'invalid_programme' }
   const profile = ProfileSchema.safeParse(data.profile)
+  const homeTimezone = (data.timezone as string) || 'Europe/London'
+  const timezone = await effectiveTimezone(supabase, userId, homeTimezone)
   return {
     status: 'active',
     enrolment: {
@@ -97,13 +105,34 @@ export async function loadHealthState(supabase: ServerClient, userId: string): P
       programmeName: (prog?.name as string) ?? def.identity.name,
       templateKey: (prog?.template_key as string | null) ?? null,
       startDate: data.start_date as string,
-      timezone: (data.timezone as string) || 'Europe/London',
+      timezone,
+      homeTimezone,
       profile: profile.success ? profile.data : null,
       overrides: (data.overrides as Record<string, unknown>) ?? {},
       targets,
       def,
       createdAt: data.created_at as string,
     },
+  }
+}
+
+/**
+ * Day-boundary timezone now: a per-day override (P2 travel mode, table health_day_timezones) for the home date ±1
+ * when it applies, else the home timezone. Best effort — a missing P2 table means "no overrides".
+ */
+export async function effectiveTimezone(supabase: ServerClient, userId: string, homeTz: string, now = new Date()): Promise<string> {
+  try {
+    const home = localDate(now, homeTz)
+    const { data, error } = await supabase
+      .from('health_day_timezones')
+      .select('local_date, timezone')
+      .eq('user_id', userId)
+      .gte('local_date', addDays(home, -1))
+      .lte('local_date', addDays(home, 1))
+    if (error || !data) return homeTz
+    return resolveTimezone(now, homeTz, data.map(r => ({ date: String(r.local_date), timezone: String(r.timezone) })))
+  } catch {
+    return homeTz
   }
 }
 

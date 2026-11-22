@@ -81,6 +81,18 @@ export function painRulePassed(rules: PainRules | undefined, checks: readonly Jo
   return sorted.slice(-n).every(c => evaluateJointCheck(rules, c) === 'ok')
 }
 
+/**
+ * Recovery OK (P2 — intervals unlock): no red flag among the last `n` pain-check sessions and none uncleared, and at
+ * least `need` of the last `n` sessions passed the pain rule. Fewer than `need` sessions → false.
+ */
+export function recoveryOk(rules: PainRules | undefined, checks: readonly JointCheck[], n = 3, need = 2): boolean {
+  if (!rules) return true
+  if (checks.some(c => c.redFlags.length > 0 && !c.physioCleared)) return false
+  const recent = [...checks].sort(byDate).slice(-n)
+  if (recent.some(c => c.redFlags.length > 0)) return false
+  return recent.filter(c => evaluateJointCheck(rules, c) === 'ok').length >= need
+}
+
 export interface ExerciseSafety {
   disabled: boolean
   warning: string | null

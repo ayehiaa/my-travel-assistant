@@ -45,6 +45,8 @@ interface Props {
   /** Sets already saved for this date + session (re-opening a saved session). */
   saved: Record<string, LoggedSet[]> | null
   savedTravel: boolean
+  /** Travel mode pre-selected (date inside a saved trip, P2) when the session was not saved yet. */
+  defaultTravel?: boolean
   savedPain: number | null
 }
 
@@ -86,7 +88,7 @@ function initialDraft(p: Props): Draft {
     const drop = p.saved?.[ex.key]?.find(s => s.isDropSet)
     if (drop) drops[ex.key] = { load: drop.loadKg !== null ? String(drop.loadKg) : '', reps: drop.reps !== null ? String(drop.reps) : '' }
   }
-  return { travel: p.savedTravel, startedAt: null, pain: p.savedPain, sets, drops, notes: '' }
+  return { travel: p.saved ? p.savedTravel : p.savedTravel || p.defaultTravel === true, startedAt: null, pain: p.savedPain, sets, drops, notes: '' }
 }
 
 const toNum = (v: string): number | null => {

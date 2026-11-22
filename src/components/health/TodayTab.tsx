@@ -12,6 +12,14 @@ import { addDays, programmeWeek, weekdayOf } from '@/lib/health/time'
 import { healthHref } from '@/lib/health/healthHub'
 import { loadTrainingContext, type TrainingContextResult } from '@/lib/health/trainingServer'
 import { nextMorningDue } from '@/lib/health/painRules'
+import { loadHealthSettings, loadMilestoneKeys, loadTripRanges, loadWaist } from '@/lib/health/p2Server'
+import { kgTo } from '@/lib/health/units'
+import { tripOn } from '@/lib/health/travel'
+import { midpointReviewDue } from '@/lib/health/adjustment'
+import { milestoneDue, milestoneViews, waistDue } from '@/lib/health/measurements'
+import ActivitySection from './ActivitySection'
+import { AdjustmentProposalView, loadAdjustmentState } from './AdjustmentSection'
+import DayTimezoneControl from './DayTimezoneControl'
 import CheckinCard from './CheckinCard'
 import NextMorningCheckCard from './NextMorningCheckCard'
 import QuickLog from './QuickLog'
@@ -60,11 +68,17 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
   let evaluation: Awaited<ReturnType<typeof evaluateDay>>
   let recentCheckins: Awaited<ReturnType<typeof loadCheckins>>
   let training: TrainingContextResult
+  let trips: Awaited<ReturnType<typeof loadTripRanges>>
+  let adjustment: Awaited<ReturnType<typeof loadAdjustmentState>>
+  let hs: Awaited<ReturnType<typeof loadHealthSettings>>
   try {
-    ;[evaluation, recentCheckins, training] = await Promise.all([
+    ;[evaluation, recentCheckins, training, trips, adjustment, hs] = await Promise.all([
       evaluateDay(supabase, userId, enrolment, date, time),
       loadCheckins(supabase, userId, addDays(date, -20), date),
       loadTrainingContext(supabase, userId, enrolment),
+      loadTripRanges(supabase, userId, enrolment),
+      loadAdjustmentState(supabase, userId, enrolment, date),
+      loadHealthSettings(supabase, userId),
     ])
   } catch (err) {
     return <HealthNotice title="Could not load today">{err instanceof Error ? err.message : 'Try again shortly.'}</HealthNotice>
@@ -93,15 +107,54 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
   const morningDue = tctx && def.painRules ? nextMorningDue(def.painRules, tctx.checks, date) : null
   const sessionNameOf = (k: string) => def.trainingSessions.find(t => t.key === k)?.name ?? k.toUpperCase()
   const trainedToday = tctx?.weekWorkouts.filter(w => w.date === date) ?? []
+  const trip = tripOn(trips, date)
+  const wu = hs.settings.units.weight
+  const midpoint = midpointReviewDue(def, enrolment.startDate, date)
+  // Waist reminder + milestone due (best effort: hidden when the P2 tables are missing).
+  let waistReminder = false
+  let milestone: ReturnType<typeof milestoneDue> = null
+  if (adjustment.available) {
+    try {
+      const [waist, done] = await Promise.all([loadWaist(supabase, userId), loadMilestoneKeys(supabase, userId, enrolment.id)])
+      const last = waist[waist.length - 1]?.date ?? null
+      waistReminder = waistDue(last, date) && (week ?? 0) >= 1
+      milestone = milestoneDue(milestoneViews(def, {
+        startDate: enrolment.startDate, today: date, startWeightKg: enrolment.profile?.weightKg ?? null,
+        weighIns: weighInsOf(recentCheckins), waist, doneKeys: done,
+      }))
+    } catch {
+      // not available
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
+      {trip && (
+        <section className={`${CARD} border-teal-300 bg-teal-50`} aria-labelledby="travel-h">
+          <h2 id="travel-h" className={CARD_TITLE}>Travel mode · {trip.label}</h2>
+          <p className="text-sm text-[var(--ink)]">
+            Trip {trip.start} → {trip.end}. Hotel variants are pre-selected in today&apos;s session; eating out:
+          </p>
+          {def.eatingOut.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-sm text-[var(--ink-2)]">
+              {def.eatingOut.map(r => <li key={r}>{r}</li>)}
+            </ul>
+          )}
+          <DayTimezoneControl
+            dates={Array.from({ length: Math.min(60, Math.max(1, Math.round((Date.parse(trip.end) - Date.parse(trip.start)) / 86_400_000) + 1)) }, (_, i) => addDays(trip.start, i))}
+            currentTz={enrolment.timezone}
+            homeTz={enrolment.homeTimezone}
+          />
+        </section>
+      )}
+
       <CheckinCard
         date={date}
         supplements={def.supplements.map(s => ({ key: s.key, name: s.name, dose: s.dose }))}
         existing={todayCheckin}
         typicalBed={sleep.typicalBedTime}
         typicalWake={sleep.typicalWakeTime}
+        weightUnit={hs.settings.units.weight}
       />
 
       {morningDue?.id && def.painRules && (
@@ -113,6 +166,20 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
           threshold={def.painRules.okThreshold}
           redFlags={def.painRules.redFlags}
         />
+      )}
+
+      <AdjustmentProposalView enrolment={enrolment} proposal={adjustment.pending} />
+
+      {(midpoint || milestone || waistReminder) && (
+        <section className={CARD} aria-labelledby="ms-h">
+          <h2 id="ms-h" className={CARD_TITLE}>This week</h2>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-[var(--ink)]">
+            {midpoint && <li>Week {midpoint.week}: mid-point review — check your weight trend, waist and adherence, and adjust calories if needed.</li>}
+            {milestone && <li>Week {milestone.week} milestone: {milestone.tasks.filter(t => !t.done).map(t => t.task).join(' · ')}</li>}
+            {waistReminder && <li>Waist measurement due (every 2 weeks) — the best progress metric while the scale is noisy.</li>}
+          </ul>
+          <Link href={healthHref({ tab: 'progress' })} className="mt-2 inline-block text-sm font-semibold text-[var(--blue-700)] underline">Open Progress</Link>
+        </section>
       )}
 
       {tctx && (
@@ -129,7 +196,7 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
           {trainedToday.length === 0 && tctx.recommendation.warnings.map(w => <p key={w} className="mt-1 text-xs text-amber-800">{w}</p>)}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {tctx.recommendation.sessionKey && trainedToday.length === 0 && (
-              <Link href={healthHref({ tab: 'training', session: tctx.recommendation.sessionKey })} className="rounded-full bg-[var(--blue-700)] px-5 py-2 text-sm font-bold text-white">
+              <Link href={healthHref({ tab: 'training', session: tctx.recommendation.sessionKey, travel: trip ? 1 : null })} className="rounded-full bg-[var(--blue-700)] px-5 py-2 text-sm font-bold text-white">
                 Start {sessionNameOf(tctx.recommendation.sessionKey)}
               </Link>
             )}
@@ -172,18 +239,18 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
           <h2 id="weight-h" className={CARD_TITLE}>Weight & sleep</h2>
           {trend.average !== null ? (
             <p className="text-sm text-[var(--ink-2)]">
-              <span className="text-2xl font-bold text-[var(--ink)]">{fmtNum(trend.average)} kg</span>{' '}
+              <span className="text-2xl font-bold text-[var(--ink)]">{fmtNum(kgTo(trend.average, wu))} {wu}</span>{' '}
               7-day average
               {trend.direction && (
                 <span className="ml-1 font-semibold">
-                  {trend.direction === 'down' ? '↓' : trend.direction === 'up' ? '↑' : '→'} {fmtNum(Math.abs(trend.weeklyChangeKg ?? 0))} kg/week
+                  {trend.direction === 'down' ? '↓' : trend.direction === 'up' ? '↑' : '→'} {fmtNum(kgTo(Math.abs(trend.weeklyChangeKg ?? 0), wu))} {wu}/week
                 </span>
               )}
             </p>
           ) : (
             <p className="text-sm text-[var(--ink-2)]">Weigh in on 3 mornings to see your 7-day average.</p>
           )}
-          {trend.latest && <p className="mt-1 text-xs text-[var(--ink-3)]">Latest single weigh-in {fmtNum(trend.latest.weightKg)} kg — daily weight is mostly water; watch the average.</p>}
+          {trend.latest && <p className="mt-1 text-xs text-[var(--ink-3)]">Latest single weigh-in {fmtNum(kgTo(trend.latest.weightKg, wu))} {wu} — daily weight is mostly water; watch the average.</p>}
           {waterNote && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">{waterNote}</p>}
           <p className="mt-3 text-sm text-[var(--ink-2)]">
             Sleep last night: <strong className="text-[var(--ink)]">{formatDuration(sleep.lastNightMinutes)}</strong>
@@ -214,7 +281,9 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
         </section>
       )}
 
-      <QuickLog date={date} nowTime={time} slots={def.mealSlots} componentLabels={componentLabels} />
+      <QuickLog date={date} nowTime={time} slots={def.mealSlots} componentLabels={componentLabels} eatingOut={def.eatingOut} />
+
+      <ActivitySection userId={userId} enrolment={enrolment} date={date} painPassed={tctx?.painPassed ?? null} checks={tctx?.checks ?? []} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className={CARD} aria-labelledby="progress-h">

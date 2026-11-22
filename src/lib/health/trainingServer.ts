@@ -200,7 +200,7 @@ export async function loadTrainingContext(supabase: ServerClient, userId: string
 }
 
 /** Prescription lookup for a stored performance (uses the week it was done in). */
-export function prescriptionFor(enrolment: ActiveEnrolment, sessionKey: string, exerciseKey: string, week: number | null) {
+export function prescriptionFor(enrolment: ActiveEnrolment, sessionKey: string, exerciseKey: string, week: number | null, painRulePassed = false) {
   const def = enrolment.def
   const session = def.trainingSessions.find(s => s.key === sessionKey)
   const ex = findExercise(def, sessionKey, exerciseKey)
@@ -209,7 +209,7 @@ export function prescriptionFor(enrolment: ActiveEnrolment, sessionKey: string, 
     // Unlocked movements keep their own fixed prescription.
     return effectivePrescription(def, session, ex, null)
   }
-  return effectivePrescription(def, session, ex, week)
+  return effectivePrescription(def, session, ex, week, { painRulePassed })
 }
 
 /** API error for a training write: missing P1b tables → 503 with the P1b script name; anything else → 500. */

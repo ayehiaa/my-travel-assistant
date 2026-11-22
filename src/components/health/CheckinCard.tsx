@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
+import { kgTo, toKg } from '@/lib/health/units'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
 
 interface Props {
@@ -12,22 +13,26 @@ interface Props {
   /** Bed/wake defaults from the typical times of recent nights. */
   typicalBed: string | null
   typicalWake: string | null
+  /** Display / entry unit (stored in kg). */
+  weightUnit?: 'kg' | 'lb'
 }
 
 /** Morning check-in (specs/029 US2): one number + a few taps. First card on Today until done. */
-export default function CheckinCard({ date, supplements, existing, typicalBed, typicalWake }: Props) {
+export default function CheckinCard({ date, supplements, existing, typicalBed, typicalWake, weightUnit = 'kg' }: Props) {
+  const toUnit = (kg: number) => (weightUnit === 'lb' ? kgTo(kg, 'lb') : kg)
   const toast = useToast()
   const router = useRouter()
   const [editing, setEditing] = useState(existing === null)
-  const [weight, setWeight] = useState(existing?.weightKg != null ? String(existing.weightKg) : '')
+  const [weight, setWeight] = useState(existing?.weightKg != null ? String(toUnit(existing.weightKg)) : '')
   const [bed, setBed] = useState(existing?.bedTime ?? typicalBed ?? '23:00')
   const [wake, setWake] = useState(existing?.wakeTime ?? typicalWake ?? '07:00')
   const [taken, setTaken] = useState<string[]>(existing?.supplementsTaken ?? [])
   const [saving, setSaving] = useState(false)
 
   async function save() {
-    const w = weight.trim() === '' ? null : Number(weight.replace(',', '.'))
-    if (w !== null && !(w >= 30 && w <= 350)) { toast('Enter your weight in kg (e.g. 80.4)', 'error'); return }
+    const entered = weight.trim() === '' ? null : Number(weight.replace(',', '.'))
+    const w = entered === null ? null : toKg(entered, weightUnit)
+    if (w !== null && !(w >= 30 && w <= 350)) { toast(`Enter your weight in ${weightUnit} (e.g. ${weightUnit === 'lb' ? '177.4' : '80.4'})`, 'error'); return }
     setSaving(true)
     try {
       const res = await fetch('/api/health/checkin', {
@@ -52,7 +57,7 @@ export default function CheckinCard({ date, supplements, existing, typicalBed, t
       <div className={`${CARD} flex flex-wrap items-center justify-between gap-2`}>
         <div className="text-sm text-[var(--ink-2)]">
           <span className="font-semibold text-[var(--ink)]">Morning check-in done</span>
-          {existing.weightKg != null && <> · {existing.weightKg} kg</>}
+          {existing.weightKg != null && <> · {toUnit(existing.weightKg)} {weightUnit}</>}
           {existing.bedTime && existing.wakeTime && <> · slept {existing.bedTime}–{existing.wakeTime}</>}
           {existing.supplementsTaken.length > 0 && <> · {existing.supplementsTaken.length} supplement{existing.supplementsTaken.length > 1 ? 's' : ''}</>}
         </div>
@@ -66,8 +71,8 @@ export default function CheckinCard({ date, supplements, existing, typicalBed, t
       <h2 className={CARD_TITLE}>Morning check-in</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="col-span-2 sm:col-span-1">
-          <span className={LABEL}>Weight (kg)</span>
-          <input className={INPUT} inputMode="decimal" value={weight} onChange={e => setWeight(e.target.value)} placeholder="80.4" autoFocus={existing === null} />
+          <span className={LABEL}>Weight ({weightUnit})</span>
+          <input className={INPUT} inputMode="decimal" value={weight} onChange={e => setWeight(e.target.value)} placeholder={weightUnit === 'lb' ? '177.4' : '80.4'} autoFocus={existing === null} />
         </label>
         <label><span className={LABEL}>Bed</span><input type="time" className={INPUT} value={bed} onChange={e => setBed(e.target.value)} /></label>
         <label><span className={LABEL}>Woke</span><input type="time" className={INPUT} value={wake} onChange={e => setWake(e.target.value)} /></label>

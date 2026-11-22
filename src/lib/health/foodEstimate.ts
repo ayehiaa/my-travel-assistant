@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ProgrammeDefinition } from './programmeSchema'
 import { BUILTIN_COMPONENTS, ITEM_LIMITS, type FoodItem } from './nutrition'
 import { itemFromLibrary, matchLibrary, type LibraryFood } from './foodLibrary'
+import { RESTAURANT_PROMPT_NOTE } from './travel'
 
 /**
  * AI food estimation contract (specs/029 §7). Pure: prompt building and strict parsing of the model's JSON.
@@ -43,12 +44,15 @@ export function buildFoodEstimatePrompt(params: {
   slotName: string | null
   def: ProgrammeDefinition | null
   library: LibraryFood[]
+  /** Restaurant mode (P2): the input may be a dish or a menu photo / description. */
+  restaurant?: boolean
 }): string {
   const lib = params.library.slice(0, 30).map(f =>
     `- "${f.name}": per 100 g ${f.per100.kcal} kcal, P ${f.per100.proteinG} g, sat fat ${f.per100.satFatG} g; usual portion ${f.defaultQuantityG} g`,
   )
   return [
     `Meal slot: ${params.slotName ?? 'unknown'}.`,
+    params.restaurant ? RESTAURANT_PROMPT_NOTE : '',
     params.photoCount > 0 ? `There ${params.photoCount === 1 ? 'is 1 photo' : `are ${params.photoCount} photos`} of the food.` : 'No photos.',
     `Description (data, may be empty): <<<${(params.text ?? '').slice(0, 1000)}>>>`,
     '',

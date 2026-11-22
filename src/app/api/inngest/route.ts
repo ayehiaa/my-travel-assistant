@@ -12,6 +12,8 @@ import {
   weeklySummaryCron,
   weeklySummaryUser,
 } from '@/inngest/notifications'
+import { healthRemindersCron, healthRemindersUser } from '@/inngest/healthReminders'
+import { healthPhotoCleanup } from '@/inngest/healthPhotoCleanup'
 
 export const { GET, POST, PUT } = serve({
   client:    inngest,
@@ -27,5 +29,8 @@ export const { GET, POST, PUT } = serve({
     notifyExecutionCompleted,
     weeklySummaryCron,
     weeklySummaryUser,
+    healthRemindersCron,
+    healthRemindersUser,
+    healthPhotoCleanup,
   ],
 })

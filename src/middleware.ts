@@ -37,6 +37,8 @@ export async function middleware(request: NextRequest) {
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname === '/api/inngest' ||
+    pathname === '/sw.js' ||
+    pathname === '/manifest.webmanifest' ||
     pathname === '/api/customer-invitations/validate' ||
     pathname === '/api/customer-invitations/accept' ||
     pathname === '/api/auth/signup'
