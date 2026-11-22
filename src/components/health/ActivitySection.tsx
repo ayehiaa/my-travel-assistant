@@ -29,7 +29,7 @@ export default async function ActivitySection({ userId, enrolment, date, painPas
     if (err instanceof P2MigrationNeeded) migrationNeeded = true
     else return <HealthNotice title="Could not load cardio">Try again shortly.</HealthNotice>
   }
-  const wk = weeklyCardio(def, cardio, date)
+  const wk = weeklyCardio(def, cardio, date, enrolment.startDate)
   const daySteps = steps.find(s => s.date === date)?.steps ?? null
   const z = def.cardio?.intensity
   const unlock = painPassed !== null && def.cardio?.unlockables.some(u => /interval/i.test(u.name))
@@ -42,7 +42,7 @@ export default async function ActivitySection({ userId, enrolment, date, painPas
       typeOptions={cardioTypeOptions(def)}
       avoidTypes={def.cardio?.avoid ?? []}
       zone={z ? { zone: z.zone, bpmMin: z.bpmMin ?? null, bpmMax: z.bpmMax ?? null } : null}
-      weekly={{ minutes: wk.minutes, target: wk.targetMinutes }}
+      weekly={{ minutes: wk.minutes, target: wk.targetMinutes, note: wk.starter ? `Starter week target: ${wk.targetSessions ?? 0} session${wk.targetSessions === 1 ? '' : 's'} over ${wk.days} day${wk.days === 1 ? '' : 's'}` : null }}
       sessions={cardio.filter(c => c.date === date).map(c => ({
         id: c.id ?? '', type: c.type, minutes: c.minutes, avgHr: c.avgHr, intervals: c.intervals,
         hrMessage: hrFlagMessage(def, hrZoneFlag(def, c.avgHr)),

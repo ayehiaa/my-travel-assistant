@@ -12,7 +12,7 @@ export interface ActivityCardProps {
   typeOptions: string[]
   avoidTypes: string[]
   zone: { zone: string; bpmMin: number | null; bpmMax: number | null } | null
-  weekly: { minutes: number; target: number | null }
+  weekly: { minutes: number; target: number | null; note?: string | null }
   sessions: Array<{ id: string; type: string; minutes: number; avgHr: number | null; intervals: boolean; hrMessage: string | null }>
   steps: number | null
   stepsTarget: string | null
@@ -92,6 +92,7 @@ export default function ActivityCard(p: ActivityCardProps) {
       <p className="text-sm text-[var(--ink-2)]">
         This week: <strong className="text-[var(--ink)]">{p.weekly.minutes}</strong>{p.weekly.target !== null && <> / {p.weekly.target} min</>}
         {pct !== null && pct >= 100 && <span className="ml-1 text-xs font-bold text-green-700">· target met</span>}
+        {p.weekly.note && <span className="block text-xs text-[var(--ink-3)]">{p.weekly.note}</span>}
       </p>
       {pct !== null && (
         <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--paper-2)]" role="presentation">

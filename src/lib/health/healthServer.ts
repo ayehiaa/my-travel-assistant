@@ -321,7 +321,7 @@ export function plannedBedtime(def: ProgrammeDefinition, checkins: StoredCheckin
  * Training signals for the rules engine (P1b). Best effort: undefined when the P1b tables are missing or a query
  * fails, so the food rules never depend on training data.
  */
-export async function loadTrainingSignals(supabase: ServerClient, userId: string, def: ProgrammeDefinition, date: string): Promise<RuleContext['training']> {
+export async function loadTrainingSignals(supabase: ServerClient, userId: string, def: ProgrammeDefinition, date: string, startDate?: string): Promise<RuleContext['training']> {
   try {
     const monday = weekStart(date)
     const [w, j] = await Promise.all([
@@ -333,7 +333,7 @@ export async function loadTrainingSignals(supabase: ServerClient, userId: string
     ])
     if (w.error || j.error) return undefined
     const workouts: WorkoutSummary[] = (w.data ?? []).map(r => ({ date: String(r.local_date), sessionKey: String(r.session_key), status: r.status as WorkoutSummary['status'] }))
-    const rec = recommendSession(def, date, workouts)
+    const rec = recommendSession(def, date, workouts, startDate)
     const joint = jointStatus(def.painRules, (j.data ?? []).map(r => rowToJointCheck(r as Record<string, unknown>)))
     const session = def.trainingSessions.find(s => s.key === rec.sessionKey)
     return {
@@ -360,7 +360,7 @@ export async function evaluateDay(
     loadEntries(supabase, userId, monday, date),
     loadCheckins(supabase, userId, addDays(date, -7), date),
     // Training rules only matter for today (a past day's coffee timing is moot).
-    date === nowFor(enrolment).date ? loadTrainingSignals(supabase, userId, enrolment.def, date) : Promise.resolve(undefined),
+    date === nowFor(enrolment).date ? loadTrainingSignals(supabase, userId, enrolment.def, date, enrolment.startDate) : Promise.resolve(undefined),
   ])
   const entries = weekEntries.filter(e => e.date === date)
   const weekComponents: Record<string, number> = {}
@@ -372,6 +372,7 @@ export async function evaluateDay(
     date,
     entries: entries.map(e => ({ time: e.time, slot: e.slot, items: e.items })),
     weekComponents,
+    startDate: enrolment.startDate,
     bedtime: plannedBedtime(enrolment.def, checkins, date),
     training,
   })

@@ -38,7 +38,8 @@ export async function writeWorkout(
       local_date:        input.date,
       session_key:       input.sessionKey,
       block_key:         position.block?.key ?? null,
-      programme_week:    position.phase === 'active' ? position.week : null,
+      // Prescription week (starter week → 1): the DB check allows 1–104 and the starter week uses Block 1 as week 1.
+      programme_week:    position.phase === 'active' ? position.prescriptionWeek : null,
       status:            input.status,
       skip_reason:       input.status === 'skipped' ? input.skipReason ?? null : null,
       travel_mode:       input.travelMode,

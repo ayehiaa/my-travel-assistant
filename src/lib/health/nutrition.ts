@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { HhMmSchema, type MealSlot, type ProgrammeDefinition } from './programmeSchema'
 import type { EffectiveTargets } from './targets'
-import { hhmmToMinutes, isValidDate } from './time'
+import { hhmmToMinutes, isValidDate, proRate, weekWindow } from './time'
 import { AssumptionSchema, MAX_ASSUMPTIONS, baseNutrients, withAssumptions } from './assumptions'
 
 /**
@@ -198,17 +198,52 @@ export interface ComponentProgress {
   target: number
   value: number
   met: boolean
+  /** Weekly component with a pro-rated target of 0 in the starter week ("not due this week"). */
+  notDue?: boolean
+  /** e.g. "pro-rated for a 3-day starter week"; null when the full target applies. */
+  note?: string | null
 }
 
-/** Progress per programme component: daily ones vs today's total, weekly ones vs this week's total. */
+export interface WeeklyComponentTarget {
+  target: number
+  proRated: boolean
+  /** Days in the window (7 outside the starter week). */
+  days: number
+  /** Pro-rated to 0 — the component is not due this week. */
+  notDue: boolean
+  note: string | null
+}
+
+/**
+ * Target of a weekly component (period 'week') for the week of `date` (spec 029 P3.2): in the starter week the target
+ * is pro-rated to round(target × days/7) (min 0; 0 → not due this week); otherwise the full weekly target applies.
+ */
+export function weeklyComponentTarget(target: number, startDate: string | undefined, date: string): WeeklyComponentTarget {
+  if (!startDate) return { target, proRated: false, days: 7, notDue: false, note: null }
+  const w = weekWindow(startDate, date)
+  if (!w.isStarter) return { target, proRated: false, days: 7, notDue: false, note: null }
+  const t = proRate(target, w.fraction)
+  return { target: t, proRated: true, days: w.days, notDue: t === 0, note: `pro-rated for a ${w.days}-day starter week` }
+}
+
+/**
+ * Progress per programme component: daily ones vs today's total, weekly ones vs this week's total. With
+ * `week` (start date + date), weekly targets are pro-rated in the starter week.
+ */
 export function componentProgress(
   def: ProgrammeDefinition,
   todayComponents: Record<string, number>,
   weekComponents: Record<string, number>,
+  week?: { startDate: string; date: string },
 ): ComponentProgress[] {
   return def.components.map(c => {
     const value = r1((c.period === 'day' ? todayComponents[c.key] : weekComponents[c.key]) ?? 0)
-    return { key: c.key, name: c.name, unit: c.unit, period: c.period, target: c.target, value, met: value >= c.target }
+    if (c.period === 'day') return { key: c.key, name: c.name, unit: c.unit, period: c.period, target: c.target, value, met: value >= c.target }
+    const wt = weeklyComponentTarget(c.target, week?.startDate, week?.date ?? '')
+    return {
+      key: c.key, name: c.name, unit: c.unit, period: c.period, target: wt.target, value,
+      met: !wt.notDue && value >= wt.target, notDue: wt.notDue, note: wt.note,
+    }
   })
 }
 

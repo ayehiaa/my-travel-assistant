@@ -1,6 +1,6 @@
 import type { MealSlot, ProgrammeDefinition, NutritionRule } from './programmeSchema'
 import type { EffectiveTargets } from './targets'
-import { mealsRemaining, sumComponents, sumNutrients, type FoodItem } from './nutrition'
+import { mealsRemaining, sumComponents, sumNutrients, weeklyComponentTarget, type FoodItem } from './nutrition'
 import { daysLeftInWeek, hhmmToMinutes } from './time'
 import { preTrainingCoffee } from './training'
 
@@ -46,6 +46,8 @@ export interface RuleContext {
   entries: RuleEntry[]
   /** Component totals for the ISO week so far (including today). */
   weekComponents: Record<string, number>
+  /** Programme start date — weekly component targets are pro-rated in the starter week (P3.2). Optional. */
+  startDate?: string
   /** Planned bedtime 'HH:MM' (programme target or typical from check-ins); null = unknown. */
   bedtime: string | null
   /** Training signals (P1b). Omitted when training data is unavailable — training rules then stay silent. */
@@ -192,13 +194,15 @@ export function evaluateRules(ctx: RuleContext): RuleFinding[] {
   const daysLeft = daysLeftInWeek(ctx.date)
   for (const c of def.components) {
     if (c.period !== 'week') continue
+    const wt = weeklyComponentTarget(c.target, ctx.startDate, ctx.date)
+    if (wt.notDue) continue
     const value = ctx.weekComponents[c.key] ?? 0
-    const remaining = c.target - value
+    const remaining = wt.target - value
     if (remaining <= 0 || daysLeft > remaining * 2) continue
     out.push({
       key: `component_week.${c.key}`, type: 'component', group: 'weekly', priority: 30 + Math.round(remaining),
-      message: `${c.name} ${fmt(value)} of ${fmt(c.target)} this week — ${c.suggestion ?? `plan ${c.sources[0]?.toLowerCase() ?? 'it'} before Sunday.`}`,
-      data: { component: c.key, value, target: c.target, daysLeft },
+      message: `${c.name} ${fmt(value)} of ${fmt(wt.target)} this week${wt.note ? ` (${wt.note})` : ''} — ${c.suggestion ?? `plan ${c.sources[0]?.toLowerCase() ?? 'it'} before Sunday.`}`,
+      data: { component: c.key, value, target: wt.target, daysLeft },
     })
   }
 

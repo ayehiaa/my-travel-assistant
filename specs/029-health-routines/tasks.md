@@ -196,3 +196,16 @@
 
 ### Docs
 - [x] T89 plan.md / tasks.md P3.1, spec §13 row, CLAUDE.md "Current Feature Plan"
+
+## Phase P3.2 — Starter week & Monday-aligned weeks
+
+- [x] T90 `time.ts`: `firstProgrammeMonday`, `hasStarterWeek`, `programmeWeek` (0 = starter), `programmeWeekStart`, `programmeEndDate`, `weekWindow`, `proRate`, labels
+- [x] T91 `training.ts`: position `starter` / `prescriptionWeek`, `weekSchedule` 'before_start', `sessionsForWeek`, `recommendSession` / `orderWarning` with start date; callers (trainingServer, healthServer signals, TrainingTab, workoutWrite)
+- [x] T92 Weekly components pro-rated (`weeklyComponentTarget`, `componentProgress`, rules weekly nudge) + Today "not due this week" / pro-rated label
+- [x] T93 Cardio starter-week target (`cardioTarget`, `weeklyCardio`) + ActivityCard note
+- [x] T94 Weekly review starter window (`computeWeeklyReview` startDate, reviewServer, Progress header)
+- [x] T95 Adjustment fortnights from the first Monday
+- [x] T96 Milestones: `milestoneWindow`, week 0 → week-1 milestone, reminder start date, lab escalation week
+- [x] T97 Display: Today / Training / Programme (end date) / Progress week labels
+- [x] T98 Tests `starterWeek.test.ts` (numbering, window, schedule, recommendation, components, cardio, review, fortnights, milestones)
+- [x] T99 Docs: plan/tasks P3.2, spec §13 row, CLAUDE.md

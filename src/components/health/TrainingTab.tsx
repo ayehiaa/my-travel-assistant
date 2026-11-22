@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { ActiveEnrolment } from '@/lib/health/healthServer'
 import { healthHref } from '@/lib/health/healthHub'
-import { addDays, isValidDate } from '@/lib/health/time'
+import { addDays, isValidDate, programmeWeekLabel } from '@/lib/health/time'
 import {
   displayName, findExercise, formatLoggedSet, orderWarning, progressionSuggestion, spacingWarning, suggestedStartLoad,
   topSetSeries, trainingPosition, unlockHostSession, usesDumbbells, weekSchedule, youtubeSearchUrl,
@@ -29,11 +29,11 @@ function fmtDay(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
-function weekBanner(enrolment: ActiveEnrolment, position: TrainingPosition): string {
+function weekBanner(enrolment: ActiveEnrolment, position: TrainingPosition, today: string): string {
   const def = enrolment.def
   if (position.phase === 'before_start') return `Programme starts ${fmtDay(enrolment.startDate)} — sessions use the table as written until then`
   if (position.phase === 'completed') return `${def.identity.name} complete — sessions use the table as written`
-  const parts = [`Week ${position.week} of ${def.identity.durationWeeks}`]
+  const parts = [programmeWeekLabel(enrolment.startDate, today, def.identity.durationWeeks) ?? `Week ${position.week} of ${def.identity.durationWeeks}`]
   if (position.block) parts.push(position.block.name)
   if (position.light) parts.push('light week')
   if (position.deload) parts.push('deload week')
@@ -48,6 +48,7 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   missed:   { label: 'Missed', cls: 'bg-red-100 text-red-800' },
   today:    { label: 'Today', cls: 'bg-blue-100 text-blue-800' },
   upcoming: { label: 'Planned', cls: 'bg-[var(--paper-2)] text-[var(--ink-3)]' },
+  before_start: { label: 'Before start', cls: 'bg-[var(--paper-2)] text-[var(--ink-3)]' },
 }
 
 function sessionName(enrolment: ActiveEnrolment, key: string): string {
@@ -88,7 +89,7 @@ async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment:
   const supabase = await createClient()
   let recent: Awaited<ReturnType<typeof loadWorkouts>> = []
   try { recent = await loadWorkouts(supabase, userId, addDays(ctx.today, -27), ctx.today) } catch { recent = [] }
-  const week = weekSchedule(def, ctx.today, ctx.weekWorkouts)
+  const week = weekSchedule(def, ctx.today, ctx.weekWorkouts, enrolment.startDate)
   const rec = ctx.recommendation
   const block = ctx.position.block
   const rules = def.painRules
@@ -98,7 +99,7 @@ async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment:
     <div className="flex flex-col gap-4">
       <OfflineSyncBanner />
       <section className={`${CARD} bg-[var(--paper-2)]`} aria-labelledby="blk-h">
-        <h2 id="blk-h" className="text-lg font-bold text-[var(--ink)]">{weekBanner(enrolment, ctx.position)}</h2>
+        <h2 id="blk-h" className="text-lg font-bold text-[var(--ink)]">{weekBanner(enrolment, ctx.position, ctx.today)}</h2>
         {block && (
           <p className="mt-1 text-sm text-[var(--ink-2)]">
             {block.focus} · {block.repRange} reps{block.rir && <> · RIR {block.rir}</>}
@@ -249,7 +250,7 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date, travel }: {
   const def = enrolment.def
   const supabase = await createClient()
   const position = trainingPosition(def, enrolment.startDate, date)
-  const week = position.phase === 'active' ? position.week : null
+  const week = position.phase === 'active' ? position.prescriptionWeek : null
   const excluded = def.movementRestrictions?.excluded ?? []
   const unlocked = unlockHostSession(def) === session.key
     ? ctx.unlocks.filter(u => u.available && u.exercise).map(u => u.exercise!)
@@ -334,7 +335,7 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date, travel }: {
   const warnings: string[] = []
   const weekOfDate = workouts.filter(w => w.date !== date)
   if (!savedWorkout) {
-    const order = orderWarning(def, session.key, weekOfDate.filter(w => w.date >= addDays(date, -6)))
+    const order = orderWarning(def, session.key, weekOfDate.filter(w => w.date >= addDays(date, -6)), { date, startDate: enrolment.startDate })
     if (order && date === ctx.today) warnings.push(order)
   }
   const spacing = spacingWarning(weekOfDate, date)
@@ -349,7 +350,7 @@ async function PlayerLoader({ userId, enrolment, ctx, session, date, travel }: {
       sessionKey={session.key}
       sessionName={session.name}
       focus={session.focus}
-      banner={weekBanner(enrolment, position)}
+      banner={weekBanner(enrolment, position, date)}
       warnings={warnings}
       painCheck={session.painCheck && !!def.painRules}
       painThreshold={def.painRules?.okThreshold ?? null}
