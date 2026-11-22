@@ -1,4 +1,5 @@
 import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
+import { CASH_ROW_KEY, isReservedCashWord } from '@/lib/cashAllocation'
 import type { AlpacaOrderResult, LiveHolding, TargetAllocationItem, TargetHorizon } from '@/types/database'
 import type { ShariahScreeningResult, TickerScreening } from '@/types/shariah'
 
@@ -166,17 +167,21 @@ export interface AllocationRow {
   drift_pct: number
 }
 
-export const CASH_TICKER = 'CASH'
+/** Key of the cash row (specs/031): not a ticker, so a real stock named "CASH" is never mistaken for cash. */
+export const CASH_TICKER = CASH_ROW_KEY
 
 /**
- * Current vs target weight per ticker (union of held and targeted tickers) plus a cash row.
- * Weights are against total account value (holdings + cash); cash's target is what the stock targets leave over.
- * Sorted by absolute drift, largest first (cash last on ties).
+ * Current vs target weight per ticker (union of held and targeted tickers) plus a cash row (key CASH_ROW_KEY).
+ * Weights are against total account value (holdings + cash). Cash's target is the recommendation's explicit
+ * `cashTargetPct` when stored (specs/031), else what the stock targets leave over (older recommendations).
+ * Reserved cash words in the target (e.g. "CASH") are never shown as stocks. A real holding with such a symbol keeps
+ * its own row. Sorted by absolute drift, largest first (cash last).
  */
 export function computeAllocationDrift(
   holdings: Array<Pick<LiveHolding, 'ticker' | 'total_value_usd'>>,
   cashUsd: number,
   target: Array<Pick<TargetAllocationItem, 'ticker' | 'target_pct'>> | null,
+  cashTargetPct: number | null = null,
 ): AllocationRow[] {
   const cash = Number.isFinite(cashUsd) && cashUsd > 0 ? cashUsd : 0
   const total = holdings.reduce((s, h) => s + (h.total_value_usd > 0 ? h.total_value_usd : 0), 0) + cash
@@ -184,7 +189,7 @@ export function computeAllocationDrift(
 
   const targetMap = new Map<string, number>()
   for (const t of target ?? []) {
-    if (t.ticker.toUpperCase() === CASH_TICKER) continue
+    if (isReservedCashWord(t.ticker)) continue
     targetMap.set(t.ticker, (targetMap.get(t.ticker) ?? 0) + (Number.isFinite(t.target_pct) ? t.target_pct : 0))
   }
   const currentMap = new Map<string, number>()
@@ -200,7 +205,11 @@ export function computeAllocationDrift(
 
   if (cash > 0 || target !== null) {
     const stockTarget = [...targetMap.values()].reduce((s, v) => s + v, 0)
-    const cashTarget = target === null ? 0 : Math.max(0, 100 - stockTarget)
+    const cashTarget = target === null
+      ? 0
+      : cashTargetPct !== null && Number.isFinite(cashTargetPct)
+        ? Math.min(100, Math.max(0, cashTargetPct))
+        : Math.max(0, 100 - stockTarget)
     const cashCurrent = pct(cash)
     rows.push({ ticker: CASH_TICKER, current_pct: cashCurrent, target_pct: cashTarget, drift_pct: cashCurrent - cashTarget })
   }

@@ -1,4 +1,5 @@
 import { formatSignedPct, type AllocationRow } from '@/lib/portfolioHub'
+import { CASH_ROW_KEY } from '@/lib/cashAllocation'
 
 interface Props {
   rows: AllocationRow[]
@@ -35,7 +36,7 @@ export default function AllocationBars({ rows, title = 'Allocation', note, drift
             return (
               <li key={r.ticker}>
                 <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-mono font-bold text-[var(--ink)]">{r.ticker === 'CASH' ? 'Cash' : r.ticker}</span>
+                  <span className="font-mono font-bold text-[var(--ink)]">{r.ticker === CASH_ROW_KEY ? 'Cash' : r.ticker}</span>
                   <span className="flex items-baseline gap-2 font-mono text-xs text-[var(--ink-3)]">
                     <span>
                       {pctText(r.current_pct)} <span aria-hidden="true">→</span>
@@ -54,10 +55,10 @@ export default function AllocationBars({ rows, title = 'Allocation', note, drift
                 <div
                   className="relative h-2.5 w-full overflow-visible rounded-full bg-[var(--paper-3)]"
                   role="img"
-                  aria-label={`${r.ticker}: current ${pctText(r.current_pct)}, target ${pctText(r.target_pct)}`}
+                  aria-label={`${r.ticker === CASH_ROW_KEY ? 'Cash' : r.ticker}: current ${pctText(r.current_pct)}, target ${pctText(r.target_pct)}`}
                 >
                   <div
-                    className={`h-full rounded-full ${r.ticker === 'CASH' ? 'bg-[var(--ink-4)]' : 'bg-[var(--blue-500)]'}`}
+                    className={`h-full rounded-full ${r.ticker === CASH_ROW_KEY ? 'bg-[var(--ink-4)]' : 'bg-[var(--blue-500)]'}`}
                     style={{ width: `${Math.min(100, (r.current_pct / scaleMax) * 100)}%` }}
                   />
                   {r.target_pct > 0 && (

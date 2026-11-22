@@ -1,4 +1,5 @@
-import type { ActionItem, TargetHorizon } from '@/types/database'
+import type { ActionItem } from '@/types/database'
+import { isReservedCashWord, scaleAllocationTo } from '@/lib/cashAllocation'
 
 export interface HoldingSummary {
   ticker: string
@@ -54,77 +55,29 @@ export function formatUsd(value: number): string {
   })
 }
 
-export interface PortfolioReturnMetrics {
-  weighted_30d_return_pct: number  // value-weighted return over the price data window
-  annualized_return_pct:   number  // ×12 approximation
-  target_annual_pct:       number  // user target converted to annual terms
-  annual_gap_pct:          number  // annualized − target_annual (negative = underperforming)
-  data_coverage_pct:       number  // percentage of portfolio value with usable price data
-}
-
-/**
- * Computes how the portfolio has actually performed versus the stated target.
- * Uses the first and last close of each holding's price data window (typically 30 days).
- * Pure function — no network calls, safe for Vitest.
- */
-export function computePortfolioReturnMetrics(
-  holdings: Array<{ ticker: string; total_value_usd: number }>,
-  priceData: Record<string, Array<{ close: number }>>,
-  target_return_pct: number,
-  target_horizon: TargetHorizon,
-): PortfolioReturnMetrics {
-  const totalValue = holdings.reduce((s, h) => s + h.total_value_usd, 0)
-  const target_annual_pct = target_horizon === 'annual' ? target_return_pct : target_return_pct * 12
-
-  if (totalValue === 0) {
-    return {
-      weighted_30d_return_pct: 0,
-      annualized_return_pct:   0,
-      target_annual_pct,
-      annual_gap_pct:          -target_annual_pct,
-      data_coverage_pct:       0,
-    }
-  }
-
-  let weightedReturnSum = 0
-  let coveredValue      = 0
-
-  for (const h of holdings) {
-    const candles = priceData[h.ticker]
-    if (!candles || candles.length < 2) continue
-    const first = candles[0].close
-    if (first === 0) continue
-    const last   = candles[candles.length - 1].close
-    const ret30d = ((last - first) / first) * 100
-    weightedReturnSum += ret30d * h.total_value_usd
-    coveredValue      += h.total_value_usd
-  }
-
-  const weighted_30d_return_pct = coveredValue > 0 ? weightedReturnSum / coveredValue : 0
-  const annualized_return_pct   = weighted_30d_return_pct * 12
-  const annual_gap_pct          = annualized_return_pct - target_annual_pct
-  const data_coverage_pct       = Math.round((coveredValue / totalValue) * 100)
-
-  return {
-    weighted_30d_return_pct,
-    annualized_return_pct,
-    target_annual_pct,
-    annual_gap_pct,
-    data_coverage_pct,
-  }
-}
-
 /**
  * Given current holdings, cash, and a target allocation, compute a list of
  * buy/sell/hold actions needed to reach the target allocation.
+ * Stock targets are sized as total × stock target%, so the cash target (explicit `cashTargetPct`, or whatever the
+ * stock targets leave over) stays uninvested; the risk-limit cash buffer still applies on top at execution.
+ * Reserved cash words in the target (e.g. "CASH") are never turned into a BUY.
  * Pure deterministic function — no network calls, safe for Vitest.
  */
 export function computeActionList(
   holdings: Array<{ ticker: string; company_name: string; total_value_usd: number }>,
   cash_usd: number,
-  targetAllocation: Array<{ ticker: string; target_pct: number }>
+  targetAllocation: Array<{ ticker: string; target_pct: number }>,
+  cashTargetPct?: number,
 ): ActionItem[] {
   const grand_total = holdings.reduce((s, h) => s + h.total_value_usd, 0) + cash_usd
+
+  // Defence in depth: never target a reserved cash word, and never let stocks + cash exceed 100%
+  let stockTargets = targetAllocation.filter(a => !isReservedCashWord(a.ticker))
+  if (cashTargetPct !== undefined && Number.isFinite(cashTargetPct)) {
+    const room = Math.max(0, 100 - Math.min(100, Math.max(0, cashTargetPct)))
+    const sum = stockTargets.reduce((s, a) => s + a.target_pct, 0)
+    if (sum > room + 1e-6) stockTargets = scaleAllocationTo(stockTargets, room)
+  }
 
   const holdingMap = new Map<string, number>()
   for (const h of holdings) {
@@ -132,13 +85,13 @@ export function computeActionList(
   }
 
   const allocationMap = new Map<string, number>()
-  for (const a of targetAllocation) {
+  for (const a of stockTargets) {
     allocationMap.set(a.ticker, a.target_pct)
   }
 
   const allTickers = new Set<string>([
     ...holdings.map(h => h.ticker),
-    ...targetAllocation.map(a => a.ticker),
+    ...stockTargets.map(a => a.ticker),
   ])
 
   const actions: ActionItem[] = []

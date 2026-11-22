@@ -24,7 +24,7 @@ import {
   settlementLookbackStart,
   type PlanInput,
 } from './tradeExecution'
-import { NOT_COMPLIANT_SKIP_REASON, NO_SCREENING_SKIP_REASON } from './shariahRules'
+import { NOT_COMPLIANT_SKIP_REASON, NO_SCREENING_SKIP_REASON, RESERVED_CASH_SKIP_REASON } from './shariahRules'
 import type { ActionItem, AlpacaOrderResult } from '@/types/database'
 import type { ShariahScreeningResult, TickerScreening } from '@/types/shariah'
 import type { AlpacaOrderSnapshot } from './alpacaClient'
@@ -453,5 +453,32 @@ describe('executionBlocksNewRequest', () => {
     expect(executionBlocksNewRequest(buildEnvelope('completed', [], 'now'))).toBe(true)
     expect(executionBlocksNewRequest(buildEnvelope('cancelled', [], 'now'))).toBe(true)
     expect(executionBlocksNewRequest([])).toBe(true)
+  })
+})
+
+describe('planOrders — reserved cash words (specs/031)', () => {
+  it('never plans a BUY of a reserved cash word, even when it is tradeable, quoted and "screened" compliant', () => {
+    const orders = planOrders(input({
+      items: [item('CASH', 'buy', 1000), item('USD', 'buy', 50), item('AAPL', 'buy', 400)],
+      screening: { ...screening, tickers: [...screening.tickers, compliant('CASH'), compliant('USD')] },
+      assets: { CASH: { tradable: true, fractionable: true }, USD: { tradable: true, fractionable: true }, AAPL: { tradable: true, fractionable: true } },
+      quotes: { CASH: 60, USD: 1, AAPL: 200 },
+      screeningConfig: { islamic: false, business: false, financial: false, stocks_only: false },
+    }))
+    const byTicker = Object.fromEntries(orders.map(o => [o.ticker, o]))
+    expect(byTicker.CASH.status).toBe('skipped')
+    expect(byTicker.CASH.error_message).toBe(RESERVED_CASH_SKIP_REASON)
+    expect(byTicker.USD.status).toBe('skipped')
+    expect(byTicker.AAPL.status).toBe('planned')
+  })
+
+  it('still allows SELLING a real holding with a reserved symbol', () => {
+    const orders = planOrders(input({
+      items: [item('CASH', 'sell', -1000, 0)],
+      assets: { CASH: { tradable: true, fractionable: false } },
+      quotes: { CASH: 50 },
+      positions: { CASH: 3 },
+    }))
+    expect(orders[0]).toMatchObject({ ticker: 'CASH', action: 'sell', status: 'planned', qty: 3 })
   })
 })

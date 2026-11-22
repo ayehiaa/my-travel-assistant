@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { normaliseTo100 } from '@/lib/allocationUtils'
 import type { AgentOutput, PortfolioSnapshot, PortfolioSettings, TargetAllocationItem } from '@/types/database'
-import type { PortfolioReturnMetrics } from '@/lib/portfolioCalculator'
+import { ANNUALISE_MIN_DAYS, MIN_HISTORY_DAYS, describeTarget, type HoldingMomentum, type RealReturnMetrics } from '@/lib/returnMetrics'
+import { extractCashEntries, normaliseWithCash } from '@/lib/cashAllocation'
 import { withIslamicMandate } from '@/lib/islamicMandate'
 import { FULL_SCREENING_CONFIG, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { MAX_STOCK_WEIGHT_PCT } from '@/lib/shariahRules'
@@ -14,7 +14,10 @@ export interface SynthesizerParams {
   snapshot:        PortfolioSnapshot
   settings:        PortfolioSettings
   recentSummaries: string[]
-  returnMetrics:   PortfolioReturnMetrics
+  /** Real account return vs target (Alpaca portfolio history) — the target verdict. */
+  returnMetrics:   RealReturnMetrics
+  /** Recent price change of each current holding — input only (which positions are weak / strong). */
+  holdingMomentum?: { rows: HoldingMomentum[]; coverage_pct: number }
   /** True when the account holds only cash — build a portfolio instead of rebalancing one. */
   isNewPortfolio?:   boolean
   /** Starter candidates the agents researched (new portfolio only). */
@@ -26,7 +29,12 @@ export interface SynthesizerParams {
 }
 
 export interface SynthesizerOutput {
+  /** Stocks only — reserved cash words have been converted into cash_target_pct. Σ target_pct + cash = 100. */
   target_allocation: TargetAllocationItem[]
+  /** Share of the account to keep in cash (0–100). Absent on results memoised before specs/031 → 0. */
+  cash_target_pct?: number
+  /** Reserved-word entries the model put into target_allocation (converted into cash). */
+  cash_converted?: string[]
   summary_text: string
   conflict_notes: string
 }
@@ -36,34 +44,66 @@ export interface SynthesizerRunResult {
   usage: AiCallUsage
 }
 
-const SynthesisSchema = z.object({
-  target_allocation: z
-    .array(
-      z.object({
-        ticker:     z.string(),
-        target_pct: z.number(),
-        rationale:  z.string(),
-      })
-    )
-    .refine(
-      items => {
-        const sum = items.reduce((s, i) => s + i.target_pct, 0)
-        // Rounding / small arithmetic slips are normalised below; only a clearly wrong total fails.
-        return sum >= 90 && sum <= 110
-      },
-      { message: 'Allocation must sum to roughly 100% (90–110%)' }
-    ),
+export const SynthesisSchema = z.object({
+  target_allocation: z.array(
+    z.object({
+      ticker:     z.string(),
+      target_pct: z.number(),
+      rationale:  z.string(),
+    })
+  ),
+  cash_target_pct: z.number().min(0).max(100).optional().default(0),
   summary_text:   z.string(),
   conflict_notes: z.string(),
-})
+}).refine(
+  o => {
+    const sum = o.target_allocation.reduce((s, i) => s + i.target_pct, 0) + o.cash_target_pct
+    // Rounding / small arithmetic slips are normalised below; only a clearly wrong total fails.
+    return sum >= 90 && sum <= 110
+  },
+  { message: 'Allocation plus cash must sum to roughly 100% (90–110%)' }
+)
+
+/**
+ * Turn the validated synthesizer JSON into the stored shape: reserved cash words → cash, zero weights dropped,
+ * stocks + cash normalised to exactly 100. Pure; exported for tests.
+ */
+export function finaliseSynthesis(validated: z.infer<typeof SynthesisSchema>): SynthesizerOutput {
+  const extracted = extractCashEntries(validated.target_allocation, validated.cash_target_pct)
+  const converted = validated.target_allocation.filter(a => !extracted.stocks.includes(a)).map(a => a.ticker)
+  const normalised = normaliseWithCash(extracted.stocks, extracted.cash_target_pct)
+  return {
+    target_allocation: normalised.stocks,
+    cash_target_pct:   normalised.cash_target_pct,
+    cash_converted:    converted,
+    summary_text:      validated.summary_text,
+    conflict_notes:    validated.conflict_notes,
+  }
+}
 
 const OUTPUT_HEADER =
   'You are a senior portfolio strategist synthesizing analysis from multiple specialised agents ' +
   'into a unified investment recommendation. ' +
-  'Return ONLY a raw JSON object (no markdown, no code fences) with exactly three fields: ' +
+  'Return ONLY a raw JSON object (no markdown, no code fences) with exactly four fields: ' +
   '"target_allocation" (array of { ticker, target_pct, rationale }), ' +
+  '"cash_target_pct" (number 0–100: share of the account to keep in cash), ' +
   '"summary_text" (100–200 word overall assessment string), ' +
   '"conflict_notes" (1–2 sentence summary of key agent disagreements, or empty string if none).\n\n'
+
+/** How to use cash (specs/031). Exported for tests. */
+export const CASH_RULES =
+  'CASH — cash is held explicitly in "cash_target_pct", NEVER as a ticker:\n' +
+  '  - Never put "CASH", "USD", "$", a money-market fund or a sweep fund in target_allocation (note: CASH is also a ' +
+  'real bank stock — writing it as a ticker would be wrong either way).\n' +
+  '  - Holding some cash makes sense when nothing compliant is attractive enough, when risk limits or concentration ' +
+  'call for it, or when uncertainty is high. Otherwise keep cash_target_pct low (0 is fine) — idle cash earns nothing ' +
+  'towards the target.\n' +
+  '  - The stock target_pct values plus cash_target_pct must sum to 100.\n\n'
+
+const OUTPUT_FORMAT_ALLOCATION =
+  '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
+  '(stocks only; rationale max 20 words per ticker)\n' +
+  '  cash_target_pct: number (0–100; stocks + cash_target_pct must sum to 100%)\n'
 
 const TICKER_RULES =
   '  1. Use only real, valid US-traded ticker symbols of individual common stocks (e.g. "MSFT", "AAPL"). ' +
@@ -130,18 +170,80 @@ function buildNewPortfolioPrompt(
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
     wording.tickerRules +
     '  3. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
-    'Output format — return a JSON object with exactly these three keys:\n' +
-    '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
-    '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +
+    CASH_RULES +
+    'Output format — return a JSON object with exactly these four keys:\n' +
+    OUTPUT_FORMAT_ALLOCATION +
     '  summary_text: string (100–200 word overall assessment of the new portfolio and why it fits the risk profile and target)\n' +
     '  conflict_notes: string (1–2 sentences on agent disagreements, or "" if none)'
   )
 }
 
+function signed(v: number): string {
+  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+}
+
+/**
+ * The "PERFORMANCE VS TARGET" section from the REAL account return (time-weighted, deposits excluded), plus the
+ * per-holding momentum clearly labelled as an input only. Pure; exported for tests.
+ */
+export function buildPerformanceSection(
+  m: RealReturnMetrics,
+  momentum?: { rows: HoldingMomentum[]; coverage_pct: number },
+): string {
+  let text = '--- PERFORMANCE VS TARGET (real account return from the broker; time-weighted, deposits/withdrawals excluded) ---\n'
+  if (m.status !== 'ok' || m.period_return_pct === null || m.gap_pct === null) {
+    text +=
+      (m.status === 'unavailable'
+        ? `  Account return history is unavailable right now (${m.reason ?? 'unknown reason'}).\n`
+        : `  Insufficient history: ${m.reason ?? `fewer than ${MIN_HISTORY_DAYS} days.`} ` +
+          `A reliable verdict needs at least ${MIN_HISTORY_DAYS} days since the programme started.\n`) +
+      `  Target: ${m.target_annual_pct.toFixed(2)}% a year (compounded).\n\n` +
+      'IMPORTANT — there is no reliable performance gap yet. Do NOT claim the portfolio is ahead of or behind its target. ' +
+      'Focus on building / maintaining the target mix that fits the risk profile and is positioned to reach the target ' +
+      'return over time; avoid chasing short-term moves.\n\n'
+  } else {
+    const period = `${m.start_date} to ${m.end_date} (${Math.round(m.days)} days, ` +
+      `${m.window === 'programme_start' ? 'since the programme started' : 'last 3 months'})`
+    const behind = m.gap_pct < 0
+    text += `  Period:                  ${period}\n` +
+      `  Period return:           ${signed(m.period_return_pct)}` +
+      (m.method === 'equity' ? ' (equity change only — may include deposits/withdrawals; treat with caution)' : '') + '\n'
+    if (m.basis === 'annualised' && m.annualised_return_pct !== null) {
+      text +=
+        `  Annualised (compounded): ${signed(m.annualised_return_pct)}\n` +
+        `  Target (annual):         ${m.target_annual_pct.toFixed(2)}%\n` +
+        `  Gap (annualised):        ${signed(m.gap_pct)} (${behind ? 'behind target' : 'ahead of target'})\n\n`
+    } else {
+      text +=
+        `  Target for this period:  ${describeTarget(m)}\n` +
+        `  Gap (period):            ${signed(m.gap_pct)} (${behind ? 'behind target' : 'ahead of target'}; ` +
+        `window under ${ANNUALISE_MIN_DAYS} days, so it is compared unannualised)\n\n`
+    }
+    text += 'IMPORTANT — your allocation MUST address this gap:\n' +
+      (behind
+        ? `  The portfolio is ${Math.abs(m.gap_pct).toFixed(2)} points behind its target. ` +
+          'Overweight instruments with stronger growth profiles or introduce new higher-return instruments. ' +
+          'Reduce or eliminate positions whose recent momentum is too weak to contribute to the target.\n\n'
+        : '  The portfolio is ahead of its target. Assess whether to maintain positioning or reduce risk ' +
+          'to lock in gains while preserving the ability to stay on target.\n\n')
+  }
+
+  if (momentum && momentum.rows.length > 0) {
+    text += '--- RECENT PER-HOLDING PRICE CHANGE (~30 days, current holdings only) ---\n' +
+      'Input only, to see which positions are weak or strong — NOT the performance verdict (it ignores cash, sold ' +
+      'positions and timing).' +
+      (momentum.coverage_pct < 80 ? ` Covers only ${momentum.coverage_pct}% of holdings value.` : '') + '\n' +
+      momentum.rows.map(r => `  ${r.ticker}: ${signed(r.return_pct)} (weight ${r.weight_pct.toFixed(1)}% of holdings)`).join('\n') +
+      '\n\n'
+  }
+  return text
+}
+
 function buildSystemPrompt(
   settings:      PortfolioSettings,
   snapshot:      PortfolioSnapshot,
-  returnMetrics: PortfolioReturnMetrics,
+  returnMetrics: RealReturnMetrics,
+  momentum:      { rows: HoldingMomentum[]; coverage_pct: number } | undefined,
   cfg:           EffectiveScreeningConfig,
 ): string {
   const wording = synthesizerWording(cfg)
@@ -150,12 +252,7 @@ function buildSystemPrompt(
     .join('\n')
 
   const horizonLabel   = settings.target_horizon === 'annual' ? 'annually' : 'per month'
-  const gapLabel       = returnMetrics.annual_gap_pct >= 0
-    ? `+${returnMetrics.annual_gap_pct.toFixed(2)}% (outperforming)`
-    : `${returnMetrics.annual_gap_pct.toFixed(2)}% (underperforming — must close this gap)`
-  const coverageNote   = returnMetrics.data_coverage_pct < 80
-    ? ` (note: only ${returnMetrics.data_coverage_pct}% of portfolio value has price data — treat with caution)`
-    : ''
+  const hasGap = returnMetrics.status === 'ok' && returnMetrics.gap_pct !== null
 
   return (
     OUTPUT_HEADER +
@@ -165,27 +262,18 @@ function buildSystemPrompt(
     holdingsText + '\n' +
     `Cash: $${snapshot.cash_usd.toFixed(2)}\n` +
     `Total portfolio value: $${snapshot.total_value_usd.toFixed(2)}\n\n` +
-    '--- PERFORMANCE VS TARGET ---\n' +
-    `  30-day weighted return:  ${returnMetrics.weighted_30d_return_pct.toFixed(2)}%${coverageNote}\n` +
-    `  Annualised equivalent:   ${returnMetrics.annualized_return_pct.toFixed(2)}%\n` +
-    `  Target (annualised):     ${returnMetrics.target_annual_pct.toFixed(2)}%\n` +
-    `  Gap:                     ${gapLabel}\n\n` +
-    'IMPORTANT — your allocation MUST address this gap:\n' +
-    (returnMetrics.annual_gap_pct < 0
-      ? `  The portfolio is ${Math.abs(returnMetrics.annual_gap_pct).toFixed(2)}% behind its annualised target. ` +
-        'Overweight instruments with stronger growth profiles or introduce new higher-return instruments. ' +
-        'Reduce or eliminate positions whose recent momentum is too weak to contribute to the target.\n\n'
-      : `  The portfolio is ahead of its target. Assess whether to maintain positioning or reduce risk ` +
-        'to lock in gains while preserving the ability to stay on target.\n\n') +
+    buildPerformanceSection(returnMetrics, momentum) +
     wording.newHoldingsLine +
     'IMPORTANT ticker rules — all tickers in target_allocation must follow these rules:\n' +
     wording.tickerRules +
     '  3. Limit new additions to a maximum of 3 new instruments per recommendation.\n' +
     '  4. All recommended tickers will be validated against market data — invalid tickers will be stripped.\n\n' +
-    'Output format — return a JSON object with exactly these three keys:\n' +
-    '  target_allocation: array of { ticker: string, target_pct: number, rationale: string } ' +
-    '(percentages must sum to 100%; rationale max 20 words per ticker)\n' +
-    '  summary_text: string (100–200 word overall assessment; must mention the performance gap and how the allocation addresses it)\n' +
+    CASH_RULES +
+    'Output format — return a JSON object with exactly these four keys:\n' +
+    OUTPUT_FORMAT_ALLOCATION +
+    (hasGap
+      ? '  summary_text: string (100–200 word overall assessment; must mention the performance gap and how the allocation addresses it)\n'
+      : '  summary_text: string (100–200 word overall assessment; say there is not enough history for a performance verdict yet and how the mix is positioned for the target)\n') +
     '  conflict_notes: string (1–2 sentences on agent disagreements, or "" if none)'
   )
 }
@@ -214,12 +302,12 @@ function buildUserPrompt(
 }
 
 export async function runSynthesizer(params: SynthesizerParams): Promise<SynthesizerRunResult> {
-  const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers } = params
+  const { agentOutputs, snapshot, settings, recentSummaries, returnMetrics, holdingMomentum, isNewPortfolio, candidateTickers } = params
 
   const cfg = params.screening ?? FULL_SCREENING_CONFIG
   const systemPrompt = withIslamicMandate(isNewPortfolio
     ? buildNewPortfolioPrompt(settings, snapshot, candidateTickers ?? [], cfg)
-    : buildSystemPrompt(settings, snapshot, returnMetrics, cfg), cfg)
+    : buildSystemPrompt(settings, snapshot, returnMetrics, holdingMomentum, cfg), cfg)
 
   const { text: raw, stopReason, usage } = await callClaude({
     role:   'synthesizer',
@@ -248,14 +336,5 @@ export async function runSynthesizer(params: SynthesizerParams): Promise<Synthes
     const messages = validationResult.error.issues.map(i => i.message).join('; ')
     throw new Error(`Synthesizer output failed schema validation: ${messages}`)
   }
-  const validated = validationResult.data
-
-  return {
-    result: {
-      target_allocation: normaliseTo100(validated.target_allocation.filter(a => a.target_pct > 0)),
-      summary_text:      validated.summary_text,
-      conflict_notes:    validated.conflict_notes,
-    },
-    usage,
-  }
+  return { result: finaliseSynthesis(validationResult.data), usage }
 }

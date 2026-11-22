@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/030-configurable-islamic-screening/spec.md` (configurable Islamic screening — per-user master switch, business-activity / financial-ratio parts and an independent individual-stocks-only toggle in `portfolio_settings.screening_settings`; pure config in `src/lib/screeningConfig.ts`; verdicts, buy guard (current settings), reviewer, prompts and divest alerts follow the effective config; plan in `plan.md`, tasks in `tasks.md`). Previous: Health module `specs/029-health-routines/spec.md`.
+Active feature spec: `specs/031-real-return-and-cash-allocation/spec.md` (target tracking from the real Alpaca time-weighted account return — window since programme start or last 3 months, min 21 days, compounded annualising from 60 days else prorated target, `src/lib/returnMetrics.ts`; explicit `cash_target_pct` in the allocation with a reserved-word deny-list that is never validated/screened/bought, `src/lib/cashAllocation.ts`; stored in `agent_outputs.cash_allocation` / `return_metrics`, no migration; plan in `plan.md`, tasks in `tasks.md`). Previous: `specs/030-configurable-islamic-screening/spec.md`, Health module `specs/029-health-routines/spec.md`.
 <!-- SPECKIT END -->

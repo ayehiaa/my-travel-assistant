@@ -14,6 +14,7 @@ import {
   annotateActionList,
   NOT_COMPLIANT_SKIP_REASON,
   NO_SCREENING_SKIP_REASON,
+  RESERVED_CASH_SKIP_REASON,
   type ReviewerTickerVerdict,
   type TickerScreeningInput,
 } from './shariahRules'
@@ -249,6 +250,38 @@ describe('applyShariahScreening', () => {
   it('throws when nothing compliant remains', () => {
     expect(() => applyShariahScreening(alloc, [screening('A', false)])).toThrow(/no compliant stocks/)
   })
+
+  it('with an explicit cash target: removed weight goes to the remaining stocks, cash is kept (specs/031)', () => {
+    const withCash = [
+      { ticker: 'A', target_pct: 15, rationale: '' },
+      { ticker: 'B', target_pct: 15, rationale: '' },
+      { ticker: 'C', target_pct: 15, rationale: '' },
+      { ticker: 'D', target_pct: 15, rationale: '' },
+      { ticker: 'E', target_pct: 15, rationale: '' },
+      { ticker: 'BANK', target_pct: 15, rationale: '' },
+    ] // + 10% cash
+    const all = ['A', 'B', 'C', 'D', 'E'].map(t => screening(t, true)).concat(screening('BANK', false))
+    const res = applyShariahScreening(withCash, all, undefined, true, 10)
+    expect(res.kept.map(k => k.target_pct)).toEqual([18, 18, 18, 18, 18])
+    expect(res.cash_target_pct).toBeCloseTo(10)
+  })
+
+  it('leftover from the 20% cap goes to cash', () => {
+    const res = applyShariahScreening(
+      [{ ticker: 'A', target_pct: 45, rationale: '' }, { ticker: 'B', target_pct: 45, rationale: '' }],
+      [screening('A', true), screening('B', true)], undefined, true, 10,
+    )
+    expect(res.kept.map(k => k.target_pct)).toEqual([20, 20])
+    expect(res.cash_target_pct).toBeCloseTo(60)
+  })
+
+  it('never keeps a reserved cash word, even if it was "screened" compliant', () => {
+    const res = applyShariahScreening(
+      [{ ticker: 'A', target_pct: 15, rationale: '' }, { ticker: 'CASH', target_pct: 85, rationale: '' }],
+      [screening('A', true), screening('CASH', true)], undefined, true, 0,
+    )
+    expect(res.kept.map(k => k.ticker)).toEqual(['A'])
+  })
 })
 
 describe('getBuyBlockReason', () => {
@@ -264,6 +297,15 @@ describe('getBuyBlockReason', () => {
 
   it('refuses every buy when no screening data exists', () => {
     expect(getBuyBlockReason('A', null)).toBe(NO_SCREENING_SKIP_REASON)
+  })
+
+  it('refuses to BUY a reserved cash word under every screening setting (specs/031)', () => {
+    const cashScreened: ShariahScreeningResult = { ...result, tickers: [screening('CASH', true)] }
+    const off = { islamic: false, business: false, financial: false, stocks_only: false }
+    for (const t of ['CASH', 'cash', 'USD', '$', 'SPAXX', 'Money Market', '__cash__']) {
+      expect(getBuyBlockReason(t, cashScreened)).toBe(RESERVED_CASH_SKIP_REASON)
+      expect(getBuyBlockReason(t, null, off)).toBe(RESERVED_CASH_SKIP_REASON)
+    }
   })
 })
 
