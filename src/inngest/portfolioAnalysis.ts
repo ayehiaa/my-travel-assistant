@@ -24,7 +24,7 @@ import {
   SCREENING_EXCLUDED_NOTE_PREFIX,
 } from '@/lib/shariahRules'
 import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
-import { effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
+import { FULL_SCREENING_CONFIG, effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
 import { isTradeableAsset } from '@/lib/alpacaClient'
 import { getStarterUniverse } from '@/lib/starterUniverse'
@@ -145,7 +145,7 @@ export const portfolioAnalysis = inngest.createFunction(
     const { run_id, user_id, trigger } = parseResult.data
 
     // Step 1: Fetch portfolio data
-    const { settings, tickers, isNewPortfolio, snapshot, screening: screeningConfig } = await step.run(
+    const { settings, tickers, isNewPortfolio, snapshot, screening: storedScreeningConfig } = await step.run(
       'fetch-portfolio',
       async (): Promise<FetchPortfolioResult> => {
         // No cookie session in Inngest — admin client used intentionally.
@@ -216,6 +216,8 @@ export const portfolioAnalysis = inngest.createFunction(
         }
       },
     )
+    // A run memoised before specs/030 has no config → full screening.
+    const screeningConfig: EffectiveScreeningConfig = storedScreeningConfig ?? FULL_SCREENING_CONFIG
 
     // Step 2: Pre-fetch Polygon.io OHLCV data (once per run — rate-limit safe)
     const priceData = await step.run(
