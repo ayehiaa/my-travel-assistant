@@ -2,12 +2,14 @@ import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { HEALTH_PHOTO_BUCKET } from '@/lib/health/healthPhotos'
 import { photoDecision, retentionCutoff, withoutPaths, type StoredObject } from '@/lib/health/photoCleanup'
+import { IMPORT_PREFIX, isStaleImport } from '@/lib/health/programmeImport'
 
 /**
  * Daily food-photo retention (specs/029 §12.1, phase P2):
  *  1. photos older than 30 days → removed from storage and from their entries' photo_paths (items/estimates kept);
  *  2. photos never attached to a saved entry → removed after 24 hours.
- * Only `<userId>/<date>/<file>.jpg` food photos are touched; progress photos (`progress/…`) are kept.
+ *  3. programme-import PDFs (`imports/<uid>/…`, P3) still present after an hour → removed.
+ * Only food photos and import uploads are touched; progress photos (`progress/…`) are kept.
  * Bounded per run (500 folders / 5,000 files); anything left is picked up the next day.
  */
 
@@ -70,7 +72,18 @@ export const healthPhotoCleanup = inngest.createFunction(
           }
         }
       }
-      return { users: userFolders.length, scanned, removed, entriesCleared: cleared }
+      // 3. Programme-import uploads (P3) left behind by an interrupted request: removed after an hour.
+      let imports = 0
+      const importUsers = await bucket.list(IMPORT_PREFIX, { limit: 1000 })
+      for (const u of (importUsers.data ?? []).map(o => o.name).filter(n => UUID_RE.test(n)).slice(0, MAX_FOLDERS)) {
+        const files = await bucket.list(`${IMPORT_PREFIX}/${u}`, { limit: 1000 })
+        const stale = (files.data ?? []).filter(f => f.id && isStaleImport(f.created_at, now)).map(f => `${IMPORT_PREFIX}/${u}/${f.name}`)
+        if (stale.length > 0) {
+          const { data } = await bucket.remove(stale)
+          imports += data?.length ?? 0
+        }
+      }
+      return { users: userFolders.length, scanned, removed, entriesCleared: cleared, importsRemoved: imports }
     })
   },
 )

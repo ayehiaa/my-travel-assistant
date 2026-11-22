@@ -6,6 +6,7 @@ import { useToast } from '@/context/ToastContext'
 import type { MealSlot } from '@/lib/health/programmeSchema'
 import { suggestSlot, type FoodItem } from '@/lib/health/nutrition'
 import FoodItemsEditor, { fromEditable, toEditable, type EditableItem } from './FoodItemsEditor'
+import BarcodeScanner from './BarcodeScanner'
 import { preparePhoto } from './resizePhoto'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
 
@@ -34,6 +35,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
   const [photoPaths, setPhotoPaths] = useState<string[]>([])
   const [tips, setTips] = useState<string[]>([])
   const [busy, setBusy] = useState<'estimate' | 'save' | null>(null)
+  const [scan, setScan] = useState(false)
 
 
   function onTimeChange(v: string) {
@@ -138,6 +140,11 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
               <input type="checkbox" checked={restaurant} onChange={e => setRestaurant(e.target.checked)} /> Eating out
             </label>
           </div>
+          {scan && (
+            <div className="mt-3">
+              <BarcodeScanner onAdd={item => setItems(toEditable([{ ...item }]).map(i => ({ ...i, remember: true })))} onClose={() => setScan(false)} />
+            </div>
+          )}
           {restaurant && eatingOut.length > 0 && (
             <div className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900">
               <p className="font-semibold">Restaurant mode — estimate from the dish or a menu photo.</p>
@@ -155,6 +162,7 @@ export default function QuickLog({ date, nowTime, slots, componentLabels, eating
             }]))}>
               Enter by hand
             </button>
+            <button type="button" className={BUTTON_SECONDARY} onClick={() => setScan(true)}>Scan barcode</button>
             <button type="button" className={`${BUTTON_PRIMARY} ml-auto`} disabled={busy !== null || (!text.trim() && photos.length === 0)} onClick={estimate}>
               {busy === 'estimate' ? 'Estimating…' : 'Estimate'}
             </button>

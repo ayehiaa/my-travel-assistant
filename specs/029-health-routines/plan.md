@@ -299,3 +299,117 @@ cross-user reads return 0 rows, cross-user insert and a foreign progress-photo p
 - Reminder scheduling uses typical times (median of recent check-ins); a user without check-ins gets the defaults.
 - Food photos uploaded before P2 for discarded estimates are cleaned by the first daily run (> 24 h old).
 - Food-entry `eaten_at` on back-dated entries uses today's timezone (unchanged from P1a).
+
+---
+
+## Phase P3 — Convenience (programme import, meal plan + shopping list, clinician export, offline sets, barcode, data rights)
+
+### Design
+- **Pure logic** (`src/lib/health/`, all tested):
+  - `programmeImport.ts` — 15 review sections covering every §3.1 field (identity · energy & macros · components ·
+    meal slots & rotation · nutrition rules & eating out · sessions/exercises · weekly schedule · blocks & progression ·
+    movement restrictions & pain rules · cardio & daily movement · sleep · supplements · tracking · adjustment ·
+    milestones & outcomes); per-section Zod validation built from `ProgrammeDefinitionSchema.shape`; status
+    extracted / needs review / not found; AI-output normalisation (nulls dropped, keys → lower_snake_case); prompt +
+    strict parser; `assembleDraft` (all confirmed + whole-definition validation, errors mapped to sections);
+    `replaceSection`; `programmeDiff` (per-section summary: added / removed / changed items, changed leaves);
+    editor templates; import upload paths (`imports/<uid>/<uuid>.pdf`) and the 1-hour stale rule.
+  - `programmeEdit.ts` — `retargetAfterEdit` (only energy/macro changes move targets; accepted adjustments re-applied
+    as a delta), `targetsForSwitch`.
+  - `mealPlan.ts` — week plan (day × slot), swaps within a slot, `cleanChoices`, 39-entry ingredient dictionary built
+    from the seed rotation (aliases, aisle, amount per serving), option parsing (split on + , ; on with —; quantities /
+    notes stripped; longest alias wins), aggregation by aisle, quantity formatting, share text, AI split prompt + strict
+    parser (known names mapped back to the dictionary).
+  - `clinicianExport.ts` + `clinicianPdf.ts` — report assembly (profile, weight + 7-day averages, waist, lipids with
+    non-HDL, adherence: food-logged days, protein ≥ target days, sat fat ≤ target / ceiling days, averages, each daily
+    component days-hit and weekly component weeks-met, training done/partial/skipped + key-lift first vs latest top set,
+    cardio minutes by type, notes); CSV (formula-injection safe); PDF with pdf-lib (A4, Helvetica, weight chart).
+  - `offlineQueue.ts` — set / finish ops with client ids, `enqueue` (idempotent, bounded 500), LWW `mergeSetOps`,
+    `queuedSetCount`, `groupQueue`, server merge `applySetOps` (op applies only if not older than the stored set; client
+    clock clamped to server now; replays no-ops), `setsToExercises`.
+  - `barcode.ts` — EAN-8/UPC-A/EAN-13/GTIN-14 + GS1 check digit, OFF product URL / mapping, portion options, scaling.
+  - `dataRights.ts` — every per-user health table in a safe delete order (a test checks it against the migrations),
+    typed confirmation, export document (redacts push keys), photo paths, storage prefixes.
+- **Server**: `p3Server.ts` (drafts, programme rows / versions, insert version, enrolment switch with rollback, meal plan,
+  ingredient cache; missing table/column → `P3MigrationNeeded` / 503), `workoutWrite.ts` (session write shared by
+  POST /workouts and the sync), `dataRightsServer.ts`, `openFoodFactsClient.lookupBarcode` (same cache),
+  `callClaude({ documents })` (base64 PDF document blocks — the installed `@anthropic-ai/sdk` 0.92 types support them),
+  AI roles `health_import` (16k tokens, effort medium) and `health_ingredients` (4k, low).
+- **API**: `programme/import` (GET drafts, POST text | uploaded PDF), `programme/import/upload-url`,
+  `programme/import/[id]` (GET / PATCH section + confirm / DELETE), `programme/import/[id]/save` (save, optionally
+  enrol), `programme` (GET versions, PATCH section | restore), `programme/switch`, `meal-plan` (GET / PATCH),
+  `meal-plan/ingredients` (AI fallback), `export/clinician` (PDF | CSV), `foods/barcode`, `workouts/sync`,
+  `data/export`, `data/delete`. All: auth → Health add-on → Zod → enrolment where needed → DB.
+- **UI**: Programme tab sub-views `?tab=programme&view=overview|edit|import|meals|export` (pills nav):
+  Edit & versions (section editor, version history with restore, your programmes + switch), Import (upload / paste →
+  step-by-step review, section chips with status, AI notes, validation errors, confirm per section, save / save & start),
+  Meal plan (`&week=` Monday; day cards with swap selects, shopping list by aisle with ticks, copy / share, "Split with
+  AI" for unknown parts), Export & data (clinician PDF/CSV with optional photos; export JSON; typed delete). Generic
+  `SectionValueEditor` (fields, item cards with add/remove/reorder, one-per-line lists, number pairs, enum selects, JSON
+  escape hatch). Barcode scanner in Log food (start screen + item editor). Offline indicator + auto-sync on the Training
+  tab and in the session player. Today links to the meal plan.
+
+### Data model (migration `20261122d_health_p3.sql`, paste-ready `supabase/apply_health_p3.sql`)
+`health_programmes` + `lineage_id`, `parent_id`, `version_no`, `source` (template | import | edit), `change_summary`
+(existing rows back-filled as v1 of their own lineage); `health_programme_imports` (draft sections / statuses / notes /
+confirmed, status draft | saved | discarded, source pdf | text, ai_usage; may only point at the user's own programme);
+`health_meal_plans` (user + Monday unique; choices jsonb, checked text[]; Monday CHECK); `health_ingredient_cache`
+(user + part key unique); `health_workout_sets` + `client_id`, `client_updated_at`. Owner-only RLS on the new tables.
+Audit CHECK (full list) + `health_programme_imported`, `health_programme_updated`, `health_data_exported`,
+`health_data_deleted`. Pre-checks P1a, P1b and P2. Tested on local PostgreSQL 16 with Supabase stubs: stops before
+P1a and before P2 with the message, applies after P2, re-runs cleanly, Monday / source CHECKs enforced, cross-user
+reads return 0 rows, an import pointing at another user's programme is rejected by RLS, owner delete in the
+data-rights order succeeds.
+
+### Decisions made autonomously (P3)
+1. **PDF handling**: the PDF goes to Claude as a base64 `document` block (SDK 0.92 supports it). The browser uploads it
+   with a one-time signed URL to the private `health-photos` bucket (`imports/<uid>/<uuid>.pdf`) — avoids serverless
+   request-body limits (4.5 MB on Vercel) for files up to 10 MB; the import request reads it once and deletes it in a
+   `finally`; the daily cleanup removes any upload older than an hour. Pasted text (≤ 100k chars) needs no storage.
+2. **One extraction call** (16k max tokens, non-streaming within the SDK's time budget); "max_tokens" → ask the user
+   to paste the main sections. The model's "uncertain" flags make a section "needs review"; invalid sections too;
+   identity missing is "needs review" (required), other empty sections "not found". Confirming an empty section is
+   allowed (schema defaults apply). Every section must be confirmed and the whole definition must validate to save.
+3. **Section editor is generic** (one component for all 15 sections) with a JSON escape hatch per section, instead of
+   15 bespoke forms — every field of §3.1 is editable; enum fields use selects; validation errors are shown inline.
+4. **Versioning**: an edit or restore inserts a new `health_programmes` row (same lineage, version + 1, diff summary)
+   and moves the enrolment to it; old rows stay (history, workouts keep their enrolment). Edited versions store
+   `template_key = null` so the seed back-fill (`upgradeSeedDefinition`) can never re-add something the user removed
+   (the edit starts from the already-upgraded definition). Targets change only when the computed targets change
+   (energy / macros); accepted fortnightly adjustments are carried over as a delta.
+5. **Switching programme** ends the current enrolment (`completed`, history kept) and starts the new one with the same
+   profile, no overrides and fresh targets; on failure the old enrolment is restored. Import is reachable from the
+   Programme tab (an active enrolment provides the profile); first-time users still start from the seed template.
+6. **Shopping list**: deterministic first; flex slots (eat out) and leftovers buy nothing; quantities are per serving
+   × meals (dictionary amounts, e.g. oats 50 g, skyr 250 g, Benecol 1 bottle). Unknown parts are listed under "Other"
+   as written until the user taps "Split with AI" (max 30 parts per call, cached per user; parts the model skips are
+   cached as themselves so they are never paid for twice). Swaps choose among the day's own options first, then the
+   same slot's options from other days (never across slots); a stale choice falls back to the rotation.
+7. **Clinician export**: PDF with pdf-lib 1.17.1 (pinned, pure JS, standard fonts — text sanitised to WinAnsi) rather
+   than HTML-to-PDF (no headless browser on serverless). Date range ≤ 400 days. Photos only when ticked (embedded,
+   max 12; CSV gets 24-hour signed links). Food items are never exported here — only daily adherence. Each section
+   degrades to empty when its phase's tables are missing. Audited as `health_data_exported` (kind only).
+8. **Offline sets**: the queue is in localStorage (`health-offline-queue:v1`, max 500 ops); a set op is queued when a
+   set is ticked / unticked while `navigator.onLine` is false; "Finish / partial / skip" while offline (or a network
+   failure during save) queues every set plus a finish op and returns to Training. Sync on load, on `online` and via
+   "Sync now". Conflict rule: last write wins per set index (client time, clamped to server time; stored sets without a
+   client time use the workout's save time). A queued finish applies unless the session was saved after it. Rejected
+   groups (future date, > 60 days, programme validation) are dropped with a toast; temporary failures retry.
+9. **Barcode**: browser `BarcodeDetector` (Chrome/Edge Android, recent Safari) with the rear camera; elsewhere manual
+   entry of the printed digits — no extra JS library (keeps the bundle small; manual entry covers iOS/Firefox). Only
+   valid GS1 codes are looked up. Not-found answers are cached for a day, products 30 days. The item is pre-ticked
+   "Remember", so saving the entry stores it in the personal food library.
+10. **Data rights**: export = one JSON file (all health rows via the user's own session + 24-hour signed photo links;
+    push-subscription keys redacted) — no zip dependency. Delete = typed "DELETE HEALTH DATA" → every per-user health
+    row (consent included, so Health restarts at the consent screen), every object under `<uid>/`, `progress/<uid>/`,
+    `imports/<uid>/`, and `health_*` rows in `notification_log`; idempotent (retry after a partial failure). The audit
+    entry has counts only. Assistants never see these audit actions (health filter extended).
+11. **Not audited**: meal-plan swaps/ticks, ingredient cache, offline sync (personal logs, spec §8).
+
+### Risks / limitations
+- No browser, Supabase or Anthropic run here — PDF extraction quality, camera scanning and offline behaviour are
+  untested end-to-end; the PDF renderer and every pure function are unit-tested.
+- Very long programmes may exceed one 16k-token extraction (the user is told to paste the main sections).
+- Offline queue is per device; the player page itself must already be loaded (no service-worker page caching).
+- Clock skew between devices can affect which set wins (clamped to server time on the future side only).
+- Apple Health / Google Fit sync (§10 P3 list) is out of scope (owner decision §12.2: manual steps).

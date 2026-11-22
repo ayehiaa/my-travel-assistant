@@ -10,6 +10,9 @@ import { createClient } from '@/lib/supabase/server'
 import { loadHealthSettings } from '@/lib/health/p2Server'
 import { readEmailConfig } from '@/lib/notifications/config'
 import HealthSettingsPanel from './HealthSettingsPanel'
+import Link from 'next/link'
+import { healthHref, type ProgrammeView } from '@/lib/health/healthHub'
+import { ExportView, MealPlanView, ProgrammeEditView, ProgrammeImportView, ProgrammeViewNav } from './ProgrammeViews'
 
 const UNITS: Record<TargetKey, string> = { kcal: 'kcal', proteinG: 'g', fatG: 'g', satFatTargetG: 'g', satFatCeilingG: 'g', carbsG: 'g', fibreMinG: 'g' }
 
@@ -34,8 +37,34 @@ function Section({ title, children, open = false }: { title: string; children: R
   )
 }
 
-/** Programme (specs/029 §5, read-only in P1a): the active programme, targets with formulas, and the AI key. */
-export default async function ProgrammeTab({ userId, email, enrolment }: { userId: string; email: string; enrolment: ActiveEnrolment }) {
+/**
+ * Programme (specs/029 §5): overview (targets with formulas, sections, settings, AI key) plus the P3 sub-views —
+ * edit by section with version history, import from PDF/text, meal plan + shopping list, clinician export + data rights.
+ */
+export default async function ProgrammeTab(props: {
+  userId: string
+  email: string
+  enrolment: ActiveEnrolment
+  view?: ProgrammeView
+  week?: string
+  importId?: string
+}) {
+  const view = props.view ?? 'overview'
+  let body: React.ReactNode
+  if (view === 'edit') body = <ProgrammeEditView userId={props.userId} enrolment={props.enrolment} />
+  else if (view === 'import') body = <ProgrammeImportView userId={props.userId} enrolment={props.enrolment} importId={props.importId} />
+  else if (view === 'meals') body = <MealPlanView userId={props.userId} enrolment={props.enrolment} week={props.week ?? ''} />
+  else if (view === 'export') body = <ExportView enrolment={props.enrolment} />
+  else body = <ProgrammeOverview userId={props.userId} email={props.email} enrolment={props.enrolment} />
+  return (
+    <div>
+      <ProgrammeViewNav active={view} />
+      {body}
+    </div>
+  )
+}
+
+async function ProgrammeOverview({ userId, email, enrolment }: { userId: string; email: string; enrolment: ActiveEnrolment }) {
   const { def, targets } = enrolment
   const today = nowFor(enrolment).date
   const week = programmeWeek(enrolment.startDate, today)
@@ -122,7 +151,6 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
         {def.movementRestrictions && def.movementRestrictions.excluded.length > 0 && (
           <p className="mt-2">Excluded movements: {def.movementRestrictions.excluded.join(', ')}.</p>
         )}
-        <p className="mt-2 text-xs text-[var(--ink-3)]">The guided session player arrives in the next update.</p>
       </Section>
 
       <Section title="Cardio, sleep & supplements">
@@ -141,9 +169,12 @@ export default async function ProgrammeTab({ userId, email, enrolment }: { userI
       </Section>
 
       <HealthSettingsPanel initial={settings} available={available} emailConfigured={readEmailConfig(process.env).ok} />
+      <p className="-mt-2 text-sm text-[var(--ink-2)]">
+        <Link className="font-semibold text-[var(--blue-700)] underline" href={healthHref({ tab: 'programme', view: 'export' })}>Export or delete your health data →</Link>
+      </p>
 
       <div>
-        <p className="mb-2 text-sm text-[var(--ink-2)]">AI food estimates use your own Anthropic API key (a few cents per logged meal; text that matches your saved foods needs no AI).</p>
+        <p className="mb-2 text-sm text-[var(--ink-2)]">AI food estimates, programme import and the shopping-list split use your own Anthropic API key (a few cents per logged meal; text that matches your saved foods needs no AI).</p>
         <AiKeyCard
           migrationApplied={aiKey.migrationApplied}
           initialConnected={aiKey.connected}

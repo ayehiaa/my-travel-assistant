@@ -5,6 +5,7 @@ import { useToast } from '@/context/ToastContext'
 import { PORTION_FACTORS, scaleItem, sumNutrients, uncertaintyBand, type FoodItem } from '@/lib/health/nutrition'
 import { applyOffProduct, type OffProduct } from '@/lib/health/openFoodFacts'
 import { BUTTON_SECONDARY, INPUT, fmtNum } from './ui'
+import BarcodeScanner from './BarcodeScanner'
 
 export interface EditableItem extends FoodItem {
   /** Quantity of the original estimate (portion presets scale from it). */
@@ -46,6 +47,7 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<OffProduct[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [scan, setScan] = useState(false)
 
   const update = (idx: number, next: EditableItem) => onChange(items.map((it, i) => (i === idx ? { ...next, remember: true } : it)))
   const totals = sumNutrients(items)
@@ -179,7 +181,9 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void search() } }}
         />
         <button type="button" className={BUTTON_SECONDARY} disabled={searching || query.trim().length < 2} onClick={search}>{searching ? '…' : 'Search'}</button>
+        <button type="button" className={BUTTON_SECONDARY} onClick={() => setScan(true)}>Scan barcode</button>
       </div>
+      {scan && <BarcodeScanner onAdd={item => onChange([...items, { ...item, baseQuantityG: item.quantityG, remember: true }])} onClose={() => setScan(false)} />}
       {results && (
         <ul className="m-0 max-h-56 list-none overflow-y-auto rounded-lg border border-[var(--rule)] p-0">
           {results.length === 0 && <li className="p-3 text-sm text-[var(--ink-3)]">No match — add the item by hand.</li>}

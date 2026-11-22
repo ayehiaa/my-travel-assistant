@@ -44,6 +44,10 @@ export type AuditAction =
   | 'health_programme_activated'
   | 'health_adjustment_accepted'
   | 'health_adjustment_declined'
+  | 'health_programme_imported'
+  | 'health_programme_updated'
+  | 'health_data_exported'
+  | 'health_data_deleted'
 
 export interface UserRoleRecord {
   user_id: string

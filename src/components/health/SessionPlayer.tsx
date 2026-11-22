@@ -10,6 +10,8 @@ import {
 } from '@/lib/health/training'
 import type { ExerciseSafety } from '@/lib/health/painRules'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
+import { newClientId, type QueueOp, type SetValues } from '@/lib/health/offlineQueue'
+import { OfflineSyncBanner, isOffline, queueOps } from './offlineSync'
 
 export interface PlayerExercise {
   key: string
@@ -100,6 +102,13 @@ const toNum = (v: string): number | null => {
 const toInt = (v: string): number | null => {
   const n = toNum(v)
   return n === null ? null : Math.round(n)
+}
+
+function setValues(ex: PlayerExercise, s: SetDraft): SetValues | null {
+  const reps = ex.rx.kind === 'reps' ? toInt(s.reps) : null
+  const hold = ex.rx.kind === 'hold' ? toInt(s.hold) : null
+  if (reps === null && hold === null) return null
+  return { loadKg: ex.usesLoad ? toNum(s.load) : null, reps, holdSeconds: hold, rir: s.failure ? null : s.rir, toFailure: s.failure }
 }
 
 /** Wall-clock milliseconds (event handlers / timers only). */
@@ -209,6 +218,10 @@ export default function SessionPlayer(props: Props) {
     const hasValue = ex.rx.kind === 'hold' ? toInt(s.hold) !== null : toInt(s.reps) !== null
     if (!hasValue) { toast(ex.rx.kind === 'hold' ? 'Enter the seconds held' : 'Enter the reps', 'error'); return }
     updateSet(ex.key, i, { done: !s.done })
+    // Offline (P3): queue the change on this device; it syncs when the connection is back.
+    if (isOffline()) {
+      queueOps([{ kind: 'set', clientId: newClientId(), date, sessionKey, exerciseKey: ex.key, setIndex: i, isDropSet: false, set: s.done ? null : setValues(ex, s), at: clock() }])
+    }
     if (s.done) return
     const t = clock()
     setDraft(d => (d.startedAt ? d : { ...d, startedAt: t }))
@@ -262,12 +275,14 @@ export default function SessionPlayer(props: Props) {
       document.getElementById('pain-score')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
+    const payload = buildPayload(status)
+    if (isOffline()) { queueSession(payload); return }
     setSaving(true)
     try {
       const res = await fetch('/api/health/workouts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(status)),
+        body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast(data.error ?? 'Could not save the session', 'error'); return }
@@ -276,10 +291,38 @@ export default function SessionPlayer(props: Props) {
       router.push(healthHref({ tab: 'training' }))
       router.refresh()
     } catch {
-      toast('Network error — your sets are kept on this device; try again', 'error')
+      // Connection dropped mid-save: queue it on this device (same as offline) — nothing is lost.
+      queueSession(payload)
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Offline save (P3): every set as a "last write wins" op + a finish op, synced when back online. */
+  function queueSession(payload: ReturnType<typeof buildPayload>) {
+    const at = clock()
+    const ops: QueueOp[] = []
+    for (const ex of exercises) {
+      const logged = payload.exercises.find(e => e.exerciseKey === ex.key)?.sets ?? []
+      const n = Math.max(draft.sets[ex.key]?.length ?? 0, ...logged.map(x => x.setIndex + 1))
+      for (let i = 0; i < n; i++) {
+        const set = logged.find(x => x.setIndex === i && !x.isDropSet)
+        ops.push({ kind: 'set', clientId: newClientId(), date, sessionKey, exerciseKey: ex.key, setIndex: i, isDropSet: false, at,
+          set: set ? { loadKg: set.loadKg, reps: set.reps, holdSeconds: set.holdSeconds, rir: set.rir, toFailure: set.toFailure } : null })
+      }
+      const drop = logged.find(x => x.isDropSet)
+      if (drop) ops.push({ kind: 'set', clientId: newClientId(), date, sessionKey, exerciseKey: ex.key, setIndex: drop.setIndex, isDropSet: true, at,
+        set: { loadKg: drop.loadKg, reps: drop.reps, holdSeconds: drop.holdSeconds, rir: drop.rir, toFailure: drop.toFailure } })
+    }
+    ops.push({
+      kind: 'finish', clientId: newClientId(), date, sessionKey, at: at + 1,
+      status: payload.status, skipReason: payload.skipReason, travelMode: payload.travelMode, durationMinutes: payload.durationMinutes,
+      notes: payload.notes, duringPain: payload.duringPain, skippedExercises: payload.skippedExercises,
+    })
+    queueOps(ops)
+    try { window.localStorage.removeItem(draftKey) } catch { /* ignore */ }
+    toast("You're offline — the session is saved on this device and will sync when you're back online", 'info')
+    router.push(healthHref({ tab: 'training' }))
   }
 
   const doneSets = Object.values(draft.sets).flat().filter(s => s.done).length
@@ -302,6 +345,7 @@ export default function SessionPlayer(props: Props) {
         {draft.travel && <p className="mt-2 text-xs text-[var(--ink-3)]">Hotel variants shown where the programme has one — same sets, reps and RIR.</p>}
         {props.warnings.map(w => <p key={w} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{w}</p>)}
         <p className="mt-2 text-xs text-[var(--ink-3)]">{doneSets} of {totalSets} sets done</p>
+        <div className="mt-2"><OfflineSyncBanner /></div>
         {stored && !touched && !dismissed && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
             <span>Unsaved sets from earlier on this device.</span>

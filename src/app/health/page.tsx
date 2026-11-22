@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { hasFeature } from '@/lib/access'
 import { createClient } from '@/lib/supabase/server'
-import { HEALTH_CONSENT_VERSION, HEALTH_TAB_LABELS, parseHealthTab, parseLogDate } from '@/lib/health/healthHub'
+import { HEALTH_CONSENT_VERSION, HEALTH_TAB_LABELS, parseHealthTab, parseLogDate, parsePlanWeek, parseProgrammeView } from '@/lib/health/healthHub'
 import { loadHealthState, nowFor } from '@/lib/health/healthServer'
 import { PROGRAMME_TEMPLATES } from '@/lib/health/seedProgramme'
 import { localDate } from '@/lib/health/time'
@@ -22,7 +22,7 @@ export const metadata = {
   title: 'Sojourn — Health',
 }
 
-/** Health hub: /health?tab=today|log|training|progress|programme (specs/029-health-routines, phases P1a + P1b). */
+/** Health hub: /health?tab=today|log|training|progress|programme (specs/029-health-routines, phases P1a–P3). */
 export default async function HealthPage({
   searchParams,
 }: {
@@ -57,7 +57,11 @@ export default async function HealthPage({
     const logDate = parseLogDate(params.date, nowFor(enrolment).date)
     const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
     const training = { session: one(params.session), exercise: one(params.exercise), date: one(params.date), travel: one(params.travel) === '1' }
-    const suspenseKey = tab === 'log' ? `log:${logDate}` : tab === 'training' ? `training:${training.session ?? ''}:${training.exercise ?? ''}:${training.date ?? ''}` : tab
+    const programme = { view: parseProgrammeView(params.view), week: parsePlanWeek(params.week, nowFor(enrolment).date), importId: one(params.import) }
+    const suspenseKey = tab === 'log' ? `log:${logDate}`
+      : tab === 'training' ? `training:${training.session ?? ''}:${training.exercise ?? ''}:${training.date ?? ''}`
+      : tab === 'programme' ? `programme:${programme.view}:${programme.week}:${programme.importId ?? ''}`
+      : tab
     body = (
       <>
         <HealthTabs active={tab} />
@@ -67,7 +71,7 @@ export default async function HealthPage({
           {tab === 'log' && <LogTab userId={user.id} enrolment={enrolment} date={logDate} />}
           {tab === 'training' && <TrainingTab userId={user.id} enrolment={enrolment} session={training.session} exercise={training.exercise} date={training.date} travel={training.travel} />}
           {tab === 'progress' && <ProgressTab userId={user.id} enrolment={enrolment} />}
-          {tab === 'programme' && <ProgrammeTab userId={user.id} email={user.email} enrolment={enrolment} />}
+          {tab === 'programme' && <ProgrammeTab userId={user.id} email={user.email} enrolment={enrolment} view={programme.view} week={programme.week} importId={programme.importId} />}
         </Suspense>
       </>
     )

@@ -21,6 +21,7 @@ import HealthNotice from './HealthNotice'
 import SessionPlayer, { type PlayerExercise } from './SessionPlayer'
 import { ApprovalToggle, DeleteWorkoutButton, JointClearanceButton } from './TrainingActions'
 import { BUTTON_PRIMARY, CARD, CARD_TITLE } from './ui'
+import { OfflineSyncBanner } from './offlineSync'
 
 const BACKDATE_DAYS = 60
 
@@ -95,6 +96,7 @@ async function Overview({ userId, enrolment, ctx }: { userId: string; enrolment:
 
   return (
     <div className="flex flex-col gap-4">
+      <OfflineSyncBanner />
       <section className={`${CARD} bg-[var(--paper-2)]`} aria-labelledby="blk-h">
         <h2 id="blk-h" className="text-lg font-bold text-[var(--ink)]">{weekBanner(enrolment, ctx.position)}</h2>
         {block && (

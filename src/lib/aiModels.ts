@@ -13,7 +13,7 @@ export type AiModelId = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 /** Effort levels accepted in `output_config.effort`. */
 export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-export type AiRole = 'agent' | 'synthesizer' | 'shariah_reviewer' | 'health_food'
+export type AiRole = 'agent' | 'synthesizer' | 'shariah_reviewer' | 'health_food' | 'health_import' | 'health_ingredients'
 
 export interface AiRoleConfig {
   model: AiModelId
@@ -29,6 +29,11 @@ export const AI_ROLE_CONFIG: Readonly<Record<AiRole, AiRoleConfig>> = {
   // Health food estimation (specs/029): text and/or up to 4 photos → strict JSON items. Low effort keeps it fast
   // (target ≤ 10 s) and cheap (target ≤ US$0.05 per logged meal).
   health_food:      { model: AI_MODELS.SONNET_5_5, maxTokens: 6000,  effort: 'low' },
+  // Health programme import (P3): a whole programme document (PDF or text) → one structured JSON draft. 16k keeps a
+  // non-streaming request inside the SDK's time budget while leaving room for adaptive thinking + a full programme.
+  health_import:    { model: AI_MODELS.SONNET_5_5, maxTokens: 16000, effort: 'medium' },
+  // Meal-plan shopping list fallback (P3): split unknown meal options into ingredients. Small, cached per user.
+  health_ingredients: { model: AI_MODELS.SONNET_5_5, maxTokens: 4000, effort: 'low' },
 }
 
 export function getRoleConfig(role: AiRole): AiRoleConfig {
