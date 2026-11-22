@@ -14,6 +14,8 @@ const ACTION_CHIP: Record<ActionItem['action'], string> = {
 }
 
 function ShariahChip({ ticker, screening }: { ticker: string; screening: ShariahScreeningResult | null }) {
+  // Islamic screening was off for this run (specs/030): no Shariah chip.
+  if (screening?.config && !screening.config.islamic) return null
   const t = screening?.tickers.find(s => s.ticker === ticker)
   if (!t) {
     return <span className="rounded-full bg-[var(--paper-3)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-3)]">Not screened</span>

@@ -1,15 +1,16 @@
 import { hubHref, settingsHref } from '@/lib/portfolioHub'
 import type { AutopilotMode } from '@/lib/schedule'
+import { describeScreeningConfig, isFullScreening, screeningModeLabel, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 
 /**
  * Pure chip builder for the Portfolio hub's global status strip (specs/028-portfolio-hub-ux-cleanup).
  * Chips only appear when relevant; every input may be missing (Alpaca unreachable, migration not applied…).
  */
 
-export type StatusChipTone = 'paused' | 'approval' | 'setup' | 'paper' | 'live' | 'dry_run' | 'autopilot'
+export type StatusChipTone = 'paused' | 'approval' | 'setup' | 'paper' | 'live' | 'dry_run' | 'autopilot' | 'shariah_on' | 'shariah_reduced'
 
 export interface StatusChip {
-  key: 'paused' | 'approval' | 'setup' | 'account' | 'dry_run' | 'autopilot'
+  key: 'paused' | 'approval' | 'setup' | 'account' | 'dry_run' | 'autopilot' | 'shariah'
   label: string
   tone: StatusChipTone
   href: string | null
@@ -29,6 +30,8 @@ export interface StatusStripInput {
   pendingApproval: { expiresInMs: number } | null
   /** Getting-started progress; null when unknown. */
   setup: { doneCount: number; total: number; complete: boolean } | null
+  /** Current effective screening config (specs/030); omitted → no screening chip. */
+  screening?: EffectiveScreeningConfig | null
 }
 
 export const AUTOPILOT_MODE_LABEL: Record<AutopilotMode, string> = {
@@ -123,6 +126,16 @@ export function buildStatusChips(input: StatusStripInput): StatusChip[] {
       tone:  'autopilot',
       href:  settingsHref('automation'),
       title: `Autopilot: ${AUTOPILOT_MODE_LABEL[input.autopilotMode]}`,
+    })
+  }
+
+  if (input.screening) {
+    chips.push({
+      key:   'shariah',
+      label: screeningModeLabel(input.screening),
+      tone:  isFullScreening(input.screening) ? 'shariah_on' : 'shariah_reduced',
+      href:  settingsHref('strategy'),
+      title: describeScreeningConfig(input.screening),
     })
   }
 

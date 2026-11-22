@@ -9,7 +9,8 @@ import AutopilotCard from '../AutopilotCard'
 import NotificationsCard from '../NotificationsCard'
 import AiKeyCard from '../AiKeyCard'
 import GettingStartedChecklist from './GettingStartedChecklist'
-import { SETTINGS_CARD, SETTINGS_CARD_TITLE } from '../settingsCard'
+import ScreeningSettingsCard from '../ScreeningSettingsCard'
+import { readScreeningSettings } from '@/lib/screeningConfig'
 import { readSafetySettings } from '@/lib/riskLimits'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { readNotificationPrefs } from '@/lib/notifications/prefs'
@@ -104,20 +105,19 @@ function StrategySection({ userId, settingsRow }: { userId: string; settingsRow:
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }
+  const screening = readScreeningSettings(settingsRow)
   return (
     <>
       <PortfolioSettingsForm initialSettings={(settingsRow as unknown as PortfolioSettings | null) ?? defaultSettings} />
-      <section className={SETTINGS_CARD} aria-labelledby="islamic-screening-heading">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 id="islamic-screening-heading" className={SETTINGS_CARD_TITLE}>Islamic screening</h3>
-          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">Always on</span>
-        </div>
-        <p className="mt-2 text-sm text-[var(--ink-2)]">
-          Every analysis and every buy is limited to Shariah-compliant individual common stocks (max 20% each).
-          No ETFs, funds, bonds, preferred shares, options, shorting or margin. Holdings that fail screening are
-          recommended for sale.
-        </p>
-      </section>
+      <ScreeningSettingsCard
+        initial={{
+          islamic_enabled:  screening.islamic_enabled,
+          business_screen:  screening.business_screen,
+          financial_screen: screening.financial_screen,
+          stocks_only:      screening.stocks_only,
+        }}
+        migrationApplied={screening.migration_applied}
+      />
     </>
   )
 }

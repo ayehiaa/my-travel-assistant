@@ -1,4 +1,5 @@
 import AgentBreakdown from '../AgentBreakdown'
+import { FULL_SCREENING_CONFIG, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import AlpacaExecuteButton from '../AlpacaExecuteButton'
 import AlpacaResultsPanel from '../AlpacaResultsPanel'
 import ApprovalPanel from '../ApprovalPanel'
@@ -23,6 +24,8 @@ interface Props {
   safety: SafetySettings
   /** Live current vs this recommendation's target (hub Rebalance tab, latest only). Falls back to analysis-time weights. */
   liveAllocation?: { rows: AllocationRow[]; note: string } | null
+  /** The user's CURRENT screening config (specs/030) — the buy guard applies it at execution time. */
+  currentScreening?: EffectiveScreeningConfig
 }
 
 const DISCLAIMER_TEXT =
@@ -67,6 +70,7 @@ export default function RebalanceView({
   hasBlockingExecution,
   safety,
   liveAllocation = null,
+  currentScreening = FULL_SCREENING_CONFIG,
 }: Props) {
   const autopilot = readAutopilotInfo(rec as unknown as Record<string, unknown>)
   const now = new Date()
@@ -116,7 +120,7 @@ export default function RebalanceView({
         </div>
         <p className="mt-2 break-words text-sm leading-relaxed text-[var(--ink-2)]">{rec.summary_text ?? 'Summary not available.'}</p>
         <p className="mt-2 text-xs text-[var(--ink-3)]">
-          {trades} trade{trades === 1 ? '' : 's'} proposed{screening ? ` · ${screening.excluded.length} excluded by Shariah screening` : ''}
+          {trades} trade{trades === 1 ? '' : 's'} proposed{screening && screening.excluded.length > 0 ? ` · ${screening.excluded.length} excluded by screening` : ''}
         </p>
       </section>
 
@@ -129,7 +133,7 @@ export default function RebalanceView({
       </Card>
 
       <Card title="Shariah screening" id="shariah-heading">
-        <ShariahScreeningPanel screening={screening} />
+        <ShariahScreeningPanel screening={screening} current={currentScreening} />
       </Card>
 
       <Card title="Risk checks" id="risk-heading">

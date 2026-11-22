@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseReviewerResponse, buildReviewerUserPrompt } from './shariahReviewer'
+import { parseReviewerResponse, buildReviewerUserPrompt, buildReviewerSystemPrompt, runShariahReviewer } from './shariahReviewer'
 import { computePolygonRatios } from '@/lib/shariahRules'
 
 const entry = (ticker: string, extra: Record<string, unknown> = {}) => ({
@@ -87,5 +87,67 @@ describe('parseReviewerResponse — instrument_type', () => {
     const bad = parseReviewerResponse(JSON.stringify({ verdicts: [{ ...entry, instrument_type: 'banana' }] }), ['MSFT'])
     expect(bad.MSFT?.verdict).toBe('compliant')
     expect(bad.MSFT?.instrument_type).toBeNull()
+  })
+})
+
+describe('configurable reviewer (specs/030)', () => {
+  const full = { islamic: true, business: true, financial: true, stocks_only: true }
+  const businessOnly = { ...full, financial: false }
+  const financialOnly = { ...full, business: false }
+  const off = { islamic: false, business: false, financial: false, stocks_only: true }
+  const raw = (e: Record<string, unknown>) => JSON.stringify({ verdicts: [e] })
+
+  it('is skipped entirely (no Claude call, no usage) when no Islamic part is enabled', async () => {
+    const input = {
+      ticker: 'AAPL', name: null, is_holding: false, security_type: 'CS', sic_code: null, sic_description: null,
+      market_cap_usd: null, revenues_usd: null, period_end: null, polygon_ratios: computePolygonRatios(null, null),
+    }
+    await expect(runShariahReviewer([input], 'unused-key', off)).resolves.toEqual({ verdicts: {}, usage: null })
+    await expect(runShariahReviewer([input], 'unused-key', { ...off, stocks_only: false })).resolves.toEqual({ verdicts: {}, usage: null })
+  })
+
+  it('full config keeps the spec-019 prompt', () => {
+    const p = buildReviewerSystemPrompt(full)
+    expect(p).toContain('Business activity')
+    expect(p).toContain('ALWAYS give numeric estimates')
+    expect(buildReviewerSystemPrompt({ ...full })).toBe(p)
+  })
+
+  it('business-only prompt: business verdict required, estimates optional', () => {
+    const p = buildReviewerSystemPrompt(businessOnly)
+    expect(p).toContain('Business activity')
+    expect(p).toContain('OPTIONAL in this review (the financial screen is off)')
+    expect(p).not.toContain('ALWAYS give numeric estimates')
+  })
+
+  it('financial-only prompt: no business task, verdict optional, estimates required', () => {
+    const p = buildReviewerSystemPrompt(financialOnly)
+    expect(p).not.toContain('Business activity: the main business')
+    expect(p).toContain('verdict is OPTIONAL')
+    expect(p).toContain('ALWAYS give numeric estimates')
+  })
+
+  it('stocks-only off: funds may pass only when explicitly Shariah-compliant', () => {
+    expect(buildReviewerSystemPrompt({ ...full, stocks_only: false })).toContain('explicitly Shariah-compliant (Islamic) fund')
+  })
+
+  it('business-only schema accepts entries without estimates; full schema rejects them', () => {
+    const e = { ticker: 'AAPL', verdict: 'compliant', reason: 'Phones', confidence: 'high' }
+    expect(parseReviewerResponse(raw(e), ['AAPL'], 'business').AAPL).toMatchObject({
+      verdict: 'compliant', non_permissible_income_pct: null,
+      ratio_estimates: { debt_pct: null, cash_and_securities_pct: null, receivables_pct: null },
+    })
+    expect(parseReviewerResponse(raw(e), ['AAPL'], 'full').AAPL).toBeNull()
+  })
+
+  it('financial-only schema accepts a null / missing verdict but requires the estimates', () => {
+    expect(parseReviewerResponse(raw(entry('AAPL', { verdict: null })), ['AAPL'], 'financial').AAPL?.verdict).toBeNull()
+    const { verdict: _v, ...noVerdict } = entry('AAPL')
+    void _v
+    expect(parseReviewerResponse(raw(noVerdict), ['AAPL'], 'financial').AAPL?.verdict).toBeNull()
+    const { ratio_estimates: _r, ...noEstimates } = entry('AAPL')
+    void _r
+    expect(parseReviewerResponse(raw(noEstimates), ['AAPL'], 'financial').AAPL).toBeNull()
+    expect(parseReviewerResponse(raw(entry('AAPL', { verdict: null })), ['AAPL'], 'full').AAPL).toBeNull()
   })
 })

@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/029-health-routines/spec.md` (Health module — latest phase P3.1 done: estimate accuracy — assumption chips, USDA SR28 reference nutrition data, no-butter/oil toggle, edit + re-calculate saved food entries; earlier P3: programme import, meal plan, clinician export, offline sets, barcode, data rights; plan in `plan.md`, tasks in `tasks.md`)
+Active feature spec: `specs/030-configurable-islamic-screening/spec.md` (configurable Islamic screening — per-user master switch, business-activity / financial-ratio parts and an independent individual-stocks-only toggle in `portfolio_settings.screening_settings`; pure config in `src/lib/screeningConfig.ts`; verdicts, buy guard (current settings), reviewer, prompts and divest alerts follow the effective config; plan in `plan.md`, tasks in `tasks.md`). Previous: Health module `specs/029-health-routines/spec.md`.
 <!-- SPECKIT END -->

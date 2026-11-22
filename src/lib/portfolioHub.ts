@@ -1,3 +1,4 @@
+import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import type { AlpacaOrderResult, LiveHolding, TargetAllocationItem, TargetHorizon } from '@/types/database'
 import type { ShariahScreeningResult, TickerScreening } from '@/types/shariah'
 
@@ -252,9 +253,19 @@ export type ShariahBadge =
   | { kind: 'compliant'; reason: string | null; screening: TickerScreening }
   | { kind: 'flagged'; reason: string; screening: TickerScreening }
   | { kind: 'unscreened' }
+  | { kind: 'off' }
 
-/** Badge for a holding from the latest screening. */
-export function shariahBadgeFor(ticker: string, screening: ShariahScreeningResult | null): ShariahBadge {
+/**
+ * Badge for a holding from the latest screening. `current` = the user's CURRENT screening config (specs/030):
+ * Islamic screening off now, or the latest screening ran with it off → "off" (shown as "Not screened").
+ */
+export function shariahBadgeFor(
+  ticker: string,
+  screening: ShariahScreeningResult | null,
+  current?: EffectiveScreeningConfig,
+): ShariahBadge {
+  if (current && !current.islamic) return { kind: 'off' }
+  if (screening?.config && !screening.config.islamic) return { kind: 'off' }
   const t = screening?.tickers.find(s => s.ticker === ticker)
   if (!t) return { kind: 'unscreened' }
   if (t.verdict === 'compliant') return { kind: 'compliant', reason: t.reasons[0] ?? null, screening: t }
