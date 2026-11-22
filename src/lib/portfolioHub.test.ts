@@ -136,8 +136,19 @@ describe('computeAllocationDrift', () => {
       { ticker: 'AAPL', current_pct: 60, target_pct: 40, drift_pct: 20 },
       { ticker: 'NVDA', current_pct: 0, target_pct: 20, drift_pct: -20 },
       { ticker: 'MSFT', current_pct: 20, target_pct: 20, drift_pct: 0 },
-      { ticker: 'CASH', current_pct: 20, target_pct: 20, drift_pct: 0 },
+      { ticker: '__cash__', current_pct: 20, target_pct: 20, drift_pct: 0 },
     ])
+  })
+
+  it('uses the explicit cash target when the recommendation stores one (specs/031)', () => {
+    const rows = computeAllocationDrift([{ ticker: 'AAPL', total_value_usd: 500 }], 500, [{ ticker: 'AAPL', target_pct: 75 }], 25)
+    expect(rows.find(r => r.ticker === '__cash__')).toEqual({ ticker: '__cash__', current_pct: 50, target_pct: 25, drift_pct: 25 })
+  })
+
+  it('keeps a real holding named CASH as its own stock row, separate from cash', () => {
+    const rows = computeAllocationDrift([{ ticker: 'CASH', total_value_usd: 100 }], 100, [{ ticker: 'AAPL', target_pct: 80 }], 20)
+    expect(rows.find(r => r.ticker === 'CASH')).toEqual({ ticker: 'CASH', current_pct: 50, target_pct: 0, drift_pct: 50 })
+    expect(rows.find(r => r.ticker === '__cash__')?.target_pct).toBe(20)
   })
 
   it('treats every holding as 0% target when there is no recommendation', () => {
@@ -147,7 +158,8 @@ describe('computeAllocationDrift', () => {
 
   it('ignores a CASH target row and never makes the cash target negative', () => {
     const rows = computeAllocationDrift([], 100, [{ ticker: 'CASH', target_pct: 50 }, { ticker: 'A', target_pct: 110 }])
-    expect(rows.find(r => r.ticker === 'CASH')).toEqual({ ticker: 'CASH', current_pct: 100, target_pct: 0, drift_pct: 100 })
+    expect(rows.find(r => r.ticker === 'CASH')).toBeUndefined()
+    expect(rows.find(r => r.ticker === '__cash__')).toEqual({ ticker: '__cash__', current_pct: 100, target_pct: 0, drift_pct: 100 })
   })
 
   it('handles an empty account', () => {

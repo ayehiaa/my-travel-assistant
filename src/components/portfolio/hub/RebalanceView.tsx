@@ -6,6 +6,9 @@ import ApprovalPanel from '../ApprovalPanel'
 import RunCostLine from '../RunCostLine'
 import ShariahScreeningPanel from '../ShariahScreeningPanel'
 import AllocationBars from './AllocationBars'
+import ReturnVsTarget from './ReturnVsTarget'
+import { readReturnMetrics } from '@/lib/returnMetrics'
+import { CASH_ROW_KEY, readCashTargetPct } from '@/lib/cashAllocation'
 import ProposedTrades from './ProposedTrades'
 import { readShariahScreening } from '@/lib/shariahRules'
 import { readRunUsage } from '@/lib/aiCost'
@@ -80,6 +83,13 @@ export default function RebalanceView({
   const analysisAllocation: AllocationRow[] = actions
     .map(a => ({ ticker: a.ticker, current_pct: a.current_pct, target_pct: a.target_pct, drift_pct: a.current_pct - a.target_pct }))
     .sort((a, b) => Math.abs(b.drift_pct) - Math.abs(a.drift_pct))
+  const cashTargetPct = readCashTargetPct(rec)
+  if (cashTargetPct !== null && actions.length > 0) {
+    // Analysis-time cash weight = whatever the positions did not take (action current_pct are of total value)
+    const cashCurrent = Math.max(0, 100 - actions.reduce((s, a) => s + a.current_pct, 0))
+    analysisAllocation.push({ ticker: CASH_ROW_KEY, current_pct: cashCurrent, target_pct: cashTargetPct, drift_pct: cashCurrent - cashTargetPct })
+  }
+  const returnMetrics = readReturnMetrics(rec)
   const allocation = liveAllocation ?? { rows: analysisAllocation, note: 'Weights at the time of the analysis.' }
   const notes = riskNotes(rec, execution, safety)
   const runDate = new Date(rec.run_at).toLocaleString('en-GB', {
@@ -125,6 +135,8 @@ export default function RebalanceView({
       </section>
 
       {!approvalFirst && approvalPanel}
+
+      {returnMetrics && <ReturnVsTarget metrics={returnMetrics} cashTargetPct={cashTargetPct} />}
 
       <AllocationBars rows={allocation.rows} title="Current vs target" note={allocation.note} />
 

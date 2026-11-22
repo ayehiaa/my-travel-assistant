@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renormaliseAllocation, capAllocation, removeTickers, normaliseTo100 } from './allocationUtils'
+import { renormaliseAllocation, capAllocation } from './allocationUtils'
 
 const sum = (xs: Array<{ target_pct: number }>) => xs.reduce((s, x) => s + x.target_pct, 0)
 
@@ -48,38 +48,5 @@ describe('capAllocation', () => {
   it('is a no-op when nothing exceeds the cap', () => {
     const out = capAllocation([{ ticker: 'A', target_pct: 20 }, { ticker: 'B', target_pct: 10 }], 20)
     expect(out.map(a => a.target_pct)).toEqual([20, 10])
-  })
-})
-
-describe('removeTickers', () => {
-  it('drops tickers and renormalises', () => {
-    const out = removeTickers([
-      { ticker: 'A', target_pct: 50, rationale: '' }, { ticker: 'B', target_pct: 25, rationale: '' },
-      { ticker: 'C', target_pct: 25, rationale: '' },
-    ], new Set(['A']))
-    expect(out.map(a => a.ticker)).toEqual(['B', 'C'])
-    expect(sum(out)).toBeCloseTo(100)
-  })
-})
-
-describe('normaliseTo100', () => {
-  const sum = (xs: Array<{ target_pct: number }>) => xs.reduce((s, a) => s + a.target_pct, 0)
-
-  it('scales an over-allocated list down to exactly 100', () => {
-    const out = normaliseTo100([{ target_pct: 60 }, { target_pct: 45 }])
-    expect(sum(out)).toBeCloseTo(100, 10)
-    expect(out[0].target_pct).toBeCloseTo(57.142857, 4)
-  })
-
-  it('scales an under-allocated list up to exactly 100', () => {
-    expect(sum(normaliseTo100([{ target_pct: 47 }, { target_pct: 47 }]))).toBeCloseTo(100, 10)
-  })
-
-  it('leaves an exact, empty or zero list unchanged', () => {
-    const exact = [{ target_pct: 50 }, { target_pct: 50 }]
-    expect(normaliseTo100(exact)).toBe(exact)
-    expect(normaliseTo100([])).toEqual([])
-    const zero = [{ target_pct: 0 }]
-    expect(normaliseTo100(zero)).toBe(zero)
   })
 })

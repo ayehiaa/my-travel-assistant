@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeHoldingSummaries, formatUsd, computeActionList, computePortfolioReturnMetrics } from './portfolioCalculator'
+import { computeHoldingSummaries, formatUsd, computeActionList } from './portfolioCalculator'
 
 describe('computeHoldingSummaries', () => {
   it('returns empty summaries and zero totals for an empty holdings array with zero cash', () => {
@@ -101,102 +101,6 @@ describe('formatUsd', () => {
   })
 })
 
-describe('computePortfolioReturnMetrics', () => {
-  const candles = (first: number, last: number) => [{ close: first }, { close: last }]
-
-  it('returns all zeros and full negative gap when totalValue is 0', () => {
-    const m = computePortfolioReturnMetrics([], {}, 10, 'annual')
-    expect(m.weighted_30d_return_pct).toBe(0)
-    expect(m.annualized_return_pct).toBe(0)
-    expect(m.target_annual_pct).toBe(10)
-    expect(m.annual_gap_pct).toBe(-10)
-    expect(m.data_coverage_pct).toBe(0)
-  })
-
-  it('computes correct 30-day return for a single holding', () => {
-    // AAPL: $100 → $110 = +10%
-    const m = computePortfolioReturnMetrics(
-      [{ ticker: 'AAPL', total_value_usd: 1000 }],
-      { AAPL: candles(100, 110) },
-      10,
-      'annual',
-    )
-    expect(m.weighted_30d_return_pct).toBeCloseTo(10)
-    expect(m.annualized_return_pct).toBeCloseTo(120)
-    expect(m.target_annual_pct).toBe(10)
-    expect(m.annual_gap_pct).toBeCloseTo(110)   // massively outperforming
-    expect(m.data_coverage_pct).toBe(100)
-  })
-
-  it('weights returns by holding value', () => {
-    // AAPL: $100 → $110 = +10%, value $1000
-    // MSFT: $200 → $190 = -5%, value $1000
-    // weighted = (10 * 1000 + -5 * 1000) / 2000 = 2.5%
-    const m = computePortfolioReturnMetrics(
-      [
-        { ticker: 'AAPL', total_value_usd: 1000 },
-        { ticker: 'MSFT', total_value_usd: 1000 },
-      ],
-      { AAPL: candles(100, 110), MSFT: candles(200, 190) },
-      12,
-      'annual',
-    )
-    expect(m.weighted_30d_return_pct).toBeCloseTo(2.5)
-    expect(m.annualized_return_pct).toBeCloseTo(30)
-    expect(m.annual_gap_pct).toBeCloseTo(18)   // 30 - 12
-  })
-
-  it('converts monthly target to annual for gap calculation', () => {
-    // 2% per month = 24% per year target
-    // Portfolio up 1% over 30d = 12% annualised → gap = -12%
-    const m = computePortfolioReturnMetrics(
-      [{ ticker: 'AAPL', total_value_usd: 500 }],
-      { AAPL: candles(100, 101) },
-      2,
-      'monthly',
-    )
-    expect(m.target_annual_pct).toBe(24)
-    expect(m.annualized_return_pct).toBeCloseTo(12)
-    expect(m.annual_gap_pct).toBeCloseTo(-12)
-  })
-
-  it('excludes holdings with no price data from weighted return', () => {
-    // AAPL has data (+10%), MSFT does not
-    const m = computePortfolioReturnMetrics(
-      [
-        { ticker: 'AAPL', total_value_usd: 500 },
-        { ticker: 'MSFT', total_value_usd: 500 },
-      ],
-      { AAPL: candles(100, 110) },
-      10,
-      'annual',
-    )
-    expect(m.weighted_30d_return_pct).toBeCloseTo(10)
-    expect(m.data_coverage_pct).toBe(50)
-  })
-
-  it('returns 0 weighted return when no holdings have price data', () => {
-    const m = computePortfolioReturnMetrics(
-      [{ ticker: 'AAPL', total_value_usd: 1000 }],
-      {},
-      10,
-      'annual',
-    )
-    expect(m.weighted_30d_return_pct).toBe(0)
-    expect(m.data_coverage_pct).toBe(0)
-  })
-
-  it('skips a holding whose first candle close is 0 to avoid division by zero', () => {
-    const m = computePortfolioReturnMetrics(
-      [{ ticker: 'AAPL', total_value_usd: 1000 }],
-      { AAPL: candles(0, 110) },
-      10,
-      'annual',
-    )
-    expect(m.weighted_30d_return_pct).toBe(0)
-    expect(m.data_coverage_pct).toBe(0)
-  })
-})
 
 describe('computeActionList', () => {
   it('produces action "buy" when target_usd > current_usd', () => {
@@ -322,5 +226,42 @@ describe('computeActionList', () => {
     expect(aapl.current_pct).toBe(0)
     expect(aapl.target_usd).toBe(0)
     expect(aapl.action).toBe('hold') // delta = 0 - 0 = 0
+  })
+})
+
+describe('computeActionList with an explicit cash target (specs/031)', () => {
+  const h = (ticker: string, v: number) => ({ ticker, company_name: ticker, total_value_usd: v })
+
+  it('keeps the cash target uninvested: buys are sized from total × stock target%', () => {
+    // $10,000 all cash; 60% AAPL + 20% MSFT + 20% cash
+    const actions = computeActionList([], 10000, [
+      { ticker: 'AAPL', target_pct: 60 },
+      { ticker: 'MSFT', target_pct: 20 },
+    ], 20)
+    const buyTotal = actions.filter(a => a.action === 'buy').reduce((s, a) => s + a.delta_usd, 0)
+    expect(buyTotal).toBeCloseTo(8000)
+    expect(actions.find(a => a.ticker === 'AAPL')?.target_usd).toBeCloseTo(6000)
+  })
+
+  it('never turns a reserved cash word into a BUY', () => {
+    const actions = computeActionList([], 1000, [
+      { ticker: 'AAPL', target_pct: 70 },
+      { ticker: 'CASH', target_pct: 30 },
+    ])
+    expect(actions.map(a => a.ticker)).toEqual(['AAPL'])
+  })
+
+  it('scales stocks down when stocks + cash would exceed 100%', () => {
+    const actions = computeActionList([], 1000, [
+      { ticker: 'AAPL', target_pct: 50 },
+      { ticker: 'MSFT', target_pct: 50 },
+    ], 20)
+    const total = actions.reduce((s, a) => s + a.target_pct, 0)
+    expect(total).toBeCloseTo(80)
+  })
+
+  it('a real holding with a reserved symbol is still sold (it can never be targeted)', () => {
+    const actions = computeActionList([h('CASH', 500)], 500, [{ ticker: 'AAPL', target_pct: 50 }], 50)
+    expect(actions.find(a => a.ticker === 'CASH')?.action).toBe('sell')
   })
 })

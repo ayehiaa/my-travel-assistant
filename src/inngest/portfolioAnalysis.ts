@@ -13,7 +13,8 @@ import { runSynthesizer, type SynthesizerRunResult } from '@/inngest/synthesizer
 import { runShariahReviewer, type ReviewerTickerInput, type ReviewerRunResult } from '@/inngest/shariahReviewer'
 import type { AgentRunResult } from '@/inngest/agents/types'
 import { summarizeRunUsage } from '@/lib/aiCost'
-import { removeTickers } from '@/lib/allocationUtils'
+import { extractCashEntries, rescaleStocksToCash, CashAllocationSchema, type StoredCashAllocation } from '@/lib/cashAllocation'
+import { buildRealReturnMetrics, computeHoldingMomentum, type RealReturnMetrics } from '@/lib/returnMetrics'
 import {
   computePolygonRatios,
   decideTickerVerdict,
@@ -23,10 +24,10 @@ import {
   NOT_COMPLIANT_SKIP_REASON,
   SCREENING_EXCLUDED_NOTE_PREFIX,
 } from '@/lib/shariahRules'
-import { computeActionList, computePortfolioReturnMetrics } from '@/lib/portfolioCalculator'
+import { computeActionList } from '@/lib/portfolioCalculator'
 import { FULL_SCREENING_CONFIG, effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
-import { isTradeableAsset } from '@/lib/alpacaClient'
+import { fetchPortfolioHistory, isTradeableAsset } from '@/lib/alpacaClient'
 import { getStarterUniverse } from '@/lib/starterUniverse'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { buildScheduledRunInfo } from '@/lib/autopilot'
@@ -579,19 +580,43 @@ export const portfolioAnalysis = inngest.createFunction(
       }
     }
 
+    // Step 6b: Real account return vs target (specs/031) from Alpaca's portfolio history. Credentials stay in this step;
+    // only the computed metrics are returned. Never fails the run — errors become status "unavailable".
+    const returnMetrics = await step.run('fetch-return-history', async (): Promise<RealReturnMetrics> => {
+      const now = new Date()
+      const base = { now, targetPct: settings.target_return_pct, horizon: settings.target_horizon }
+      if (isNewPortfolio) return buildRealReturnMetrics({ ...base, history: null, programmeStart: null })
+      let programmeStart: Date | null = null
+      try {
+        // Programme start = the user's first complete recommendation
+        const { data: first } = await createAdminClient()
+          .from('recommendations')
+          .select('run_at')
+          .eq('user_id', user_id)
+          .eq('status', 'complete')
+          .order('run_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        programmeStart = typeof first?.run_at === 'string' ? new Date(first.run_at) : null
+        if (!programmeStart) return buildRealReturnMetrics({ ...base, history: null, programmeStart: null })
+        const creds = await loadAlpacaCredentials(user_id)
+        if (!creds) return buildRealReturnMetrics({ ...base, history: null, programmeStart, unavailableReason: 'No Alpaca account connected' })
+        const history = await fetchPortfolioHistory('3M', '1D', creds.keyId, creds.secret, creds.isPaper)
+        return buildRealReturnMetrics({ ...base, history, programmeStart })
+      } catch {
+        return buildRealReturnMetrics({ ...base, history: null, programmeStart: programmeStart ?? now, unavailableReason: 'Account history could not be fetched' })
+      }
+    })
+
     // Step 7: Synthesize agent outputs into a proposed allocation.
     // Each later stage is its own step so a retry never re-runs the synthesizer.
     const { result: synthResult, usage: synthUsage } = await step.run('synthesize', async (): Promise<SynthesizerRunResult> => {
       try {
         const apiKey = await requireRunApiKey(user_id)
-        const returnMetrics = computePortfolioReturnMetrics(
-          snapshot.holdings,
-          priceData,
-          settings.target_return_pct,
-          settings.target_horizon,
-        )
+        // Per-holding price change: an input for which positions are weak / strong — NOT the target verdict
+        const holdingMomentum = computeHoldingMomentum(snapshot.holdings, priceData)
         await setStage('synthesizer', 'running')
-        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [], apiKey, screening: screeningConfig })
+        const result = await runSynthesizer({ agentOutputs, snapshot, settings, recentSummaries, returnMetrics, holdingMomentum, isNewPortfolio, candidateTickers: isNewPortfolio ? tickers : [], apiKey, screening: screeningConfig })
         await setStage('synthesizer', 'complete')
         return result
       } catch (err) {
@@ -602,24 +627,27 @@ export const portfolioAnalysis = inngest.createFunction(
 
     // Step 8: Validate any tickers the synthesizer added that are not in the current holdings
     // (for a new portfolio that is every ticker, including starter candidates).
-    // Polygon confirms the symbol exists; invalid ones are stripped and the rest renormalised to 100.
-    const validatedAllocation = await step.run('validate-tickers', async (): Promise<TargetAllocationItem[]> => {
+    // Polygon confirms the symbol exists; invalid ones are stripped and the remaining STOCKS rescaled to 100 − cash.
+    // Reserved cash words (CASH, USD, money-market symbols …) are converted into cash and never validated as tickers.
+    const { allocation: validatedAllocation, cash_target_pct: synthCashPct } = await step.run('validate-tickers', async (): Promise<{ allocation: TargetAllocationItem[]; cash_target_pct: number }> => {
       try {
+        // Idempotent re-extraction also covers a synthesizer result memoised before specs/031 (no cash field)
+        const { stocks, cash_target_pct } = extractCashEntries(synthResult.target_allocation, synthResult.cash_target_pct ?? 0)
         const existingTickerSet = new Set(snapshot.holdings.map(h => h.ticker))
-        const newTickers = synthResult.target_allocation
+        const newTickers = stocks
           .map(a => a.ticker)
           .filter(t => !existingTickerSet.has(t))
 
-        let cleaned = synthResult.target_allocation
+        let cleaned = stocks
         if (newTickers.length > 0) {
           // Alpaca (generous rate limits) confirms the symbol is an active, tradeable asset; Polygon only as a fallback.
           const creds = await loadAlpacaCredentials(user_id)
           const confirmedNew = creds ? await confirmTradeable(newTickers, creds) : await checkTickersExist(newTickers)
           const invalid = new Set(newTickers.filter(t => !confirmedNew.has(t)))
-          if (invalid.size > 0) cleaned = removeTickers(synthResult.target_allocation, invalid)
+          if (invalid.size > 0) cleaned = rescaleStocksToCash(stocks.filter(a => !invalid.has(a.ticker)), cash_target_pct)
         }
         if (cleaned.length === 0) throw new Error('Recommendation contained no valid tickers')
-        return cleaned
+        return { allocation: cleaned, cash_target_pct }
       } catch (err) {
         await markRunError(err)
         throw err
@@ -693,7 +721,7 @@ export const portfolioAnalysis = inngest.createFunction(
 
       let screened
       try {
-        screened = applyShariahScreening(validatedAllocation, screenings, undefined, screeningConfig.islamic)
+        screened = applyShariahScreening(validatedAllocation, screenings, undefined, screeningConfig.islamic, synthCashPct ?? 0)
       } catch (err) {
         // Keep the screening visible on the failed run, then fail it.
         const failed = buildShariahScreeningResult(
@@ -711,8 +739,15 @@ export const portfolioAnalysis = inngest.createFunction(
       }
 
       const screening  = buildShariahScreeningResult(screenings, screened.excluded, now, screeningConfig)
+      // Explicit cash (specs/031): synthesizer cash + whatever the per-stock cap could not place. Stored in
+      // agent_outputs.cash_allocation (no migration); target_allocation keeps stocks only.
+      const cashAllocation: StoredCashAllocation = CashAllocationSchema.parse({
+        version:         1,
+        cash_target_pct: Math.min(100, Math.max(0, screened.cash_target_pct)),
+        converted:       synthResult.cash_converted ?? [],
+      })
       const actionList = annotateActionList(
-        computeActionList(snapshot.holdings, snapshot.cash_usd, screened.kept),
+        computeActionList(snapshot.holdings, snapshot.cash_usd, screened.kept, cashAllocation.cash_target_pct),
         screened.excluded,
         screeningConfig.islamic ? NOT_COMPLIANT_SKIP_REASON : SCREENING_EXCLUDED_NOTE_PREFIX,
       )
@@ -724,8 +759,9 @@ export const portfolioAnalysis = inngest.createFunction(
           action_list:       actionList,
           summary_text:      synthResult.summary_text,
           conflict_notes:    synthResult.conflict_notes,
-          // Compact copy that survives even when the shariah_screening migration is not applied
-          agent_outputs:     { ...agentOutputs, shariah_review: screening, usage },
+          // Compact copy that survives even when the shariah_screening migration is not applied;
+          // cash target + the real-return metrics the synthesizer saw (specs/031) live here too.
+          agent_outputs:     { ...agentOutputs, shariah_review: screening, usage, cash_allocation: cashAllocation, return_metrics: returnMetrics },
           status:            'complete',
           updated_at:        now,
         })

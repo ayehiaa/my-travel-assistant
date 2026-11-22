@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { renormaliseAllocation, capAllocation } from '@/lib/allocationUtils'
+import { isReservedCashWord, rescaleStocksToCash, residualCashPct } from '@/lib/cashAllocation'
 import type { ActionItem, TargetAllocationItem } from '@/types/database'
 import { FULL_SCREENING_CONFIG, EffectiveScreeningConfigSchema, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import type {
@@ -28,6 +29,8 @@ export const NOT_COMPLIANT_SKIP_REASON = 'Not Shariah-compliant'
 export const NO_SCREENING_SKIP_REASON =
   'Not Shariah-compliant — re-run the analysis (this recommendation predates Shariah screening)'
 export const NOT_COMMON_STOCK_SKIP_REASON = 'Not an individual common stock'
+/** A reserved cash word ("CASH", "USD", a money-market symbol …) is never bought as a ticker (specs/031). */
+export const RESERVED_CASH_SKIP_REASON = 'Reserved cash word — cash is held as cash, never bought as a ticker'
 export const UNKNOWN_TYPE_SKIP_REASON =
   'Security type unknown — re-run the analysis to confirm it is an individual common stock'
 /** Sell-note prefix for exclusions when Islamic screening is off (stocks-only exclusions). */
@@ -333,11 +336,14 @@ export function decideTickerVerdict(
 export interface ScreenedAllocation {
   kept:     TargetAllocationItem[]
   excluded: Array<{ ticker: string; reasons: string[] }>
+  /** Cash target after screening + cap: 100 − Σ kept (explicit cash plus anything the per-stock cap left over). */
+  cash_target_pct: number
 }
 
 /**
  * Drop every ticker that is not fully compliant (a ticker with no screening result is dropped),
- * renormalise to 100 and cap each stock at MAX_STOCK_WEIGHT_PCT. Non-compliant holdings that are
+ * rescale the rest to 100 − cash (cash = 0 when no explicit cash target is given) and cap each stock at
+ * MAX_STOCK_WEIGHT_PCT (the excess the cap cannot place becomes cash). Non-compliant holdings that are
  * not in the allocation are listed as excluded too (their target is 0% → SELL).
  * Throws when nothing compliant remains.
  */
@@ -346,11 +352,14 @@ export function applyShariahScreening(
   screenings: TickerScreening[],
   capPct: number = MAX_STOCK_WEIGHT_PCT,
   islamic: boolean = true,
+  /** Explicit cash target (specs/031). Undefined → legacy: the stocks are rescaled to 100 and cash is what the cap leaves. */
+  cashTargetPct?: number,
 ): ScreenedAllocation {
   const byTicker = new Map(screenings.map(s => [s.ticker, s]))
   const excludedMap = new Map<string, string[]>()
 
-  const compliantItems = allocation.filter(a => {
+  // Reserved cash words are never stocks: never screened, never kept (defence in depth — the synthesizer converts them)
+  const compliantItems = allocation.filter(a => !isReservedCashWord(a.ticker)).filter(a => {
     const s = byTicker.get(a.ticker)
     if (s && s.verdict === 'compliant') return true
     excludedMap.set(a.ticker, s ? s.reasons : ['Not screened'])
@@ -370,10 +379,13 @@ export function applyShariahScreening(
     )
   }
 
-  const kept = capAllocation(renormaliseAllocation(positive), capPct)
+  // Removed stocks' weight goes to the remaining stocks (cash unchanged); whatever the cap cannot place goes to cash.
+  const rescaled = cashTargetPct === undefined ? renormaliseAllocation(positive) : rescaleStocksToCash(positive, cashTargetPct)
+  const kept = capAllocation(rescaled, capPct)
   return {
     kept,
     excluded: Array.from(excludedMap, ([ticker, reasons]) => ({ ticker, reasons })),
+    cash_target_pct: residualCashPct(kept),
   }
 }
 
@@ -446,6 +458,8 @@ export function getBuyBlockReason(
   screening: ShariahScreeningResult | null,
   current: EffectiveScreeningConfig = FULL_SCREENING_CONFIG,
 ): string | null {
+  // Never buy a reserved cash word (e.g. "CASH" is a real bank stock) — independent of every screening setting.
+  if (isReservedCashWord(ticker)) return RESERVED_CASH_SKIP_REASON
   if (!current.islamic && !current.stocks_only) return null
   const s = screening?.tickers.find(t => t.ticker === ticker) ?? null
   if (!current.islamic) return stocksOnlyBlock(s)

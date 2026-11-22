@@ -423,6 +423,8 @@ export interface PortfolioHistory {
   equity: Array<number | null>
   /** Cumulative, deposit-adjusted return per point as a fraction (e.g. 0.012 = +1.2%). */
   profit_loss_pct: Array<number | null>
+  /** Cumulative P/L in USD per point (excludes deposits / withdrawals). Empty when Alpaca sends none. */
+  profit_loss: Array<number | null>
   base_value: number | null
 }
 
@@ -449,12 +451,14 @@ export async function fetchPortfolioHistory(
     timestamp?: Array<number | string>
     equity?: Array<number | string | null>
     profit_loss_pct?: Array<number | string | null>
+    profit_loss?: Array<number | string | null>
     base_value?: number | string | null
   }
   return {
     timestamp:       Array.isArray(data.timestamp) ? data.timestamp.map(v => Number(v)) : [],
     equity:          Array.isArray(data.equity) ? data.equity.map(v => parseOptionalNum(v)) : [],
     profit_loss_pct: Array.isArray(data.profit_loss_pct) ? data.profit_loss_pct.map(v => parseOptionalNum(v)) : [],
+    profit_loss:     Array.isArray(data.profit_loss) ? data.profit_loss.map(v => parseOptionalNum(v)) : [],
     base_value:      parseOptionalNum(data.base_value),
   }
 }

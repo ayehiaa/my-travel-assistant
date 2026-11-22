@@ -9,6 +9,7 @@ import { effectiveScreeningConfig, readScreeningSettings } from '@/lib/screening
 import { readAutopilotSettings } from '@/lib/schedule'
 import { AUTOPILOT_MODE_LABEL, formatNextRunShort } from '@/lib/portfolioStatusStrip'
 import { computeAllocationDrift, inProgressRunId, settingsHref } from '@/lib/portfolioHub'
+import { readCashTargetPct } from '@/lib/cashAllocation'
 import type { Recommendation, TargetAllocationItem } from '@/types/database'
 
 /**
@@ -44,7 +45,7 @@ export default async function RebalanceTab({ userId }: { userId: string }) {
   const target = (latest?.target_allocation as TargetAllocationItem[] | null | undefined) ?? null
   const liveAllocation = latest && target && live.portfolio
     ? {
-        rows: computeAllocationDrift(live.portfolio.holdings, live.portfolio.cash_usd, target),
+        rows: computeAllocationDrift(live.portfolio.holdings, live.portfolio.cash_usd, target, readCashTargetPct(latest)),
         note: 'Current weights live from Alpaca; target from this analysis.',
       }
     : null
