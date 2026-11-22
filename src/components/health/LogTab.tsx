@@ -82,8 +82,10 @@ export default async function LogTab({ userId, enrolment, date }: { userId: stri
         entries.map(e => (
           <FoodEntryCard
             key={e.id}
-            entry={{ id: e.id, time: e.time, slot: e.slot, text: e.text, restaurant: e.restaurant, items: e.items }}
-            photoUrls={e.photoPaths.map(p => urls[p]).filter((u): u is string => !!u)}
+            entry={{
+              id: e.id, time: e.time, slot: e.slot, text: e.text, restaurant: e.restaurant, noAddedFat: e.noAddedFat, items: e.items,
+              photos: e.photoPaths.filter(p => !!urls[p]).map(p => ({ path: p, url: urls[p] })),
+            }}
             slots={slots}
             componentLabels={componentLabels}
           />

@@ -1,44 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { callClaude } from '@/lib/aiCall'
-import { resolveAiKeyForUser } from '@/lib/aiKeyStore'
-import { AI_KEY_REJECTED_MESSAGE } from '@/lib/aiKeyResolver'
-import { checkStopReason } from '@/lib/aiResponse'
 import { HhMmSchema } from '@/lib/health/programmeSchema'
 import { isValidDate } from '@/lib/health/time'
-import { itemsFromLibraryText } from '@/lib/health/foodLibrary'
-import {
-  FOOD_ESTIMATE_SYSTEM,
-  MAX_PHOTOS,
-  applyLibrary,
-  buildFoodEstimatePrompt,
-  componentKeys,
-  parseFoodEstimate,
-  toFoodItem,
-  type EstimatedItem,
-} from '@/lib/health/foodEstimate'
-import { applyOffProduct, pickOffMatch } from '@/lib/health/openFoodFacts'
-import { searchOpenFoodFacts } from '@/lib/health/openFoodFactsClient'
+import { MAX_PHOTOS } from '@/lib/health/foodEstimate'
+import { NO_KEY_MESSAGE, runFoodEstimate } from '@/lib/health/foodEstimateServer'
+import { resolveAiKeyForUser } from '@/lib/aiKeyStore'
 import { MAX_PHOTO_BYTES, photoPath, sanitizePhoto, uploadPhoto } from '@/lib/health/healthPhotos'
-import {
-  loadEntries, loadLibrary, nowFor, requireEnrolment, requireHealthUser, type ActiveEnrolment, type ServerClient,
-} from '@/lib/health/healthServer'
-import { restaurantTips } from '@/lib/health/travel'
-import { sumNutrients, type FoodItem } from '@/lib/health/nutrition'
+import { nowFor, requireEnrolment, requireHealthUser } from '@/lib/health/healthServer'
 
 /**
- * Estimate a meal from text and/or 1–4 photos (specs/029 US3). Nothing is saved as an entry here: the client shows
- * the editable items and saves them with POST /api/health/food. Photos are stripped of metadata and stored in the
- * private bucket now so the saved entry can reference them.
+ * Estimate a meal from text and/or 1–4 photos (specs/029 US3, P3.1). Nothing is saved as an entry here: the client
+ * shows the editable items (with assumption chips) and saves them with POST /api/health/food. Photos are stripped
+ * of metadata and stored in the private bucket now so the saved entry can reference them.
  *
- * Order: personal library (no AI when every part of the text matches) → Claude with the user's own key →
- * library overrides → Open Food Facts for branded packaged products.
+ * The pipeline (library → reference data → Open Food Facts → AI) lives in runFoodEstimate, shared with the
+ * re-calculate action on saved entries.
  */
 
 export const maxDuration = 60
-
-const NO_KEY_MESSAGE = 'Add your Anthropic API key in Health → Programme to estimate food with AI'
 
 const FieldsSchema = z.object({
   text: z.string().trim().max(1000).optional().transform(v => (v ? v : null)),
@@ -46,6 +26,7 @@ const FieldsSchema = z.object({
   date: z.string().refine(isValidDate, { message: 'Invalid date' }),
   time: HhMmSchema,
   restaurant: z.enum(['true', 'false']).optional().transform(v => v === 'true'),
+  noAddedFat: z.enum(['true', 'false']).optional().transform(v => v === 'true'),
 })
 
 export async function POST(request: NextRequest) {
@@ -63,9 +44,10 @@ export async function POST(request: NextRequest) {
     date: form.get('date'),
     time: form.get('time'),
     restaurant: form.get('restaurant') ?? undefined,
+    noAddedFat: form.get('noAddedFat') ?? undefined,
   })
   if (!fields.success) return NextResponse.json({ error: fields.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 })
-  const { text, slot, date, restaurant } = fields.data
+  const { text, slot, date, restaurant, noAddedFat } = fields.data
 
   const files = form.getAll('photos').filter((f): f is File => f instanceof File && f.size > 0)
   if (!text && files.length === 0) return NextResponse.json({ error: 'Describe the food or add a photo' }, { status: 400 })
@@ -78,21 +60,15 @@ export async function POST(request: NextRequest) {
   const { enrolment } = enrol
   if (date > nowFor(enrolment).date) return NextResponse.json({ error: 'Cannot log food for a future date' }, { status: 400 })
 
-  const library = await loadLibrary(supabase, user.id)
-
-  // 1. Text only and every part is a personal food → no AI call (free, instant).
-  if (text && files.length === 0) {
-    const fromLibrary = itemsFromLibraryText(text, library)
-    if (fromLibrary) return NextResponse.json({ items: fromLibrary, photoPaths: [], source: 'library', costUsd: 0 })
+  // Photos always need the AI: check the key before storing anything (no orphaned uploads).
+  if (files.length > 0) {
+    const key = await resolveAiKeyForUser(user.id).catch(() => null)
+    if (!key || !key.ok) return NextResponse.json({ error: NO_KEY_MESSAGE, needsAiKey: true }, { status: 400 })
   }
 
-  // 2. Claude with the user's own key (owner emails may use the app key — spec 026).
-  const key = await resolveAiKeyForUser(user.id).catch(() => null)
-  if (!key || !key.ok) return NextResponse.json({ error: NO_KEY_MESSAGE, needsAiKey: true }, { status: 400 })
-
-  // 3. Photos: metadata stripped, stored privately, sent as base64 image blocks.
+  // Photos: metadata stripped, stored privately, sent as base64 image blocks.
   const photoPaths: string[] = []
-  const images: Array<{ mediaType: 'image/jpeg'; data: string }> = []
+  const images: string[] = []
   for (const file of files) {
     let jpeg: Uint8Array
     try {
@@ -104,71 +80,12 @@ export async function POST(request: NextRequest) {
     const uploaded = await uploadPhoto(path, jpeg)
     if (!uploaded.ok) return NextResponse.json({ error: uploaded.reason }, { status: 503 })
     photoPaths.push(path)
-    images.push({ mediaType: 'image/jpeg', data: Buffer.from(jpeg).toString('base64') })
+    images.push(Buffer.from(jpeg).toString('base64'))
   }
 
-  const slotName = enrolment.def.mealSlots.find(s => s.key === slot)?.name ?? null
-  let result: Awaited<ReturnType<typeof callClaude>>
-  try {
-    result = await callClaude({
-      role: 'health_food',
-      name: 'health_food',
-      system: FOOD_ESTIMATE_SYSTEM,
-      user: buildFoodEstimatePrompt({ text, photoCount: images.length, slotName, def: enrolment.def, library, restaurant }),
-      images,
-      apiKey: key.apiKey,
-    })
-  } catch (err) {
-    const rejected = err instanceof Error && err.message === AI_KEY_REJECTED_MESSAGE
-    return NextResponse.json(
-      { error: rejected ? AI_KEY_REJECTED_MESSAGE : 'The AI estimate failed — try again or add the items by hand', photoPaths },
-      { status: 502 },
-    )
+  const outcome = await runFoodEstimate({ supabase, userId: user.id, enrolment, date, text, slot, restaurant, noAddedFat, images })
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.error, needsAiKey: outcome.needsAiKey, photoPaths }, { status: outcome.status })
   }
-
-  const stop = checkStopReason(result.stopReason)
-  const parsed = stop.ok ? parseFoodEstimate(result.text, componentKeys(enrolment.def)) : null
-  if (!parsed || parsed.length === 0) {
-    return NextResponse.json(
-      { error: 'Could not recognise any food — add more detail or enter the items by hand', photoPaths },
-      { status: 422 },
-    )
-  }
-
-  // 4. Library overrides, then Open Food Facts for up to 3 branded products (in parallel, 4 s timeout each).
-  let items: EstimatedItem[] = applyLibrary(parsed, library)
-  const packaged = items.map((item, i) => ({ item, i })).filter(x => x.item.packaged && x.item.source === 'ai').slice(0, 3)
-  if (packaged.length > 0) {
-    const matches = await Promise.all(packaged.map(async ({ item }) => {
-      const hint = item.packaged!
-      const products = await searchOpenFoodFacts(`${hint.brand} ${hint.product}`.trim())
-      return pickOffMatch(products, hint)
-    }))
-    items = items.map((item, i) => {
-      const k = packaged.findIndex(p => p.i === i)
-      const product = k >= 0 ? matches[k] : null
-      return product ? applyOffProduct(item, product) : item
-    })
-  }
-
-  const out = items.map(toFoodItem)
-  return NextResponse.json({
-    items: out,
-    photoPaths,
-    source: 'ai',
-    costUsd: result.usage.cost_usd,
-    tips: restaurant ? await restaurantTipsFor(supabase, user.id, enrolment, date, out) : [],
-  })
-}
-
-/** Restaurant tips (deterministic) with the sat fat left today. Best effort: rules-only tips on any error. */
-async function restaurantTipsFor(supabase: ServerClient, userId: string, enrolment: ActiveEnrolment, date: string, items: FoodItem[]): Promise<string[]> {
-  let left: number | null = null
-  try {
-    const entries = await loadEntries(supabase, userId, date, date)
-    left = enrolment.targets.satFatTargetG - sumNutrients(entries.flatMap(e => e.items)).satFatG
-  } catch {
-    left = null
-  }
-  return restaurantTips(enrolment.def, items, left)
+  return NextResponse.json({ items: outcome.items, photoPaths, source: outcome.source, costUsd: outcome.costUsd, tips: outcome.tips })
 }

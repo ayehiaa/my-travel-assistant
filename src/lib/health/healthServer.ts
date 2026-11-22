@@ -7,6 +7,8 @@ import { parseProgrammeDefinition, type ProgrammeDefinition } from './programmeS
 import { readEffectiveTargets, ProfileSchema, type EffectiveTargets, type Profile } from './targets'
 import { FoodItemSchema, type FoodItem } from './nutrition'
 import { normalizeFoodName, per100FromItem, readLibraryRow, type LibraryFood } from './foodLibrary'
+import { assumptionPrefsOf, baseNutrients } from './assumptions'
+import { joinItemMeta, splitItemMeta } from './itemMeta'
 import { evaluateRules, type RuleContext, type RuleFinding } from './rules'
 import { sleepSummary, type SleepNight, type WeighIn } from './checkin'
 import { addDays, localDate, localTime, weekStart } from './time'
@@ -152,6 +154,8 @@ export interface StoredEntry {
   slot: string | null
   text: string | null
   restaurant: boolean
+  /** P3.1 "cooked/served without butter or oil" (stored in the entry's ai_usage jsonb — no migration). */
+  noAddedFat: boolean
   photoPaths: string[]
   items: StoredItem[]
 }
@@ -162,6 +166,7 @@ function num(v: unknown): number {
 }
 
 export function rowToItem(row: Record<string, unknown>): StoredItem | null {
+  const { components, meta } = splitItemMeta(row.components)
   const parsed = FoodItemSchema.safeParse({
     name: row.name,
     quantityG: num(row.quantity_g),
@@ -171,12 +176,14 @@ export function rowToItem(row: Record<string, unknown>): StoredItem | null {
     fatG: num(row.fat_g),
     satFatG: num(row.sat_fat_g),
     fibreG: num(row.fibre_g),
-    components: row.components ?? {},
+    components,
     confidence: row.confidence,
     isTreat: row.is_treat === true,
-    source: row.source,
+    source: meta.source ?? row.source,
     libraryId: row.library_id ?? null,
     offCode: row.off_code ?? null,
+    ...(meta.assumptions.length ? { assumptions: meta.assumptions } : {}),
+    ...(meta.refId ? { refId: meta.refId } : {}),
   })
   return parsed.success ? { ...parsed.data, id: String(row.id) } : null
 }
@@ -194,16 +201,18 @@ export function itemToRow(item: FoodItem, entryId: string, userId: string, posit
     fat_g: item.fatG,
     sat_fat_g: item.satFatG,
     fibre_g: item.fibreG,
-    components: item.components,
+    components: joinItemMeta(item),
     confidence: item.confidence,
     is_treat: item.isTreat,
-    source: item.source,
+    // The DB CHECK predates the 'reference' source: store 'ai' there and the real source in components._meta.
+    source: item.source === 'reference' ? 'ai' : item.source,
     library_id: item.libraryId ?? null,
     off_code: item.offCode ?? null,
   }
 }
 
 function rowToEntry(row: Record<string, unknown>): StoredEntry {
+  const usage = row.ai_usage && typeof row.ai_usage === 'object' ? (row.ai_usage as Record<string, unknown>) : null
   const items = Array.isArray(row.health_food_items)
     ? (row.health_food_items as Record<string, unknown>[])
         .sort((a, b) => num(a.position) - num(b.position))
@@ -217,6 +226,7 @@ function rowToEntry(row: Record<string, unknown>): StoredEntry {
     slot: (row.slot as string | null) ?? null,
     text: (row.input_text as string | null) ?? null,
     restaurant: row.restaurant === true,
+    noAddedFat: usage?.noAddedFat === true,
     photoPaths: Array.isArray(row.photo_paths) ? (row.photo_paths as string[]) : [],
     items,
   }
@@ -227,7 +237,7 @@ function rowToEntry(row: Record<string, unknown>): StoredEntry {
 export async function loadEntries(supabase: ServerClient, userId: string, from: string, to: string): Promise<StoredEntry[]> {
   const { data, error } = await supabase
     .from('health_food_entries')
-    .select('id, local_date, local_time, slot, input_text, restaurant, photo_paths, health_food_items(*)')
+    .select('id, local_date, local_time, slot, input_text, restaurant, photo_paths, ai_usage, health_food_items(*)')
     .eq('user_id', userId)
     .gte('local_date', from)
     .lte('local_date', to)
@@ -425,8 +435,10 @@ export async function rememberFoods(supabase: ServerClient, userId: string, item
     const now = new Date().toISOString()
     const toRemember = [...new Set(rememberIdx)].map(i => items[i]).filter((i): i is FoodItem => !!i)
     for (const item of toRemember) {
-      const per100 = per100FromItem(item)
+      // P3.1: the library keeps the BASE food (as described) + the chip choices, e.g. "no butter on this toast".
+      const per100 = per100FromItem(baseNutrients(item))
       if (!per100) continue
+      const prefs = assumptionPrefsOf(item)
       const normalized = normalizeFoodName(item.name)
       if (!normalized) continue
       const { data: existing } = await supabase
@@ -435,7 +447,14 @@ export async function rememberFoods(supabase: ServerClient, userId: string, item
         .eq('user_id', userId)
         .eq('normalized_name', normalized)
         .maybeSingle()
-      const row = { name: item.name, default_quantity_g: item.quantityG, per100, is_treat: item.isTreat, last_used_at: now, updated_at: now }
+      const row = {
+        name: item.name,
+        default_quantity_g: item.quantityG,
+        per100: Object.keys(prefs).length ? { ...per100, assumptionPrefs: prefs } : per100,
+        is_treat: item.isTreat,
+        last_used_at: now,
+        updated_at: now,
+      }
       if (existing) {
         await supabase.from('health_food_library').update({ ...row, uses_count: Number(existing.uses_count ?? 0) + 1 }).eq('id', existing.id)
       } else {

@@ -23,6 +23,8 @@ import DayTimezoneControl from './DayTimezoneControl'
 import CheckinCard from './CheckinCard'
 import NextMorningCheckCard from './NextMorningCheckCard'
 import QuickLog from './QuickLog'
+import FoodEntryCard from './FoodEntryCard'
+import { signedPhotoUrls } from '@/lib/health/healthPhotos'
 import HealthNotice from './HealthNotice'
 import { CARD, CARD_TITLE, fmtNum } from './ui'
 
@@ -85,6 +87,7 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
   }
 
   const { entries, weekEntries, findings } = evaluation
+  const photoUrls = await signedPhotoUrls(entries.flatMap(e => e.photoPaths))
   const items = entries.flatMap(e => e.items)
   const totals = sumNutrients(items)
   const comps = sumComponents(items)
@@ -344,6 +347,21 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
             <li className="text-sm text-[var(--ink-2)]">Other: {sumNutrients(entries.filter(e => !e.slot).flatMap(e => e.items)).kcal} kcal</li>
           )}
         </ol>
+        {entries.length > 0 && (
+          <div className="mt-3 flex flex-col gap-3">
+            {entries.map(e => (
+              <FoodEntryCard
+                key={e.id}
+                entry={{
+                  id: e.id, time: e.time, slot: e.slot, text: e.text, restaurant: e.restaurant, noAddedFat: e.noAddedFat, items: e.items,
+                  photos: e.photoPaths.filter(p => !!photoUrls[p]).map(p => ({ path: p, url: photoUrls[p] })),
+                }}
+                slots={def.mealSlots.map(m => ({ key: m.key, name: m.name }))}
+                componentLabels={componentLabels}
+              />
+            ))}
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
           <Link href={healthHref({ tab: 'log', date })} className="text-sm font-semibold text-[var(--blue-700)] underline">Edit today&apos;s log</Link>
           <Link href={healthHref({ tab: 'programme', view: 'meals' })} className="text-sm font-semibold text-[var(--blue-700)] underline">Meal plan & shopping list</Link>

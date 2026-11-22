@@ -73,3 +73,22 @@ export async function removePhotos(paths: string[]): Promise<void> {
     // ignore
   }
 }
+
+/**
+ * Stored photos as base64 JPEG (re-calculation of a saved entry sends its existing photos to the model again).
+ * Only the caller's own paths; unreadable photos are skipped.
+ */
+export async function downloadPhotosBase64(paths: string[], userId: string): Promise<string[]> {
+  const out: string[] = []
+  for (const path of paths) {
+    if (!isOwnPhotoPath(path, userId)) continue
+    try {
+      const { data, error } = await createAdminClient().storage.from(HEALTH_PHOTO_BUCKET).download(path)
+      if (error || !data) continue
+      out.push(Buffer.from(await data.arrayBuffer()).toString('base64'))
+    } catch {
+      // skip
+    }
+  }
+  return out
+}

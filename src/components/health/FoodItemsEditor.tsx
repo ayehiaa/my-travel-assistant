@@ -6,6 +6,9 @@ import { PORTION_FACTORS, scaleItem, sumNutrients, uncertaintyBand, type FoodIte
 import { applyOffProduct, type OffProduct } from '@/lib/health/openFoodFacts'
 import { BUTTON_SECONDARY, INPUT, fmtNum } from './ui'
 import BarcodeScanner from './BarcodeScanner'
+import AssumptionChips from './AssumptionChips'
+import { setAssumptionKept } from '@/lib/health/assumptions'
+import { itemSourceLabel } from '@/lib/health/itemMeta'
 
 export interface EditableItem extends FoodItem {
   /** Quantity of the original estimate (portion presets scale from it). */
@@ -116,9 +119,11 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
                   {componentLabels[k]?.name ?? k.replace(/_/g, ' ')} {fmtNum(v)}{componentLabels[k]?.unit === 'servings' ? '' : ` ${componentLabels[k]?.unit ?? ''}`}
                 </span>
               ))}
-              <span className={low ? 'font-bold text-amber-800' : ''}>{item.source === 'library' ? 'My food' : item.source === 'off' ? 'Label values' : `${item.confidence} confidence`}</span>
+              <span className={`rounded-full px-2 py-0.5 ${item.source === 'ai' ? 'bg-amber-50 text-amber-900' : 'bg-[var(--paper-2)] text-[var(--ink-2)]'}`}>{itemSourceLabel(item.source)}</span>
+              {(item.source === 'ai' || item.source === 'reference') && <span className={low ? 'font-bold text-amber-800' : ''}>{item.confidence === 'low' ? 'portion unsure' : `${item.confidence} confidence`}</span>}
               {item.isTreat && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-pink-800">treat</span>}
             </div>
+            <AssumptionChips assumptions={item.assumptions} onToggle={(key, kept) => update(idx, setAssumptionKept(item, key, kept))} />
             {low && item.baseQuantityG > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold text-amber-900">Portion?</span>
@@ -156,7 +161,7 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
                       onBlur={e => {
                         const v = Number(e.target.value.replace(',', '.'))
                         if (v === item[n.key]) return
-                        if (Number.isFinite(v) && v >= 0) update(idx, { ...item, [n.key]: v, source: item.source === 'ai' ? 'manual' : item.source, confidence: 'high' })
+                        if (Number.isFinite(v) && v >= 0) update(idx, { ...item, [n.key]: v, source: item.source === 'ai' || item.source === 'reference' ? 'manual' : item.source, refId: item.source === 'reference' ? null : item.refId, confidence: 'high' })
                       }}
                     />
                   </label>

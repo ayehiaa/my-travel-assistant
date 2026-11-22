@@ -171,3 +171,28 @@
 | US14 | PDF/CSV of weight & waist trend, labs, adherence, training for a date range | clinicianExport.test.ts, export/clinician |
 | §9 | set logging works with intermittent connectivity (queue and sync) | offlineQueue.test.ts, workouts/sync |
 | §8 | export (JSON + photo links) and hard delete in Settings | dataRights.test.ts, data/export, data/delete |
+
+## Phase P3.1 — Estimate accuracy
+
+### Data
+- [x] T77 Download a reference dataset (CoFID blocked → USDA SR28 official flat files), build script + selection list, 423-row bundled JSON with source/id per row, licence README
+- [x] T78 No migration: assumptions / refId / 'reference' source in `components._meta`; toggle in `ai_usage`; library chip prefs in `per100.assumptionPrefs`
+
+### Pure logic (tested)
+- [x] T79 `assumptions.ts` — schema, keys, totals kept/removed, toggle filter, prefs, back-compat read
+- [x] T80 `referenceFoods.ts` — matching/ranking, strict match, prompt candidates, per-portion scaling, composite parts
+- [x] T81 `foodEstimate.ts` — prompt contract (assumptions, candidates, no-fat note), parse, resolveReference, resolveEstimate precedence, pickItemSource; regression test for the production example
+- [x] T82 `itemMeta.ts` (split/join `_meta`, source labels), `foodEntryEdit.ts` (photo plans, column updates), `scaleItem` with assumptions
+- [x] T83 `RESTAURANT_PROMPT_NOTE`: hidden fat as assumptions
+
+### Server + API
+- [x] T84 `foodEstimateServer.runFoodEstimate` shared by `/food/estimate` and re-calculate; `downloadPhotosBase64`
+- [x] T85 `POST /api/health/food/[id]` re-calculate (preview, no save); `PATCH` extended (text, restaurant, noAddedFat, photos); `POST /api/health/food` stores the toggle
+
+### UI
+- [x] T86 `AssumptionChips` ("+ butter (assumed) ✕", removable / add back) in the item editor and saved entry cards; source chip per item
+- [x] T87 `NoAddedFatToggle` in Log food (prominent in eating-out mode) and the entry editor
+- [x] T88 `FoodEntryCard` edit flow: text, photos, slot, time, eating-out, toggle, Re-calculate → review → Save / Cancel; entry cards on Today
+
+### Docs
+- [x] T89 plan.md / tasks.md P3.1, spec §13 row, CLAUDE.md "Current Feature Plan"

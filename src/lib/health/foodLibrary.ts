@@ -23,6 +23,8 @@ export interface LibraryFood {
   defaultQuantityG: number
   per100: Per100
   isTreat: boolean
+  /** P3.1: remembered assumption-chip choices for this food, e.g. { butter: false } = "no butter on my toast". */
+  assumptionPrefs?: Record<string, boolean>
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
@@ -127,6 +129,11 @@ export function readLibraryRow(row: unknown): LibraryFood | null {
   const per100 = Per100Schema.safeParse(r.per100)
   if (typeof r.id !== 'string' || typeof r.name !== 'string' || !per100.success) return null
   const q = Number(r.default_quantity_g)
+  const prefsRaw = r.per100 && typeof r.per100 === 'object' ? (r.per100 as Record<string, unknown>).assumptionPrefs : null
+  const assumptionPrefs: Record<string, boolean> = {}
+  if (prefsRaw && typeof prefsRaw === 'object' && !Array.isArray(prefsRaw)) {
+    for (const [k, v] of Object.entries(prefsRaw)) if (typeof v === 'boolean' && /^[a-z][a-z0-9_]{0,39}$/.test(k)) assumptionPrefs[k] = v
+  }
   return {
     id: r.id,
     name: r.name,
@@ -134,6 +141,7 @@ export function readLibraryRow(row: unknown): LibraryFood | null {
     defaultQuantityG: Number.isFinite(q) && q > 0 ? q : 100,
     per100: per100.data,
     isTreat: r.is_treat === true,
+    ...(Object.keys(assumptionPrefs).length ? { assumptionPrefs } : {}),
   }
 }
 

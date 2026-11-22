@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { HhMmSchema, type MealSlot, type ProgrammeDefinition } from './programmeSchema'
 import type { EffectiveTargets } from './targets'
 import { hhmmToMinutes, isValidDate } from './time'
+import { AssumptionSchema, MAX_ASSUMPTIONS, baseNutrients, withAssumptions } from './assumptions'
 
 /**
  * Food items, day totals, remaining budget and component progress (specs/029 §3.4, US3, US4). Pure.
@@ -13,7 +14,8 @@ export const BUILTIN_COMPONENTS = ['starch_servings', 'caffeine_mg'] as const
 export const CONFIDENCE_LEVELS = ['low', 'medium', 'high'] as const
 export type Confidence = (typeof CONFIDENCE_LEVELS)[number]
 
-export const ITEM_SOURCES = ['ai', 'library', 'off', 'manual'] as const
+/** 'reference' (P3.1): numbers from the bundled reference dataset (src/lib/health/reference). */
+export const ITEM_SOURCES = ['ai', 'library', 'off', 'manual', 'reference'] as const
 export type ItemSource = (typeof ITEM_SOURCES)[number]
 
 /** Plausibility clamps for one item (AI output and user edits). */
@@ -41,6 +43,10 @@ export const FoodItemSchema = z.object({
   source:     z.enum(ITEM_SOURCES).default('manual'),
   libraryId:  z.string().uuid().nullable().optional(),
   offCode:    z.string().regex(/^[0-9]{4,20}$/).nullable().optional(),
+  /** P3.1: things the person did not state (butter, oil, portion guesses) with their own deltas. Absent = none. */
+  assumptions: z.array(AssumptionSchema).max(MAX_ASSUMPTIONS).optional(),
+  /** P3.1: reference-dataset row id (e.g. "usda-sr28:09037") when the numbers came from it. */
+  refId:      z.string().regex(/^[a-z0-9-]{2,20}:[A-Za-z0-9-]{1,20}$/).nullable().optional(),
 })
 export type FoodItem = z.infer<typeof FoodItemSchema>
 
@@ -53,17 +59,27 @@ export const FoodEntryInputSchema = z.object({
   text:       z.string().trim().max(1000).nullable().optional(),
   restaurant: z.boolean().default(false),
   photoPaths: z.array(z.string().regex(PHOTO_PATH_RE)).max(4).default([]),
+  /** P3.1 "cooked/served without butter or oil" toggle, remembered with the entry. */
+  noAddedFat: z.boolean().default(false),
   items:      z.array(FoodItemSchema).min(1).max(30),
   /** Indices of items to remember in the personal food library (the UI ticks edited items automatically). */
   remember:   z.array(z.number().int().min(0).max(29)).max(30).default([]),
 }).strict()
 export type FoodEntryInput = z.infer<typeof FoodEntryInputSchema>
 
-/** PATCH body: replace items and/or move the entry to another slot / time (same day). */
+/**
+ * PATCH body: replace items and/or move the entry to another slot / time (same day). P3.1: the description,
+ * eating-out flag, no-added-fat toggle and the photo list (subset of the entry's photos + newly uploaded ones from
+ * a re-calculation) can be replaced too.
+ */
 export const FoodEntryPatchSchema = z.object({
   time:     HhMmSchema.optional(),
   slot:     z.string().regex(/^[a-z][a-z0-9_]{0,39}$/).nullable().optional(),
   items:    z.array(FoodItemSchema).min(1).max(30).optional(),
+  text:       z.string().trim().max(1000).nullable().optional(),
+  restaurant: z.boolean().optional(),
+  noAddedFat: z.boolean().optional(),
+  photoPaths: z.array(z.string().regex(PHOTO_PATH_RE)).max(4).optional(),
   remember: z.array(z.number().int().min(0).max(29)).max(30).default([]),
 }).strict()
 export type FoodEntryPatch = z.infer<typeof FoodEntryPatchSchema>
@@ -196,9 +212,16 @@ export function componentProgress(
   })
 }
 
-/** Scale an item's nutrition linearly to a new quantity (portion edit). Zero quantity → unchanged. */
+/**
+ * Scale an item's nutrition linearly to a new quantity (portion edit). Zero quantity → unchanged. Assumption deltas
+ * (e.g. 7 g butter) are not portion-proportional: only the base item scales, kept assumptions are re-added as-is.
+ */
 export function scaleItem<T extends FoodItem>(item: T, newQuantityG: number): T {
   if (!(item.quantityG > 0) || !(newQuantityG >= 0)) return item
+  if (item.assumptions?.length) {
+    const base = scaleItem({ ...baseNutrients(item), assumptions: undefined }, newQuantityG)
+    return withAssumptions({ ...base }, item.assumptions)
+  }
   const f = newQuantityG / item.quantityG
   const components: Record<string, number> = {}
   for (const [k, v] of Object.entries(item.components)) components[k] = r1(v * f)
