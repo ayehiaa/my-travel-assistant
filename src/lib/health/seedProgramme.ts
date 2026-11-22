@@ -4,15 +4,20 @@ import { ProgrammeDefinitionSchema, type ProgrammeDefinition, type ProgrammeDefi
  * The seed template: "12-Week Programme v3" (specs/029-health-routines §3.1, "Seed example" column).
  * Shipped as a code constant (no migration data). Users enrol from it and personalise targets from their profile.
  *
- * The source PDF is not in the repo — values come from the spec summary. Exercise lists for sessions A/B/C are
- * reconstructed from the session descriptions (7 / 9 / 8 exercises, knee-friendly, no excluded movements) and should
- * be checked against the original document (see plan.md "Decisions made autonomously").
+ * Sessions A/B/C, blocks, weekly schedule and the 7-day meal rotation are taken from the owner's programme document
+ * (the PDF itself is not in the repo). Exercise video links are YouTube searches by exercise name.
  */
 
 export const SEED_TEMPLATE_KEY = 'seed-12wk-v3'
 
 const BANDS = ['Resistance band']
 const DB = ['Dumbbells']
+const BENCH = ['Bench']
+
+/** YouTube search link for a demonstration (the PDF's own links are not in the repo; a search never goes dead). */
+function yt(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' exercise form')}`
+}
 
 const SEED_INPUT: ProgrammeDefinitionInput = {
   schemaVersion: 1,
@@ -81,14 +86,50 @@ const SEED_INPUT: ProgrammeDefinitionInput = {
       template: 'Fish / chicken / tofu with vegetables, one starch, stanol drink', covers: ['plant_stanols', 'oily_fish'] },
   ],
   mealRotation: {
-    days: (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => ({
-      day,
-      slots: [
-        { slot: 'breakfast', options: ['Porridge with soya milk', 'Soya yoghurt, oat bran and berries'], flex: false },
-        { slot: 'lunch', options: day === 'sat' ? ['Eat out (flex)'] : ['Chicken and lentil salad', 'Tuna and bean wrap'], flex: day === 'sat' },
-        { slot: 'dinner', options: day === 'tue' || day === 'fri' ? ['Salmon, rice and greens'] : ['Chicken or tofu stir-fry', 'Turkey chilli with beans'], flex: false },
-      ],
-    })),
+    days: [
+      { day: 'mon', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + walnuts + blueberries'], flex: false },
+        { slot: 'lunch', options: ['Jacket potato + tuna + big salad'], flex: false },
+        { slot: 'afternoon', options: ['Skyr + pomegranate'], flex: false },
+        { slot: 'dinner', options: ['Grilled salmon + vegetables + Benecol'], flex: false },
+      ] },
+      { day: 'tue', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + almonds + banana'], flex: false },
+        { slot: 'lunch', options: ['Shish tawook (no butter) + bulgur + salad'], flex: false },
+        { slot: 'afternoon', options: ['Hummus + carrots'], flex: false },
+        { slot: 'dinner', options: ['Cod or hake + roasted vegetables + Benecol'], flex: false },
+      ] },
+      { day: 'wed', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + mixed nuts + berries'], flex: false },
+        { slot: 'lunch', options: ['Lentil soup + tabbouleh + 1 flatbread'], flex: false },
+        { slot: 'afternoon', options: ['Skyr + berries'], flex: false },
+        { slot: 'dinner', options: ['Tandoori chicken + dhal + chapati + Benecol'], flex: false },
+      ] },
+      { day: 'thu', slots: [
+        { slot: 'breakfast', options: ['2 poached eggs + smoked salmon + 1 slice toast + avocado'], flex: false },
+        { slot: 'lunch', options: ['Ful medames + salad + olive oil'], flex: false },
+        { slot: 'afternoon', options: ['Leblebi (40 g) + apple'], flex: false },
+        { slot: 'dinner', options: ['Tofu stir-fry + vegetables + rice + Benecol'], flex: false },
+      ] },
+      { day: 'fri', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + nuts + pomegranate'], flex: false },
+        { slot: 'lunch', options: ['Sardines or mackerel on wholegrain toast + salad'], flex: false },
+        { slot: 'afternoon', options: ['Skyr + nuts'], flex: false },
+        { slot: 'dinner', options: ['Grilled sea bass + potato + vegetables + Benecol'], flex: false },
+      ] },
+      { day: 'sat', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + nuts', 'Eggs + avocado + 1 toast'], flex: false },
+        { slot: 'lunch', options: ['Eat out — grilled protein, salad, one starch'], flex: true },
+        { slot: 'afternoon', options: ['Hummus + crudités'], flex: false },
+        { slot: 'dinner', options: ['Lighter: skyr + fruit, or a small plate'], flex: false },
+      ] },
+      { day: 'sun', slots: [
+        { slot: 'breakfast', options: ['Oats + soya + nuts + berries'], flex: false },
+        { slot: 'lunch', options: ['Jacket potato + tuna', 'Leftover grilled fish'], flex: false },
+        { slot: 'afternoon', options: ['Skyr + pomegranate'], flex: false },
+        { slot: 'dinner', options: ['Chicken + bulgur + hummus + salad + Benecol'], flex: false },
+      ] },
+    ],
   },
   nutritionRules: [
     { type: 'one_starch_per_meal', maxStarchServings: 1 },
@@ -98,74 +139,110 @@ const SEED_INPUT: ProgrammeDefinitionInput = {
     { type: 'last_meal_before_bed', minGapHours: 2 },
   ],
   eatingOut: [
-    'Grilled, not fried',
-    'Sauce on the side',
-    'Ask for no butter on the grill',
-    'Watch the hidden saturated fat: cream sauces, cheese, pastry, butter-finished vegetables',
+    'Grilled, not fried — mashwi, tandoori, à la plancha, alla griglia',
+    'Sauce on the side, always — butter sauces are 12–20 g saturated fat each',
+    'Ask for no butter on the grill (worth 1.5–2 g saturated fat every time)',
+    'Hidden saturated fat: bacon in roast potatoes, ghee, coconut milk curries, mayonnaise "garlic sauce", palm-oil coatings',
     'Leave a third of the portion',
   ],
   trainingSessions: [
     {
       key: 'a', name: 'Session A', focus: 'Upper body', painCheck: false,
       exercises: [
-        { key: 'db_floor_press', name: 'Dumbbell floor press', sets: 3, reps: '10-15', restSeconds: 90, region: 'upper', equipment: DB },
-        { key: 'one_arm_row', name: 'One-arm dumbbell row', sets: 3, reps: '10-15', restSeconds: 90, region: 'upper', perSide: true, equipment: DB },
-        { key: 'seated_db_press', name: 'Seated dumbbell shoulder press', sets: 3, reps: '10-15', restSeconds: 90, region: 'upper', equipment: DB },
-        { key: 'incline_push_up', name: 'Incline push-up', sets: 3, reps: '10-15', restSeconds: 60, region: 'upper',
-          travelSubstitute: { name: 'Push-up against the hotel desk' } },
-        { key: 'band_pull_apart', name: 'Band pull-apart', sets: 3, reps: '15-20', restSeconds: 45, region: 'upper', equipment: BANDS, supersetGroup: '1' },
-        { key: 'db_curl', name: 'Dumbbell curl', sets: 3, reps: '10-15', restSeconds: 60, region: 'upper', equipment: DB, supersetGroup: '2' },
-        { key: 'oh_triceps', name: 'Overhead triceps extension', sets: 3, reps: '10-15', restSeconds: 60, region: 'upper', equipment: DB, supersetGroup: '2' },
+        { key: 'db_bench_press', name: 'Dumbbell bench press', sets: 4, reps: '8-12', restSeconds: 90, region: 'upper', equipment: [...DB, ...BENCH],
+          notes: 'Flat bench. Elbows ~45° from torso, not flared.', videoUrl: yt('Dumbbell bench press') },
+        { key: 'one_arm_row', name: 'One-arm dumbbell row', sets: 4, reps: '10-12', restSeconds: 75, region: 'upper', perSide: true, equipment: [...DB, ...BENCH],
+          notes: 'One hand on the bench, both feet on the floor: no kneeling. Pull to the hip.', videoUrl: yt('One-arm dumbbell row'),
+          travelSubstitute: { name: 'Backpack row' } },
+        { key: 'seated_shoulder_press', name: 'Seated dumbbell shoulder press', sets: 3, reps: '8-12', restSeconds: 90, region: 'upper', equipment: [...DB, ...BENCH],
+          notes: "Bench upright. Don't lock out hard at the top.", videoUrl: yt('Seated dumbbell shoulder press'),
+          travelSubstitute: { name: 'Pike push-up' } },
+        { key: 'band_lat_pulldown', name: 'Band lat pulldown (anchored high)', sets: 3, reps: '12-15', restSeconds: 60, region: 'upper', equipment: BANDS,
+          notes: 'Pull to collarbone, squeeze shoulder blades down.', videoUrl: yt('Band lat pulldown') },
+        { key: 'incline_db_press', name: 'Incline dumbbell press', sets: 3, reps: '10-12', restSeconds: 75, region: 'upper', equipment: [...DB, ...BENCH],
+          notes: 'Bench at 30–40°. Upper chest.', videoUrl: yt('Incline dumbbell press'),
+          travelSubstitute: { name: 'Push-up (feet elevated)' } },
+        { key: 'lateral_raise', name: 'Dumbbell lateral raise', sets: 3, reps: '12-15', restSeconds: 60, region: 'upper', equipment: DB,
+          notes: 'Light. Lead with elbows, stop at shoulder height.', videoUrl: yt('Dumbbell lateral raise') },
+        { key: 'band_face_pull', name: 'Band face pull', sets: 3, reps: '15-20', restSeconds: 45, region: 'upper', equipment: BANDS,
+          notes: "Posture insurance. Don't skip it at a desk job.", videoUrl: yt('Band face pull') },
       ],
     },
     {
       key: 'b', name: 'Session B', focus: 'Lower body (knee-friendly) & core', painCheck: true,
       exercises: [
-        { key: 'glute_bridge', name: 'Glute bridge', sets: 3, reps: '12-15', restSeconds: 60, region: 'lower', jointWatch: true },
-        { key: 'db_rdl', name: 'Dumbbell Romanian deadlift', sets: 3, reps: '10-15', restSeconds: 90, region: 'lower', equipment: DB, tempo: '3-1-1', jointWatch: true },
-        { key: 'wall_sit', name: 'Wall sit (≤45° knee bend)', sets: 3, holdSeconds: 30, restSeconds: 60, region: 'lower', jointWatch: true,
-          notes: 'Shallow angle only — never deeper than 45°.' },
-        { key: 'banded_lateral_walk', name: 'Banded lateral walk', sets: 3, reps: '12-15', restSeconds: 45, region: 'lower', perSide: true, equipment: BANDS },
-        { key: 'standing_calf_raise', name: 'Standing calf raise', sets: 3, reps: '12-20', restSeconds: 45, region: 'lower' },
-        { key: 'straight_leg_raise', name: 'Straight-leg raise', sets: 3, reps: '10-15', restSeconds: 45, region: 'lower', perSide: true, jointWatch: true },
-        { key: 'dead_bug', name: 'Dead bug', sets: 3, reps: '8-12', restSeconds: 45, region: 'core', perSide: true },
-        { key: 'side_plank', name: 'Side plank', sets: 3, holdSeconds: 30, restSeconds: 45, region: 'core', perSide: true },
-        { key: 'pallof_press', name: 'Pallof press', sets: 3, reps: '10-12', restSeconds: 45, region: 'core', perSide: true, equipment: BANDS },
+        { key: 'db_hip_thrust', name: 'Dumbbell hip thrust', sets: 4, reps: '10-15', restSeconds: 90, region: 'lower', equipment: [...DB, ...BENCH], jointWatch: true,
+          notes: 'Shoulders on the bench, weight across the hips. The knee stays at a right angle and barely moves.', videoUrl: yt('Dumbbell hip thrust'),
+          travelSubstitute: { name: 'Single-leg glute bridge' } },
+        { key: 'romanian_deadlift', name: 'Romanian deadlift', sets: 4, reps: '8-12', restSeconds: 90, region: 'lower', equipment: DB, jointWatch: true,
+          notes: 'Hinge at the hip, soft knees, flat back. Feel it in the hamstrings.', videoUrl: yt('Dumbbell Romanian deadlift'),
+          travelSubstitute: { name: 'Single-leg Romanian deadlift' } },
+        { key: 'shallow_wall_sit', name: 'Shallow wall sit (hold)', sets: 4, holdSeconds: 45, restSeconds: 60, region: 'lower', jointWatch: true,
+          notes: 'Hold 30–45 s. Slide down only a third of the way: knees bent about 45°, never to a right angle.', videoUrl: yt('Wall sit') },
+        { key: 'band_tke', name: 'Band terminal knee extension', sets: 3, reps: '15-20', restSeconds: 45, region: 'lower', perSide: true, equipment: BANDS, jointWatch: true,
+          notes: 'Band behind the knee, anchored in front. Straighten fully and squeeze the thigh for 2 seconds.', videoUrl: yt('Band terminal knee extension') },
+        { key: 'band_hamstring_curl', name: 'Band seated hamstring curl', sets: 3, reps: '12-15', restSeconds: 60, region: 'lower', equipment: BANDS, jointWatch: true,
+          notes: 'Bend to a right angle and no further. Stop if you feel it at the back of the knee.', videoUrl: yt('Band seated hamstring curl') },
+        { key: 'band_side_step', name: 'Band side-step', sets: 3, reps: '12 each way', restSeconds: 45, region: 'lower', equipment: BANDS,
+          notes: 'Band just above the knees, knees only slightly bent. Strong hips take load off the kneecap.', videoUrl: yt('Band side step') },
+        { key: 'standing_calf_raise', name: 'Standing calf raise (dumbbells)', sets: 3, reps: '15-20', restSeconds: 45, region: 'lower', equipment: DB,
+          notes: 'Full stretch at the bottom, pause at the top.', videoUrl: yt('Standing dumbbell calf raise') },
+        { key: 'dead_bug', name: 'Dead bug', sets: 3, reps: '10 each', restSeconds: 45, region: 'core',
+          notes: 'Lower back stays flat on the floor throughout.', videoUrl: yt('Dead bug exercise') },
+        { key: 'plank', name: 'Plank', sets: 3, holdSeconds: 60, restSeconds: 45, region: 'core',
+          notes: "Hold 45–60 s. Squeeze glutes, don't let hips sag.", videoUrl: yt('Plank') },
       ],
     },
     {
       key: 'c', name: 'Session C', focus: 'Full body', painCheck: true,
       exercises: [
-        { key: 'c_db_rdl', name: 'Dumbbell Romanian deadlift', sets: 3, reps: '10-15', restSeconds: 90, region: 'lower', equipment: DB, jointWatch: true },
-        { key: 'c_db_bench', name: 'Dumbbell bench or floor press', sets: 3, reps: '10-15', restSeconds: 90, region: 'upper', equipment: DB },
-        { key: 'hip_thrust', name: 'Hip thrust', sets: 3, reps: '10-15', restSeconds: 90, region: 'lower', jointWatch: true },
-        { key: 'c_row', name: 'Chest-supported dumbbell row', sets: 3, reps: '10-15', restSeconds: 90, region: 'upper', equipment: DB },
-        { key: 'lateral_raise', name: 'Dumbbell lateral raise', sets: 3, reps: '12-20', restSeconds: 60, region: 'upper', equipment: DB },
-        { key: 'farmer_carry', name: 'Farmer carry', sets: 3, holdSeconds: 40, restSeconds: 60, region: 'full', equipment: DB },
-        { key: 'c_calf_raise', name: 'Standing calf raise', sets: 3, reps: '12-20', restSeconds: 45, region: 'lower' },
-        { key: 'plank', name: 'Front plank', sets: 3, holdSeconds: 30, restSeconds: 45, region: 'core' },
+        { key: 'floor_press_or_push_up', name: 'Dumbbell floor press or push-up', sets: 3, reps: '10-15', restSeconds: 75, region: 'upper', equipment: DB,
+          notes: 'Elevate feet on the bench to make push-ups harder.', videoUrl: yt('Dumbbell floor press'),
+          travelSubstitute: { name: 'Push-up (feet elevated)' } },
+        { key: 'staggered_rdl', name: 'Staggered-stance Romanian deadlift', sets: 3, reps: '10-12', restSeconds: 75, region: 'lower', perSide: true, equipment: DB, jointWatch: true,
+          notes: 'Back foot on its toes for balance, front leg does the work. Knee soft, not bending further as you lower.', videoUrl: yt('Staggered stance Romanian deadlift'),
+          travelSubstitute: { name: 'Single-leg Romanian deadlift' } },
+        { key: 'chest_supported_row', name: 'Chest-supported row (bench at 30°)', sets: 4, reps: '10-12', restSeconds: 75, region: 'upper', equipment: [...DB, ...BENCH],
+          notes: 'Chest on the incline bench. Removes lower-back fatigue.', videoUrl: yt('Chest supported dumbbell row'),
+          travelSubstitute: { name: 'Backpack row' } },
+        { key: 'single_leg_glute_bridge', name: 'Single-leg glute bridge', sets: 3, reps: '10-12', restSeconds: 60, region: 'lower', perSide: true, jointWatch: true,
+          notes: 'Lying on your back, one foot on the floor. Keep the hips level and pause at the top.', videoUrl: yt('Single leg glute bridge') },
+        { key: 'c_shallow_wall_sit', name: 'Shallow wall sit (hold)', sets: 3, holdSeconds: 45, restSeconds: 60, region: 'lower', jointWatch: true,
+          notes: 'Hold 30–45 s. Same shallow ~45° angle as Session B.', videoUrl: yt('Wall sit') },
+        { key: 'arnold_press', name: 'Arnold press', sets: 3, reps: '10-12', restSeconds: 75, region: 'upper', equipment: DB,
+          notes: 'Rotate palms as you press. Hits all three delt heads.', videoUrl: yt('Arnold press'),
+          travelSubstitute: { name: 'Pike push-up' } },
+        { key: 'db_curl', name: 'Dumbbell curl', sets: 3, reps: '10-12', restSeconds: 45, region: 'upper', equipment: DB, supersetGroup: 'c1',
+          notes: 'Superset with the overhead triceps extension, no rest between the pair.', videoUrl: yt('Dumbbell curl') },
+        { key: 'oh_triceps_ext', name: 'Overhead triceps extension', sets: 3, reps: '10-12', restSeconds: 45, region: 'upper', equipment: DB, supersetGroup: 'c1',
+          notes: 'Superset with the curl.', videoUrl: yt('Dumbbell overhead triceps extension') },
+        { key: 'band_pull_apart', name: 'Band pull-apart', sets: 3, reps: '15-20', restSeconds: 45, region: 'upper', equipment: BANDS,
+          notes: 'Rear delts and upper back.', videoUrl: yt('Band pull apart') },
       ],
     },
   ],
   weeklySchedule: {
     days: [
-      { day: 'mon', kind: 'session', session: 'a', label: 'Session A — Upper' },
-      { day: 'tue', kind: 'cardio', label: 'Zone 2 cardio' },
-      { day: 'wed', kind: 'session', session: 'b', label: 'Session B — Lower & core' },
-      { day: 'thu', kind: 'cardio', label: 'Zone 2 cardio' },
+      { day: 'mon', kind: 'session', session: 'a', label: 'Session A — Upper (black coffee 45 min before if training before 2pm)' },
+      { day: 'tue', kind: 'cardio', label: 'Zone 2 cardio — 30 min brisk walk or bike (saddle high)' },
+      { day: 'wed', kind: 'session', session: 'b', label: 'Session B — Lower & core (hardest session — eat properly beforehand)' },
+      { day: 'thu', kind: 'cardio', label: 'Zone 2 cardio — 30 min' },
       { day: 'fri', kind: 'session', session: 'c', label: 'Session C — Full body' },
-      { day: 'sat', kind: 'cardio', label: 'Zone 2 cardio' },
-      { day: 'sun', kind: 'walk', label: 'Easy walk' },
+      { day: 'sat', kind: 'cardio', label: 'Zone 2 cardio — 30 min, outdoors if possible' },
+      { day: 'sun', kind: 'walk', label: '30 min easy walk — recovery; plan the week\'s food' },
     ],
-    spacingRules: ['At least one day between lifting sessions', 'Order A → B → C'],
+    spacingRules: ['At least one day between lifting sessions', 'Keep A → B → C order every week', 'Evening training: skip the pre-training coffee'],
     shortWeekPriority: ['c', 'a', 'b'],
   },
   blocks: [
-    { key: 'b1', name: 'Block 1', weeks: [1, 4], focus: 'Technique and base', sets: 3, repRange: '10-15', rir: '2-3', lightWeeks: [4] },
-    { key: 'b2', name: 'Block 2', weeks: [5, 8], focus: 'Build', sets: 3, repRange: '8-12',
-      intensityTechnique: '4 sets on the first two exercises; last set to failure', lightWeeks: [8] },
-    { key: 'b3', name: 'Block 3', weeks: [9, 12], focus: 'Peak', sets: 3, repRange: '6-12 / 12-20',
-      intensityTechnique: 'Drop set on the last set', deloadWeeks: [12], notes: 'Week 12: deload and retest.' },
+    { key: 'b1', name: 'Block 1 — Foundation', weeks: [1, 4], focus: 'Technique and base', sets: 3, repRange: '10-15', rir: '2-3', lightWeeks: [4],
+      notes: '3 sets of every exercise; load light enough that form is perfect. Record every weight — this is your baseline. Week 4 is lighter: same sessions, 2 sets each.' },
+    { key: 'b2', name: 'Block 2 — Build', weeks: [5, 8], focus: 'Load and volume', sets: 4, repRange: '8-12', rir: '1-2',
+      intensityTechnique: '4 sets on the first two exercises of each session (set counts as in the session tables); last set of each exercise to failure', lightWeeks: [8],
+      notes: 'Week 8 lighter: 2 sets at 60% of normal load.' },
+    { key: 'b3', name: 'Block 3 — Intensify', weeks: [9, 12], focus: 'Maximum stimulus', sets: 4, repRange: '6-12 compounds / 12-20 isolation', rir: '1-2',
+      intensityTechnique: 'Drop set on the final set of one exercise per session: to failure, drop 30% of the weight, go again', deloadWeeks: [12],
+      notes: '4 sets throughout. Week 12 is a deload — half the volume, then retest.' },
   ],
   progression: {
     loadIncrementKg: { upper: 2, lower: 4 },
@@ -235,11 +312,11 @@ const SEED_INPUT: ProgrammeDefinitionInput = {
     ],
   },
   milestones: [
-    { week: 1, tasks: ['Physio review', 'Lipid panel', 'Weight', 'Waist', 'Progress photos', 'Baseline lifts', 'Start creatine'], expected: [] },
-    { week: 4, tasks: ['Review lifts'], expected: ['Weight −1 to −1.5 kg', 'Lifts +10–20%'] },
-    { week: 6, tasks: ['Mid-programme review'], expected: ['Weight −2 to −2.5 kg', 'Waist −2 to −3 cm'] },
-    { week: 8, tasks: ['Review'], expected: ['Weight −3 to −3.5 kg'] },
-    { week: 12, tasks: ['Lipid panel', 'Retest lifts'], expected: ['Weight −4 to −5 kg', 'Waist −5 to −7 cm'] },
+    { week: 1, tasks: ['Physiotherapy review', 'Lipid panel', 'Weight', 'Waist', 'Progress photos', 'Baseline lifts', 'Start creatine'], expected: ['Your reference point for everything'] },
+    { week: 4, tasks: ['Weight and waist', 'Lighter training week'], expected: ['Weight −1 to −1.5 kg (less on the scale with creatine)', 'Lifts +10–20%'] },
+    { week: 6, tasks: ['Mid-point review', 'Adjust calories if needed'], expected: ['Weight −2 to −2.5 kg', 'Waist −2 to −3 cm'] },
+    { week: 8, tasks: ['Weight and waist', 'Lighter training week'], expected: ['Weight −3 to −3.5 kg'] },
+    { week: 12, tasks: ['Full lipid panel', 'Weight', 'Waist', 'Progress photos', 'Retest lifts'], expected: ['Weight −4 to −5 kg', 'Waist −5 to −7 cm'] },
   ],
   outcomes: {
     expectations: ['LDL −1.0 to −1.5 mmol/L (20–30%) with all components for 12 weeks.'],

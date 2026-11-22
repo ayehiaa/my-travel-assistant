@@ -24,7 +24,11 @@ describe('seed programme (12-Week Programme v3)', () => {
     expect(p.nutritionRules.map(r => r.type).sort()).toEqual(
       ['caffeine_cutoff', 'last_meal_before_bed', 'one_starch_per_meal', 'protein_every_occasion', 'treat_budget'])
     expect(p.eatingOut.length).toBeGreaterThanOrEqual(5)
-    expect(p.trainingSessions.map(s => s.exercises.length)).toEqual([7, 9, 8])
+    // Session C's 8 table rows include one superset row (curl + overhead triceps) = 9 exercises
+    expect(p.trainingSessions.map(s => s.exercises.length)).toEqual([7, 9, 9])
+    expect(p.trainingSessions[1].exercises.map(e => e.name)).toContain('Dumbbell hip thrust')
+    expect(p.trainingSessions[0].exercises[0]).toMatchObject({ name: 'Dumbbell bench press', sets: 4, reps: '8-12', restSeconds: 90 })
+    expect(p.trainingSessions.every(s => s.exercises.every(e => e.videoUrl?.startsWith('https://www.youtube.com/')))).toBe(true)
     expect(p.weeklySchedule?.days).toHaveLength(7)
     expect(p.weeklySchedule?.shortWeekPriority[0]).toBe('c')
     expect(p.blocks.map(b => b.weeks)).toEqual([[1, 4], [5, 8], [9, 12]])
