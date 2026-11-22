@@ -3,7 +3,7 @@ import type { ProgrammeDefinition } from './programmeSchema'
 import type { Profile } from './targets'
 import type { WeighIn } from './checkin'
 import { sevenDayAverage } from './checkin'
-import { addDays, daysBetween, isValidDate, programmeWeek } from './time'
+import { addDays, daysBetween, isValidDate, programmeWeek, programmeWeekStart } from './time'
 import { toCm, toMmol, type Units } from './units'
 
 /**
@@ -110,7 +110,7 @@ export interface Escalation { metric: string; value: number; threshold: number; 
 export function labEscalations(def: ProgrammeDefinition, startDate: string, panels: readonly LipidPanel[]): Escalation[] {
   const rules = def.outcomes?.escalation ?? []
   if (rules.length === 0) return []
-  const lastWeekStart = addDays(startDate, (def.identity.durationWeeks - 1) * 7)
+  const lastWeekStart = programmeWeekStart(startDate, def.identity.durationWeeks)
   const latest = [...panels].filter(p => p.date >= lastWeekStart).sort((a, b) => a.date.localeCompare(b.date)).pop()
   if (!latest) return []
   const out: Escalation[] = []
@@ -155,6 +155,15 @@ export function milestoneTaskKey(week: number, task: string): string {
 }
 
 /**
+ * Dates of a milestone week (P3.2): week 1 runs from the start date (covering any starter week) to the Sunday of
+ * programme week 1; week N ≥ 2 is that Mon–Sun programme week.
+ */
+export function milestoneWindow(startDate: string, week: number): { start: string; end: string } {
+  const monday = programmeWeekStart(startDate, Math.max(1, week))
+  return { start: week <= 1 ? startDate : monday, end: addDays(monday, 6) }
+}
+
+/**
  * Milestone checklist per programme week with expected ranges next to actuals: weight change = 7-day average at the
  * end of the milestone week (or today) minus the start weight; waist change = latest waist up to then minus the first.
  * State: current week → 'current'; past with open tasks → 'due'; all ticked → 'done'; future → 'upcoming'.
@@ -163,11 +172,12 @@ export function milestoneViews(
   def: ProgrammeDefinition,
   ctx: { startDate: string; today: string; startWeightKg: number | null; weighIns: readonly WeighIn[]; waist: readonly WaistMeasurement[]; doneKeys: ReadonlySet<string> },
 ): MilestoneView[] {
-  const week = programmeWeek(ctx.startDate, ctx.today)
+  const raw = programmeWeek(ctx.startDate, ctx.today)
+  // Starter week (P3.2): week-1 milestone tasks are already shown / due from the start date.
+  const week = raw === 0 ? 1 : raw
   const sortedWaist = [...ctx.waist].sort((a, b) => a.date.localeCompare(b.date))
   return def.milestones.map(m => {
-    const start = addDays(ctx.startDate, (m.week - 1) * 7)
-    const end = addDays(start, 6)
+    const { start, end } = milestoneWindow(ctx.startDate, m.week)
     const tasks = m.tasks.map(task => ({ task, done: ctx.doneKeys.has(milestoneTaskKey(m.week, task)) }))
     const allDone = tasks.length > 0 && tasks.every(t => t.done)
     const state: MilestoneState = allDone ? 'done'

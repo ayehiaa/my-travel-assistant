@@ -9,6 +9,7 @@ import { buildWeeklyReview } from '@/lib/health/reviewServer'
 import { sleepSummary } from '@/lib/health/checkin'
 import { rankRecommendations } from '@/lib/health/rules'
 import { computeProposal, latestFinishedPeriod } from '@/lib/health/adjustment'
+import { milestoneWindow } from '@/lib/health/measurements'
 import { addDays, weekStart, weekdayOf } from '@/lib/health/time'
 import { buildReminder, dueReminderTypes, reminderTimes, type ReminderData } from '@/lib/health/reminders'
 import { deliverHealthReminder } from '@/lib/health/reminderDelivery'
@@ -76,7 +77,7 @@ export const healthRemindersUser = inngest.createFunction(
       const tctx = training.status === 'ok' ? training.ctx : null
       const trainedToday = !!tctx?.weekWorkouts.some(w => w.date === date && w.status !== 'skipped')
       const trainingToday = !!tctx?.recommendation.sessionKey && !trainedToday
-      const milestone = enrolment.def.milestones.find(m => addDays(enrolment.startDate, (m.week - 1) * 7) === date) ?? null
+      const milestone = enrolment.def.milestones.find(m => milestoneWindow(enrolment.startDate, m.week).start === date) ?? null
       const period = latestFinishedPeriod(enrolment.def, enrolment.startDate, date)
       const bedtime = plannedBedtime(enrolment.def, checkins, date)
       const times = reminderTimes({

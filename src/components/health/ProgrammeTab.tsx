@@ -4,7 +4,8 @@ import type { ActiveEnrolment } from '@/lib/health/healthServer'
 import { nowFor } from '@/lib/health/healthServer'
 import type { NutritionRule } from '@/lib/health/programmeSchema'
 import { TARGET_KEYS, TARGET_LABELS, TargetOverridesSchema, computeTargets, type TargetKey } from '@/lib/health/targets'
-import { programmeWeek } from '@/lib/health/time'
+import { programmeEndDate, programmeWeek, programmeWeekLabel } from '@/lib/health/time'
+import { trainingPosition } from '@/lib/health/training'
 import { CARD } from './ui'
 import { createClient } from '@/lib/supabase/server'
 import { loadHealthSettings } from '@/lib/health/p2Server'
@@ -71,7 +72,9 @@ async function ProgrammeOverview({ userId, email, enrolment }: { userId: string;
   const overrides = TargetOverridesSchema.safeParse(enrolment.overrides)
   const formulas = enrolment.profile ? computeTargets(def, enrolment.profile, overrides.success ? overrides.data : {}).formulas : null
   const aiKey = await getAiKeyStatus(userId, email)
-  const block = week !== null ? def.blocks.find(b => week >= b.weeks[0] && week <= b.weeks[1]) : null
+  const block = trainingPosition(def, enrolment.startDate, today).block
+  const endDate = programmeEndDate(enrolment.startDate, def.identity.durationWeeks)
+  const longDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const { settings, available } = await loadHealthSettings(await createClient(), userId)
   const computed = enrolment.profile ? computeTargets(def, enrolment.profile, overrides.success ? overrides.data : {}).targets : null
 
@@ -80,8 +83,8 @@ async function ProgrammeOverview({ userId, email, enrolment }: { userId: string;
       <section className={CARD}>
         <h2 className="text-lg font-bold text-[var(--ink)]">{enrolment.programmeName}</h2>
         <p className="text-sm text-[var(--ink-2)]">
-          Started {new Date(`${enrolment.startDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
-          {week !== null && <> · week {Math.min(week, def.identity.durationWeeks)} of {def.identity.durationWeeks}</>}
+          {week === null ? 'Starts' : 'Started'} {longDate(enrolment.startDate)} · ends {longDate(endDate)}
+          {week !== null && <> · {programmeWeekLabel(enrolment.startDate, today, def.identity.durationWeeks) ?? 'programme complete'}</>}
           {block && <> · {block.name} ({block.focus})</>}
           {' '}· timezone {enrolment.homeTimezone}{enrolment.timezone !== enrolment.homeTimezone && <> (today: {enrolment.timezone})</>}
         </p>

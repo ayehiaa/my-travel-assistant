@@ -8,7 +8,7 @@ import {
   componentProgress, mealsRemaining, progressRatio, remainingBudget, sumComponents, sumNutrients, uncertaintyBand,
 } from '@/lib/health/nutrition'
 import { formatDuration, sleepSummary, waterWeightNote, weightTrend } from '@/lib/health/checkin'
-import { addDays, programmeWeek, weekdayOf } from '@/lib/health/time'
+import { addDays, programmeWeek, programmeWeekLabel, weekdayOf } from '@/lib/health/time'
 import { healthHref } from '@/lib/health/healthHub'
 import { loadTrainingContext, type TrainingContextResult } from '@/lib/health/trainingServer'
 import { nextMorningDue } from '@/lib/health/painRules'
@@ -95,7 +95,7 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
   const remainingMeals = mealsRemaining(def.mealSlots, time, entries.map(e => e.slot))
   const oneStarch = def.nutritionRules.some(r => r.type === 'one_starch_per_meal')
   const remaining = remainingBudget(totals, targets, { mealsRemaining: remainingMeals.length, oneStarchRule: oneStarch })
-  const progress = componentProgress(def, comps, weekComps)
+  const progress = componentProgress(def, comps, weekComps, { startDate: enrolment.startDate, date })
   const recs = rankRecommendations(findings)
   const band = uncertaintyBand(totals.kcal)
 
@@ -120,7 +120,7 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
     try {
       const [waist, done] = await Promise.all([loadWaist(supabase, userId), loadMilestoneKeys(supabase, userId, enrolment.id)])
       const last = waist[waist.length - 1]?.date ?? null
-      waistReminder = waistDue(last, date) && (week ?? 0) >= 1
+      waistReminder = waistDue(last, date) && week !== null
       milestone = milestoneDue(milestoneViews(def, {
         startDate: enrolment.startDate, today: date, startWeightKg: enrolment.profile?.weightKg ?? null,
         weighIns: weighInsOf(recentCheckins), waist, doneKeys: done,
@@ -261,7 +261,7 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
           </p>
           {week !== null && (
             <p className="mt-3 text-xs text-[var(--ink-3)]">
-              Week {Math.min(week, def.identity.durationWeeks)} of {def.identity.durationWeeks}
+              {programmeWeekLabel(enrolment.startDate, date, def.identity.durationWeeks) ?? `Week ${def.identity.durationWeeks} of ${def.identity.durationWeeks}`}
               {scheduled && <> · Today: {scheduled.label}</>}
             </p>
           )}
@@ -313,7 +313,9 @@ export default async function TodayTab({ userId, enrolment }: { userId: string; 
                   </span>
                   <span className="text-[var(--ink-2)]">
                     {c.period === 'week'
-                      ? <>{fmtNum(c.value)} of {fmtNum(c.target)} this week</>
+                      ? c.notDue
+                        ? <>not due this week</>
+                        : <>{fmtNum(c.value)} of {fmtNum(c.target)} this week{c.note && <span className="block text-right text-xs text-[var(--ink-3)]">{c.note}</span>}</>
                       : <>{fmtNum(c.value)} / {fmtNum(c.target)}{c.unit === 'servings' ? '' : ` ${c.unit}`}</>}
                     <span className="sr-only">{c.met ? ' — met' : ' — not yet'}</span>
                   </span>

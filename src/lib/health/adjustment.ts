@@ -3,12 +3,13 @@ import type { ProgrammeDefinition } from './programmeSchema'
 import type { EffectiveTargets, Profile } from './targets'
 import { kcalFloor } from './targets'
 import type { WeighIn } from './checkin'
-import { addDays, daysBetween, programmeWeek } from './time'
+import { addDays, daysBetween, firstProgrammeMonday, programmeWeek } from './time'
 
 /**
  * Fortnightly adjustment engine (specs/029 §6.3, US8). Pure.
  *
- * Periods are fixed fortnights from the programme start (days 1–14, 15–28, …). When a period has ended, the 7-day
+ * Periods are fixed fortnights from the first programme Monday (weeks 1–2, 3–4, …; P3.2: a starter week before it
+ * never forms a fortnight, though its weigh-ins may still feed the first week's 7-day average). When a period has ended, the 7-day
  * average of its second week is compared with the 7-day average of its first week (≥ minWeighInsPerWeek weigh-ins
  * in EACH week, seed 5). Loss = first − second. The programme's bands map the loss to a kcal change (seed: < 0.4 kg →
  * −150; 0.4–1.2 kg → no change (aim 0.6–0.9); > 1.2 kg → +150). A loss exactly on a boundary resolves to the
@@ -31,12 +32,13 @@ export function latestFinishedPeriod(def: ProgrammeDefinition, startDate: string
   const every = def.adjustment?.everyWeeks
   if (!every) return null
   const len = every * 7
-  const elapsed = daysBetween(startDate, today)
+  const first = firstProgrammeMonday(startDate)
+  const elapsed = daysBetween(first, today)
   const done = Math.floor(elapsed / len)
   if (done < 1) return null
   const maxPeriods = Math.floor((def.identity.durationWeeks * 7) / len)
   const index = Math.min(done, Math.max(1, maxPeriods))
-  const start = addDays(startDate, (index - 1) * len)
+  const start = addDays(first, (index - 1) * len)
   return { index, start, end: addDays(start, len - 1) }
 }
 

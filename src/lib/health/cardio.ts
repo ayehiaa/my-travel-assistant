@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ProgrammeDefinition } from './programmeSchema'
-import { isValidDate, weekStart, addDays } from './time'
+import { WEEKDAYS } from './programmeSchema'
+import { isValidDate, weekStart, addDays, proRate, weekWindow } from './time'
 
 /**
  * Cardio and daily steps (specs/029 US7, phase P2). Pure. Decisions in plan.md (P2 section).
@@ -87,24 +88,54 @@ export interface WeeklyCardio {
   targetMinutes: number | null
   targetSessions: number | null
   met: boolean
+  /** Starter week (P3.2): target counts only the days from the start date. */
+  starter: boolean
+  /** Days in the counted window (7 outside the starter week). */
+  days: number
 }
 
-/** Minutes and sessions in the ISO week of `date` vs the programme target (sessions × minutes). */
-export function weeklyCardio(def: ProgrammeDefinition, sessions: readonly CardioSession[], date: string): WeeklyCardio {
+/**
+ * Weekly cardio target (sessions, minutes) for the week of `date`. Normally sessionsPerWeek × minutes (seed 4 × 30).
+ * In the starter week (P3.2): sessions = scheduled cardio/walk days from the start date to Sunday; without a weekly
+ * schedule, sessions = round(n × days/7) and minutes = round(n × minutes × days/7).
+ */
+export function cardioTarget(def: ProgrammeDefinition, date: string, startDate?: string): { sessions: number | null; minutes: number | null; starter: boolean; days: number } {
+  const per = def.cardio?.minutes
+  const n = def.cardio?.sessionsPerWeek
+  const full = { sessions: n ?? null, minutes: per !== undefined && n !== undefined ? per * n : null, starter: false, days: 7 }
+  if (!startDate) return full
+  const w = weekWindow(startDate, date)
+  if (!w.isStarter) return full
+  const days = def.weeklySchedule?.days ?? []
+  if (days.length > 0 && per !== undefined) {
+    const monday = weekStart(date)
+    const count = days.filter(d => (d.kind === 'cardio' || d.kind === 'walk') && addDays(monday, WEEKDAYS.indexOf(d.day)) >= w.weekStart).length
+    return { sessions: count, minutes: count * per, starter: true, days: w.days }
+  }
+  return {
+    sessions: n !== undefined ? proRate(n, w.fraction) : null,
+    minutes: full.minutes !== null ? proRate(full.minutes, w.fraction) : null,
+    starter: true,
+    days: w.days,
+  }
+}
+
+/** Minutes and sessions in the ISO week of `date` vs the programme target (starter week: pro-rated, see cardioTarget). */
+export function weeklyCardio(def: ProgrammeDefinition, sessions: readonly CardioSession[], date: string, startDate?: string): WeeklyCardio {
   const monday = weekStart(date)
   const sunday = addDays(monday, 6)
   const inWeek = sessions.filter(s => s.date >= monday && s.date <= sunday)
   const minutes = inWeek.reduce((t, s) => t + s.minutes, 0)
-  const per = def.cardio?.minutes
-  const n = def.cardio?.sessionsPerWeek
-  const targetMinutes = per !== undefined && n !== undefined ? per * n : null
+  const t = cardioTarget(def, date, startDate)
   return {
     weekStart: monday,
     minutes,
     sessions: inWeek.length,
-    targetMinutes,
-    targetSessions: n ?? null,
-    met: targetMinutes !== null ? minutes >= targetMinutes : false,
+    targetMinutes: t.minutes,
+    targetSessions: t.sessions,
+    met: t.minutes !== null ? minutes >= t.minutes : false,
+    starter: t.starter,
+    days: t.days,
   }
 }
 

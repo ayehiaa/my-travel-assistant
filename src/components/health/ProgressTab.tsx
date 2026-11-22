@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { loadCheckins, nowFor, sleepNightsOf, weighInsOf, type ActiveEnrolment } from '@/lib/health/healthServer'
 import { formatDuration, sevenDayAverageSeries, sleepSummary, waterWeightNote, weightTrend } from '@/lib/health/checkin'
-import { addDays, weekStart } from '@/lib/health/time'
+import { addDays, programmeWeekLabel, weekStart } from '@/lib/health/time'
 import { signedPhotoUrls } from '@/lib/health/healthPhotos'
 import {
   loadHealthSettings, loadLabs, loadMilestoneKeys, loadProgressPhotos, loadWaist, loadWeeklyReviews, P2_MIGRATION_MESSAGE,
@@ -53,9 +53,11 @@ export default async function ProgressTab({ userId, enrolment }: { userId: strin
   const startWeight = enrolment.profile?.weightKg ?? null
   const waterNote = waterWeightNote(enrolment.def, enrolment.startDate, today)
   const adjustment = await loadAdjustmentState(supabase, userId, enrolment, today)
+  const weekLabel = programmeWeekLabel(enrolment.startDate, today, enrolment.def.identity.durationWeeks)
 
   return (
     <div className="flex flex-col gap-4">
+      {weekLabel && <p className="text-sm font-semibold text-[var(--ink-2)]">{weekLabel}</p>}
       <AdjustmentProposalView enrolment={enrolment} proposal={adjustment.pending} showInsufficient />
 
       <section className={CARD} aria-labelledby="wt-h">
@@ -201,11 +203,11 @@ async function P2Sections({ userId, enrolment, today, units, weighIns }: {
 
       <section className={CARD} aria-labelledby="rev-h">
         <h2 id="rev-h" className={CARD_TITLE}>Weekly reviews</h2>
-        {current && <ReviewBlock review={current} title={`This week so far (${current.daysCounted} of 7 days)`} units={units} />}
+        {current && <ReviewBlock review={current} title={`${current.label ?? 'This week'} so far (${current.daysCounted} of ${current.windowDays ?? 7} days)`} units={units} />}
         {pastReviews.length === 0 && <p className="mt-2 text-sm text-[var(--ink-3)]">Your first full weekly review appears after your first Sunday.</p>}
         {pastReviews.map(r => (
           <details key={r.weekStart} className="mt-3 border-t border-[var(--rule-soft)] pt-2">
-            <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">Week of {fmtDay(r.weekStart)} — {r.focus[0] ?? ''}</summary>
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">{r.label ? `${r.label}, ${fmtDay(r.windowStart ?? r.weekStart)}` : `Week of ${fmtDay(r.weekStart)}`} — {r.focus[0] ?? ''}</summary>
             <ReviewBlock review={r} units={units} />
           </details>
         ))}
@@ -221,7 +223,7 @@ function ReviewBlock({ review: r, title, units }: { review: WeeklyReview; title?
       {title && <h3 className="mb-1 text-sm font-bold text-[var(--ink)]">{title}</h3>}
       <ul className="m-0 grid list-none gap-x-6 gap-y-1 p-0 sm:grid-cols-2">
         {r.components.map(c => (
-          <li key={c.key}>{c.name}: <strong className="text-[var(--ink)]">{c.period === 'day' ? `${c.value}/${c.of} days` : `${c.value} of ${c.of} this week`}</strong></li>
+          <li key={c.key}>{c.name}: <strong className="text-[var(--ink)]">{c.period === 'day' ? `${c.value}/${c.of} days` : c.note === 'not due this week' ? 'not due this week' : `${c.value} of ${c.of} this week`}</strong>{c.note && c.note !== 'not due this week' && <span className="text-xs text-[var(--ink-3)]"> ({c.note})</span>}</li>
         ))}
         <li>Protein on target: <strong className="text-[var(--ink)]">{r.proteinDays}/{n} days</strong></li>
         <li>Sat fat ≤ target / ≤ ceiling: <strong className="text-[var(--ink)]">{r.satFatWithinTargetDays} / {r.satFatWithinCeilingDays} of {r.daysLogged} logged days</strong></li>

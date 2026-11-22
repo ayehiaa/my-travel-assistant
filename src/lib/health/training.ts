@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ProgrammeDefinition, Weekday } from './programmeSchema'
 import { WEEKDAYS } from './programmeSchema'
-import { addDays, daysBetween, programmeWeek, weekStart, weekdayOf } from './time'
+import { addDays, daysBetween, programmeWeek, proRate, shortDayLabel, weekStart, weekWindow, weekdayOf } from './time'
 
 /**
  * Training logic for the Health module (specs/029 §4 US5, §6.1 schedule / progression rules, phase P1b). Pure —
@@ -16,8 +16,15 @@ export type Block = ProgrammeDefinition['blocks'][number]
 
 export interface TrainingPosition {
   phase: 'before_start' | 'active' | 'completed'
-  /** Programme week (1-based), null before the start. Not clamped (week 13+ = completed). */
+  /**
+   * Programme week, null before the start: 0 = starter week (non-Monday start → that Sunday), then 1..N Mon–Sun weeks.
+   * Not clamped (week 13+ = completed).
+   */
   week: number | null
+  /** In the starter week (week 0). */
+  starter: boolean
+  /** Week whose prescriptions apply (starter week → 1, i.e. Block 1 as week 1); null outside the programme. */
+  prescriptionWeek: number | null
   block: Block | null
   blockIndex: number
   /** Week is a light week of its block (e.g. B1 week 4, B2 week 8). */
@@ -34,16 +41,22 @@ export function blockForWeek(def: ProgrammeDefinition, week: number): { block: B
 /** Current programme week and block for a local date. */
 export function trainingPosition(def: ProgrammeDefinition, startDate: string, date: string): TrainingPosition {
   const week = programmeWeek(startDate, date)
-  if (week === null) return { phase: 'before_start', week: null, block: null, blockIndex: -1, light: false, deload: false }
-  if (week > def.identity.durationWeeks) return { phase: 'completed', week, block: null, blockIndex: -1, light: false, deload: false }
-  const { block, index } = blockForWeek(def, week)
+  const idle = { block: null, blockIndex: -1, light: false, deload: false, starter: false, prescriptionWeek: null }
+  if (week === null) return { ...idle, phase: 'before_start', week: null }
+  if (week > def.identity.durationWeeks) return { ...idle, phase: 'completed', week }
+  // Starter week: Block 1 prescriptions as week 1 — never a light or deload week.
+  const starter = week === 0
+  const prescriptionWeek = Math.max(1, week)
+  const { block, index } = blockForWeek(def, prescriptionWeek)
   return {
     phase: 'active',
     week,
+    starter,
+    prescriptionWeek,
     block,
     blockIndex: index,
-    light: !!block?.lightWeeks.includes(week),
-    deload: !!block?.deloadWeeks.includes(week),
+    light: !starter && !!block?.lightWeeks.includes(week),
+    deload: !starter && !!block?.deloadWeeks.includes(week),
   }
 }
 
@@ -499,9 +512,9 @@ export interface ScheduleDay {
   workouts: WorkoutSummary[]
   /**
    * Planned session: done / partial / skipped / moved (done on another day this week) / missed (date passed, not
-   * done this week) / today / upcoming.
+   * done this week) / today / upcoming / before_start (planned day before the programme start date — never "missed").
    */
-  status: WorkoutStatus | 'moved' | 'missed' | 'today' | 'upcoming' | null
+  status: WorkoutStatus | 'moved' | 'missed' | 'today' | 'upcoming' | 'before_start' | null
 }
 
 /** Lifting sessions in schedule order (A → B → C). */
@@ -519,8 +532,11 @@ export function plannedForDate(def: ProgrammeDefinition, date: string) {
   return def.weeklySchedule?.days.find(d => d.day === weekdayOf(date)) ?? null
 }
 
-/** The ISO week (Mon–Sun) around `today` with plan + logged status per day. */
-export function weekSchedule(def: ProgrammeDefinition, today: string, workouts: readonly WorkoutSummary[]): ScheduleDay[] {
+/**
+ * The ISO week (Mon–Sun) around `today` with plan + logged status per day. With `startDate`, planned sessions on days
+ * before the programme start get 'before_start' (starter week: e.g. Mon–Thu of a Friday start).
+ */
+export function weekSchedule(def: ProgrammeDefinition, today: string, workouts: readonly WorkoutSummary[], startDate?: string): ScheduleDay[] {
   const monday = weekStart(today)
   return WEEKDAYS.map((day, i) => {
     const date = addDays(monday, i)
@@ -533,6 +549,7 @@ export function weekSchedule(def: ProgrammeDefinition, today: string, workouts: 
       const doneElsewhere = workouts.some(w => w.sessionKey === sessionKey && w.date !== date && LIFTED.has(w.status)
         && w.date >= monday && w.date <= addDays(monday, 6))
       if (own) status = own.status
+      else if (startDate && date < startDate) status = 'before_start'
       else if (doneElsewhere) status = 'moved'
       else status = date < today ? 'missed' : date === today ? 'today' : 'upcoming'
     } else if (logged.length > 0) {
@@ -564,19 +581,49 @@ export interface SessionRecommendation {
 }
 
 /**
+ * Sessions that count this week. Normally every session; in the starter week only those scheduled on or after the
+ * start date (Friday start → Session C). Without a weekly schedule the starter week gets round(n × days/7) sessions,
+ * short-week priority first.
+ */
+export function sessionsForWeek(def: ProgrammeDefinition, today: string, startDate?: string): string[] {
+  const order = sessionOrder(def)
+  if (!startDate) return order
+  const w = weekWindow(startDate, today)
+  if (!w.isStarter) return order
+  const days = def.weeklySchedule?.days ?? []
+  if (days.length > 0) {
+    const monday = weekStart(today)
+    const keys = new Set(days
+      .filter(d => d.kind === 'session' && d.session && addDays(monday, WEEKDAYS.indexOf(d.day)) >= w.weekStart)
+      .map(d => d.session as string))
+    return order.filter(k => keys.has(k))
+  }
+  const priority = def.weeklySchedule?.shortWeekPriority ?? []
+  const ranked = [...priority.filter(k => order.includes(k)), ...order.filter(k => !priority.includes(k))]
+  const keep = new Set(ranked.slice(0, proRate(order.length, w.fraction)))
+  return order.filter(k => keep.has(k))
+}
+
+/**
  * Which session to do today (§6.1 schedule rules): keep A → B → C order; missed sessions roll forward; when fewer
  * spaced training days remain than sessions, the week is "cut short" and the programme's priority applies (C first).
+ * With `startDate` (P3.2): nothing before the start; in the starter week only sessions scheduled from the start date
+ * count (no rolling forward of earlier sessions, no "week cut short").
  */
-export function recommendSession(def: ProgrammeDefinition, today: string, weekWorkouts: readonly WorkoutSummary[]): SessionRecommendation {
-  const order = sessionOrder(def)
+export function recommendSession(def: ProgrammeDefinition, today: string, weekWorkouts: readonly WorkoutSummary[], startDate?: string): SessionRecommendation {
   const monday = weekStart(today)
-  const inWeek = weekWorkouts.filter(w => w.date >= monday && w.date <= addDays(monday, 6))
-  const doneKeys = new Set(inWeek.filter(w => LIFTED.has(w.status)).map(w => w.sessionKey))
   const plan = plannedForDate(def, today)
   const plannedKey = plan?.kind === 'session' ? plan.session ?? null : null
+  if (startDate && today < startDate) {
+    return { plannedKey, warnings: [], missed: [], sessionKey: null, reason: `Your programme starts ${shortDayLabel(startDate)}.`, remaining: [], shortWeek: false }
+  }
+  const starter = !!startDate && weekWindow(startDate, today).isStarter
+  const order = sessionsForWeek(def, today, startDate)
+  const inWeek = weekWorkouts.filter(w => w.date >= monday && w.date <= addDays(monday, 6))
+  const doneKeys = new Set(inWeek.filter(w => LIFTED.has(w.status)).map(w => w.sessionKey))
   const remainingInOrder = order.filter(k => !doneKeys.has(k))
-  const schedule = weekSchedule(def, today, inWeek)
-  const missed = schedule.filter(d => d.status === 'missed' && d.sessionKey && !doneKeys.has(d.sessionKey)).map(d => d.sessionKey as string)
+  const schedule = weekSchedule(def, today, inWeek, startDate)
+  const missed = schedule.filter(d => d.status === 'missed' && d.sessionKey && !doneKeys.has(d.sessionKey) && order.includes(d.sessionKey)).map(d => d.sessionKey as string)
 
   const base = { plannedKey, warnings: [] as string[], missed }
   if (remainingInOrder.length === 0) {
@@ -590,7 +637,7 @@ export function recommendSession(def: ProgrammeDefinition, today: string, weekWo
   const daysLeft = daysBetween(today, addDays(monday, 6)) + 1
   const liftedYesterday = inWeek.some(w => w.date === addDays(today, -1) && LIFTED.has(w.status))
   const slots = liftedYesterday ? Math.floor(daysLeft / 2) : Math.ceil(daysLeft / 2)
-  const shortWeek = remainingInOrder.length > slots
+  const shortWeek = !starter && remainingInOrder.length > slots
   let remaining = remainingInOrder
   if (shortWeek) {
     const priority = def.weeklySchedule?.shortWeekPriority ?? []
@@ -619,9 +666,13 @@ export function recommendSession(def: ProgrammeDefinition, today: string, weekWo
   return { ...base, sessionKey, reason, warnings, remaining, shortWeek }
 }
 
-/** Warning when the user starts a session out of A → B → C order this week. */
-export function orderWarning(def: ProgrammeDefinition, sessionKey: string, weekWorkouts: readonly WorkoutSummary[]): string | null {
-  const order = sessionOrder(def)
+/**
+ * Warning when the user starts a session out of A → B → C order this week. With `date` + `startDate`, only the
+ * sessions that count this week (starter week: scheduled from the start date) are considered.
+ */
+export function orderWarning(def: ProgrammeDefinition, sessionKey: string, weekWorkouts: readonly WorkoutSummary[], week?: { date: string; startDate: string }): string | null {
+  const counted = week ? sessionsForWeek(def, week.date, week.startDate) : sessionOrder(def)
+  const order = counted.includes(sessionKey) ? counted : sessionOrder(def)
   const done = new Set(weekWorkouts.filter(w => LIFTED.has(w.status)).map(w => w.sessionKey))
   const before = order.slice(0, order.indexOf(sessionKey)).filter(k => !done.has(k))
   if (before.length === 0) return null

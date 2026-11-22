@@ -191,7 +191,7 @@ export async function loadTrainingContext(supabase: ServerClient, userId: string
       status: 'ok',
       ctx: {
         today, now, position, weekWorkouts, checks, joint, painPassed, approvals, unlocks,
-        recommendation: recommendSession(def, today, weekWorkouts),
+        recommendation: recommendSession(def, today, weekWorkouts, enrolment.startDate),
       },
     }
   } catch (err) {

@@ -469,3 +469,59 @@ sat 2.8 g" (reference ≈ 1.7 g). Sat fat is the most important number (15 g/day
 - US composition data (e.g. US 2 % milk for semi-skimmed); swap to CoFID when it can be downloaded.
 - Component contributions are still model-derived, not computed from reference rows.
 - Restaurant tips on a re-calculation count the entry's old version in "sat fat left today".
+
+## Phase P3.2 — Starter week & Monday-aligned weeks
+
+Problem: `programmeWeek` made week 1 = start date … start+6 (e.g. Fri–Thu) while the schedule, cardio, weekly
+components, weekly review, adjustments and milestones used ISO Mon–Sun weeks. A Friday start marked Mon–Thu sessions
+"missed", applied full weekly targets to 3 days and misaligned programme vs calendar weeks. Owner-approved behaviour:
+
+### Design
+- **Pure helpers in `time.ts`** (single source of truth): `firstProgrammeMonday(start)` (start if Monday, else the
+  next Monday), `hasStarterWeek`, `programmeWeek(start, date)` → null before start, 0 in the starter week, 1..N
+  Mon–Sun weeks after (not clamped), `programmeWeekStart`, `programmeEndDate` (= firstMonday + 7×duration − 1),
+  `weekWindow(start, date)` → `{ weekStart: max(Monday, start), weekEnd: Sunday, days, fraction, isStarter }`,
+  `proRate`, display labels `programmeWeekLabel` ("Starter week · 3 days (Fri–Sun) · Week 1 starts Mon 23 Nov" /
+  "Week X of N") and `starterWeekRangeLabel` ("Starter week (Fri–Sun)").
+- **Training** (`training.ts`): `TrainingPosition` gains `starter` and `prescriptionWeek` (starter → 1; Block 1, never
+  light/deload). `weekSchedule(def, today, workouts, startDate?)` marks planned sessions before the start
+  'before_start' (chip "Before start"). New `sessionsForWeek(def, today, startDate?)` — in the starter week only
+  sessions scheduled on/after the start date (Fri start → C; no schedule → round(n × days/7), short-week priority
+  first). `recommendSession(…, startDate?)` uses it: nothing before the start, no roll-forward of A/B, no "week cut
+  short" in the starter week. `orderWarning` takes the same window.
+- **Weekly components** (`nutrition.weeklyComponentTarget`, `componentProgress(…, { startDate, date })`,
+  `RuleContext.startDate`): starter-week target = round(target × days/7), min 0; 0 → "not due this week"; labelled
+  "pro-rated for an N-day starter week". Daily components unchanged.
+- **Cardio** (`cardio.cardioTarget`, `weeklyCardio(…, startDate?)`): starter week = scheduled cardio/walk days from the
+  start to Sunday × minutes (sessions = that count); without a schedule minutes and sessions are pro-rated by days/7.
+  Intervals unlock uses the new week numbers (week 0 < unlock week).
+- **Weekly review** (`computeWeeklyReview({ startDate })`, `reviewServer`): the review keeps its Monday `weekStart` as
+  the storage key; new optional fields `windowStart`, `windowDays`, `starter`, `label`. In the starter week the window
+  is start..Sunday (daysCounted ≤ window days), planned sessions = `sessionsForWeek`, cardio per `cardioTarget`,
+  weekly components pro-rated. Daily thresholds still scale by daysCounted/7; session and cardio thresholds (already
+  window-sized) scale by daysCounted/windowDays. Progress shows "Starter week (Fri–Sun)".
+- **Adjustments** (`latestFinishedPeriod`): fortnights from `firstProgrammeMonday`; the starter week never forms a
+  fortnight; first proposal after weeks 1–2.
+- **Milestones** (`measurements.milestoneWindow`): week 1 runs from the start date (covers the starter week) to the
+  Sunday of programme week 1; later weeks are Mon–Sun programme weeks; `milestoneViews` treats week 0 as week 1; the
+  milestone reminder fires on `milestoneWindow(...).start`. Lab escalations use `programmeWeekStart(duration)`.
+- **Display**: Today, Training (banner + player), Programme (plus "ends …") and Progress show `programmeWeekLabel`.
+
+### Decisions made autonomously
+1. **Stored week numbers**: `health_workouts.programme_week` stores the *prescription* week (starter week → 1). The DB
+   CHECK allows 1–104 and the starter week uses Block 1 as week 1, so no migration is needed and progression history
+   (light-week detection) keeps working. Existing rows keep their stored values (computed under the old numbering);
+   new rows use the new numbering. Nothing else stores a week number (milestone ticks are keyed by milestone week,
+   reviews by Monday) — all other behaviour derives from the start date, so existing enrolments switch automatically.
+2. Old stored weekly reviews have no `windowDays` / `label`; readers default to 7 / none.
+3. Before the start date `recommendSession` (with a start date) recommends nothing ("Your programme starts …").
+4. Starter-week weigh-ins do not form a fortnight; they are not used in the first fortnight's 7-day averages either
+   (the period's first week is Mon–Sun of programme week 1), which is the conservative reading of "may".
+5. The waist reminder now starts from the start date (week ≥ 0), as before the change.
+6. A 1-day (Sunday) starter week pro-rates a 2/week target to 0 → "not due this week".
+
+### Limitations
+- Enrolments whose start was a non-Monday will see their week number drop by up to one and the programme end move
+  later by up to 6 days (the full duration now runs after the starter week) — intended.
+- The fortnightly adjustment for an existing non-Monday enrolment moves to the Monday-aligned fortnight; an already
+  decided period keyed by its old end date is not re-mapped (the next period is proposed normally).

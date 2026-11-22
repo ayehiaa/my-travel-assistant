@@ -135,5 +135,5 @@ Trips have two sources (discriminated union in `POST /api/trips`):
 
 <!-- SPECKIT START -->
 ## Current Feature Plan
-Active feature spec: `specs/031-real-return-and-cash-allocation/spec.md` (target tracking from the real Alpaca time-weighted account return — window since programme start or last 3 months, min 21 days, compounded annualising from 60 days else prorated target, `src/lib/returnMetrics.ts`; explicit `cash_target_pct` in the allocation with a reserved-word deny-list that is never validated/screened/bought, `src/lib/cashAllocation.ts`; stored in `agent_outputs.cash_allocation` / `return_metrics`, no migration; plan in `plan.md`, tasks in `tasks.md`). Previous: `specs/030-configurable-islamic-screening/spec.md`, Health module `specs/029-health-routines/spec.md`.
+Active feature spec: `specs/029-health-routines/spec.md` — phase P3.2 starter week & Monday-aligned weeks (non-Monday start → week 0 = start..Sunday with Block 1 prescriptions and pro-rated weekly component / cardio / session targets; week 1 from the next Monday; helpers `firstProgrammeMonday`, `programmeWeek`, `weekWindow` in `src/lib/health/time.ts`; no migration; plan in `plan.md` P3.2, tasks in `tasks.md`). Previous: `specs/031-real-return-and-cash-allocation/spec.md`, `specs/030-configurable-islamic-screening/spec.md`.
 <!-- SPECKIT END -->
