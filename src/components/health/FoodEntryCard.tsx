@@ -29,6 +29,8 @@ interface Props {
   entry: FoodEntryView
   slots: Array<{ key: string; name: string }>
   componentLabels: Record<string, { name: string; unit: string }>
+  /** Inside a sheet: no card frame. */
+  bare?: boolean
 }
 
 /**
@@ -36,7 +38,7 @@ interface Props {
  * eating-out flag and the no-added-fat toggle, then Re-calculate with the full estimation pipeline. New items are
  * shown for review; Save replaces the entry's items (same entry, updated_at bumped), Cancel keeps the old version.
  */
-export default function FoodEntryCard({ entry, slots, componentLabels }: Props) {
+export default function FoodEntryCard({ entry, slots, componentLabels, bare = false }: Props) {
   const toast = useToast()
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -172,7 +174,7 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
   }
 
   return (
-    <article className={CARD}>
+    <article className={bare ? '' : CARD}>
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-base font-bold text-[var(--ink)]">
           <span className="mr-2 font-mono text-sm text-[var(--ink-3)]">{entry.time}</span>{slotName}
@@ -187,7 +189,6 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
           <label className="mb-3 block">
             <span className={LABEL}>What you ate</span>
             <textarea className={`${INPUT} min-h-[64px]`} value={text} maxLength={1000} onChange={e => { setText(e.target.value); setRecalculated(false) }} onPaste={onPasteImages} onDragOver={e => e.preventDefault()} onDrop={onDropImages} />
-            <span className="mt-1 block text-xs text-[var(--ink-3)]">You can paste or drop a screenshot here too.</span>
           </label>
           <div className="mb-3 flex flex-wrap gap-2">
             {kept.map((p, i) => (
@@ -210,8 +211,8 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
             <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
             {kept.length + added.length < MAX_PHOTOS && (
               <>
-                <button type="button" className={BUTTON_SECONDARY} onClick={() => fileRef.current?.click()}>Take photo</button>
-                <button type="button" className={BUTTON_SECONDARY} onClick={() => libraryRef.current?.click()}>Upload image / screenshot</button>
+                <button type="button" className={BUTTON_SECONDARY} onClick={() => fileRef.current?.click()}>Photo</button>
+                <button type="button" className={BUTTON_SECONDARY} onClick={() => libraryRef.current?.click()}>Upload</button>
               </>
             )}
           </div>
@@ -232,9 +233,9 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
             <button type="button" className={BUTTON_SECONDARY} disabled={busy !== null} onClick={recalculate}>
               {busy === 'recalc' ? 'Re-calculating…' : 'Re-calculate'}
             </button>
-            <span className="text-xs text-[var(--ink-3)]">
-              {recalculated ? 'New estimate below — nothing is saved until you press Save.' : inputsChanged ? 'Inputs changed — re-calculate to update the items.' : 'Edit items by hand below, or change the text and re-calculate.'}
-            </span>
+            {(recalculated || inputsChanged) && (
+              <span className="text-xs text-[var(--ink-3)]">{recalculated ? 'New estimate — Save to keep' : 'Changed — re-calculate'}</span>
+            )}
           </div>
           <FoodItemsEditor items={items} onChange={setItems} componentLabels={componentLabels} />
           <div className="mt-3 flex justify-end gap-2">
@@ -267,9 +268,9 @@ export default function FoodEntryCard({ entry, slots, componentLabels }: Props) 
               </li>
             ))}
           </ul>
-          <div className="mt-3 flex justify-end gap-2">
-            <button type="button" className={BUTTON_SECONDARY} disabled={busy !== null} onClick={remove}>Delete</button>
-            <button type="button" className={BUTTON_SECONDARY} disabled={busy !== null} onClick={startEdit}>Edit</button>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button type="button" className="min-h-11 px-2 text-sm font-semibold text-red-700" disabled={busy !== null} onClick={remove}>Delete</button>
+            <button type="button" className={BUTTON_PRIMARY} disabled={busy !== null} onClick={startEdit}>Edit</button>
           </div>
         </>
       )}

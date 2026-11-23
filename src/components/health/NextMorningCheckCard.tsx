@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
-import { BUTTON_PRIMARY, CARD, CARD_TITLE } from './ui'
+import { BUTTON_PRIMARY, CARD } from './ui'
 
 interface Props {
   checkId: string
@@ -45,25 +45,25 @@ export default function NextMorningCheckCard({ checkId, sessionName, sessionDate
 
   return (
     <section className={`${CARD} border-[var(--blue-700)]`} aria-labelledby="jc-h">
-      <h2 id="jc-h" className={CARD_TITLE}>Joint check — morning after {sessionName}</h2>
-      <p className="mb-2 text-sm text-[var(--ink-2)]">
-        How does the joint feel this morning? ({sessionDate}{duringPain !== null && <>; {duringPain}/10 during the session</>}). Up to {threshold} and settled is OK.
+      <h2 id="jc-h" className="text-sm font-bold text-[var(--ink)]">Joint check</h2>
+      <p className="mb-2 text-xs text-[var(--ink-3)]">
+        After {sessionName} ({sessionDate}){duringPain !== null && <> · {duringPain}/10 during</>} · OK ≤ {threshold}
       </p>
       <div className="flex flex-wrap gap-1" role="group" aria-label="Pain this morning, 0 to 10">
         {Array.from({ length: 11 }, (_, v) => (
           <button key={v} type="button" aria-pressed={pain === v} onClick={() => setPain(v)}
-            className={`h-10 w-10 rounded-full text-sm font-bold ${pain === v ? (v > threshold ? 'bg-red-700 text-white' : 'bg-[var(--blue-700)] text-white') : 'border border-[var(--rule)] text-[var(--ink-2)]'}`}>
+            className={`h-11 w-11 rounded-full text-sm font-bold ${pain === v ? (v > threshold ? 'bg-red-700 text-white' : 'bg-[var(--blue-700)] text-white') : 'border border-[var(--rule)] text-[var(--ink-2)]'}`}>
             {v}
           </button>
         ))}
       </div>
       <label className="mt-3 flex items-center gap-2 text-sm text-[var(--ink)]">
         <input type="checkbox" className="h-4 w-4" checked={swelling} onChange={e => setSwelling(e.target.checked)} />
-        Swollen or sore compared with yesterday
+        Swollen or sorer than yesterday
       </label>
       {redFlags.length > 0 && (
         <fieldset className="mt-3">
-          <legend className="text-xs font-bold uppercase tracking-wide text-red-800">Red flags — tick any you noticed</legend>
+          <legend className="text-xs font-bold uppercase tracking-wide text-red-800">Red flags</legend>
           <div className="mt-1 flex flex-wrap gap-3">
             {redFlags.map(f => (
               <label key={f} className="flex items-center gap-2 text-sm text-[var(--ink)]">
@@ -76,7 +76,7 @@ export default function NextMorningCheckCard({ checkId, sessionName, sessionDate
         </fieldset>
       )}
       <div className="mt-3 flex justify-end">
-        <button type="button" className={BUTTON_PRIMARY} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save joint check'}</button>
+        <button type="button" className={BUTTON_PRIMARY} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </section>
   )

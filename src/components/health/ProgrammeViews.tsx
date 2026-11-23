@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { PROGRAMME_VIEWS, PROGRAMME_VIEW_LABELS, healthHref, type ProgrammeView } from '@/lib/health/healthHub'
+import { PROGRAMME_VIEW_LABELS, healthHref, type ProgrammeView } from '@/lib/health/healthHub'
 import { nowFor, type ActiveEnrolment } from '@/lib/health/healthServer'
 import { IMPORT_SECTIONS, sectionOf, type SectionKey, type SectionValue } from '@/lib/health/programmeImport'
 import { P3MigrationNeeded, P3_MIGRATION_MESSAGE, latestPerLineage, loadImportDraft, loadIngredientCache, loadMealPlan, loadOpenDrafts, loadProgrammeRows } from '@/lib/health/p3Server'
@@ -11,24 +11,13 @@ import { ProgrammeSectionEditor, ProgrammeSwitcher, VersionHistory } from './Pro
 import MealPlanWeek from './MealPlanWeek'
 import { ClinicianExportForm, HealthDataRights } from './ExportAndData'
 
-/** Programme tab sub-navigation (P3): Overview · Edit & versions · Import · Meal plan · Export & data. */
+/** Plan sub-page header (specs/032): back to the Plan overview + the page title. */
 export function ProgrammeViewNav({ active }: { active: ProgrammeView }) {
   return (
-    <nav aria-label="Programme sections" className="-mx-1 mb-4 overflow-x-auto">
-      <ul className="flex w-max gap-1.5 px-1">
-        {PROGRAMME_VIEWS.map(v => (
-          <li key={v}>
-            <Link
-              href={healthHref({ tab: 'programme', view: v === 'overview' ? null : v })}
-              aria-current={v === active ? 'page' : undefined}
-              className={`inline-block whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold ${v === active ? 'border-[var(--blue-700)] bg-[var(--blue-700)] text-white' : 'border-[var(--rule)] bg-white text-[var(--ink-2)]'}`}
-            >
-              {PROGRAMME_VIEW_LABELS[v]}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <div className="mb-3 flex items-center gap-2">
+      <Link href={healthHref({ tab: 'plan' })} aria-label="Back to Plan" className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[var(--rule)] bg-white text-lg text-[var(--ink)]">‹</Link>
+      <h2 className="text-lg font-bold text-[var(--ink)]">{PROGRAMME_VIEW_LABELS[active]}</h2>
+    </div>
   )
 }
 
@@ -87,7 +76,7 @@ export async function ProgrammeImportView({ userId, enrolment, importId }: { use
   if (failure === 'error') return <HealthNotice title="Import is unavailable">Could not load your imports — try again shortly.</HealthNotice>
   if (!wantsDraft) return <ImportUpload drafts={drafts} />
   if (!draft || draft.status !== 'draft') {
-    return <HealthNotice title="Draft not found">This import was saved, discarded or does not exist. <Link className="underline" href={healthHref({ tab: 'programme', view: 'import' })}>Start a new import</Link>.</HealthNotice>
+    return <HealthNotice title="Draft not found">This import was saved, discarded or does not exist. <Link className="underline" href={healthHref({ tab: 'plan', view: 'import' })}>Start a new import</Link>.</HealthNotice>
   }
   return (
     <ImportReview

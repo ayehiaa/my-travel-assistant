@@ -91,9 +91,9 @@ export default function MealPlanWeek({ def, week, prevWeek, nextWeek, today, ini
   return (
     <div className="flex flex-col gap-4">
       <div className={`${CARD} flex flex-wrap items-center justify-between gap-2`}>
-        <Link className={BUTTON_SECONDARY} href={healthHref({ tab: 'programme', view: 'meals', week: prevWeek })}>← Previous</Link>
+        <Link className={BUTTON_SECONDARY} href={healthHref({ tab: 'plan', view: 'meals', week: prevWeek })}>← Previous</Link>
         <p className="text-sm font-semibold text-[var(--ink)]">Week of {new Date(`${week}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}</p>
-        <Link className={BUTTON_SECONDARY} href={healthHref({ tab: 'programme', view: 'meals', week: nextWeek })}>Next →</Link>
+        <Link className={BUTTON_SECONDARY} href={healthHref({ tab: 'plan', view: 'meals', week: nextWeek })}>Next →</Link>
       </div>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

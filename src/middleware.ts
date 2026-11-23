@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Dev-only Lifestyle preview (fixture data, specs/032): reachable without a session outside production only.
+  if (process.env.NODE_ENV !== 'production' && request.nextUrl.pathname === '/dev/lifestyle-preview') {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

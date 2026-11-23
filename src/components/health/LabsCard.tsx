@@ -9,12 +9,13 @@ import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from
 export interface LabRow { id: string; date: string; total: number | null; ldl: number | null; hdl: number | null; tg: number | null; nonHdl: number | null }
 
 /** Lipid panels (specs/029 US9): entry in mmol/L or mg/dL, non-HDL computed, history, escalation note. */
-export default function LabsCard({ today, unit, rows, expectations, escalations }: {
+export default function LabsCard({ today, unit, rows, expectations, escalations, bare = false }: {
   today: string
   unit: 'mmol' | 'mgdl'
   rows: LabRow[]
   expectations: string[]
   escalations: string[]
+  bare?: boolean
 }) {
   const toast = useToast()
   const router = useRouter()
@@ -45,8 +46,8 @@ export default function LabsCard({ today, unit, rows, expectations, escalations 
   const v = (x: number | null) => (x === null ? '—' : String(x))
 
   return (
-    <section className={CARD} aria-labelledby="labs-h">
-      <h2 id="labs-h" className={CARD_TITLE}>Lipid panel ({label(unit)})</h2>
+    <section className={bare ? '' : CARD} aria-labelledby={bare ? undefined : "labs-h"}>
+      {!bare && <h2 id="labs-h" className={CARD_TITLE}>Lipid panel ({label(unit)})</h2>}
       {escalations.map(e => <p key={e} className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{e}</p>)}
       {rows.length === 0 ? <p className="text-sm text-[var(--ink-2)]">No results yet — the programme asks for a panel in week 1 and week 12.</p> : (
         <div className="overflow-x-auto">

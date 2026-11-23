@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import { sendJson, errorOf } from './api'
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_TITLE, INPUT, LABEL } from './ui'
+import Bar from './ui/Bar'
+import InfoPopover from './ui/InfoPopover'
 
 export interface ActivityCardProps {
   date: string
@@ -19,6 +21,8 @@ export interface ActivityCardProps {
   stepsStatus: 'below' | 'in_range' | 'above' | null
   intervals: { available: boolean; reason: string; prescription: string } | null
   migrationNeeded: boolean
+  /** Inside a sheet: no card frame or heading. */
+  bare?: boolean
 }
 
 /** Cardio + manual steps (specs/029 US7): log a session (avoid-list types confirm first), HR flag, weekly minutes. */
@@ -85,31 +89,37 @@ export default function ActivityCard(p: ActivityCardProps) {
 
   const pct = p.weekly.target ? Math.min(100, Math.round((p.weekly.minutes / p.weekly.target) * 100)) : null
   const allTypes = [...p.typeOptions, ...p.avoidTypes.map(a => a)]
+  const Wrapper = p.bare ? 'div' : 'section'
 
   return (
-    <section className={CARD} aria-labelledby={`act-${p.date}`}>
-      <h2 id={`act-${p.date}`} className={CARD_TITLE}>{p.title ?? 'Cardio & steps'}</h2>
-      <p className="text-sm text-[var(--ink-2)]">
-        This week: <strong className="text-[var(--ink)]">{p.weekly.minutes}</strong>{p.weekly.target !== null && <> / {p.weekly.target} min</>}
-        {pct !== null && pct >= 100 && <span className="ml-1 text-xs font-bold text-green-700">· target met</span>}
-        {p.weekly.note && <span className="block text-xs text-[var(--ink-3)]">{p.weekly.note}</span>}
-      </p>
-      {pct !== null && (
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--paper-2)]" role="presentation">
-          <div className={`h-full rounded-full ${pct >= 100 ? 'bg-green-600' : 'bg-[var(--blue-700)]'}`} style={{ width: `${pct}%` }} />
+    <Wrapper className={p.bare ? '' : CARD} aria-labelledby={p.bare ? undefined : `act-${p.date}`}>
+      {!p.bare && (
+        <div className="-mt-2 flex items-center justify-between gap-2">
+          <h2 id={`act-${p.date}`} className={`${CARD_TITLE} mb-0`}>{p.title ?? 'Cardio & steps'}</h2>
+          {p.zone && (
+            <InfoPopover label="Cardio zone">
+              {p.zone.zone}{p.zone.bpmMin !== null && p.zone.bpmMax !== null && <>: {p.zone.bpmMin}–{p.zone.bpmMax} bpm</>} — you can talk in full sentences.
+            </InfoPopover>
+          )}
         </div>
       )}
-      {p.zone && <p className="mt-2 text-xs text-[var(--ink-3)]">{p.zone.zone}{p.zone.bpmMin !== null && p.zone.bpmMax !== null && <>: {p.zone.bpmMin}–{p.zone.bpmMax} bpm — you can talk in full sentences.</>}</p>}
+      <p className="flex items-baseline justify-between gap-2 text-sm text-[var(--ink-2)]">
+        <span><strong className="text-[var(--ink)]">{p.weekly.minutes}</strong>{p.weekly.target !== null && <> / {p.weekly.target}</>} min this week</span>
+        {pct !== null && pct >= 100 && <span className="text-xs font-bold text-green-700">✓ Done</span>}
+      </p>
+      {pct !== null && <div className="mt-1"><Bar ratio={pct / 100} tone={pct >= 100 ? 'good' : 'neutral'} /></div>}
+      {p.weekly.note && <p className="mt-1 text-xs text-[var(--ink-3)]">{p.weekly.note}</p>}
+      {p.bare && p.zone && <p className="mt-1 text-xs text-[var(--ink-3)]">{p.zone.zone}{p.zone.bpmMin !== null && p.zone.bpmMax !== null && <> · {p.zone.bpmMin}–{p.zone.bpmMax} bpm</>}</p>}
 
       {p.sessions.length > 0 && (
         <ul className="mt-3 flex list-none flex-col gap-1 p-0">
           {p.sessions.map(s => (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <span className="text-[var(--ink)]">
-                {s.type} · {s.minutes} min{s.avgHr !== null && <> · {s.avgHr} bpm</>}{s.intervals && ' · intervals'}
+                ✓ {s.type} · {s.minutes} min{s.avgHr !== null && <> · {s.avgHr} bpm</>}{s.intervals && ' · intervals'}
                 {s.hrMessage && <span className="block text-xs text-amber-800">{s.hrMessage}</span>}
               </span>
-              <button type="button" className="text-xs font-semibold text-red-700 underline" disabled={busy === s.id} onClick={() => remove(s.id)}>Delete</button>
+              <button type="button" className="min-h-11 px-2 text-xs font-semibold text-red-700 underline" disabled={busy === s.id} onClick={() => remove(s.id)}>Delete</button>
             </li>
           ))}
         </ul>
@@ -128,9 +138,9 @@ export default function ActivityCard(p: ActivityCardProps) {
           </select>
         </label>
         <label><span className={LABEL}>Minutes</span><input className={INPUT} inputMode="numeric" value={minutes} onChange={e => setMinutes(e.target.value)} /></label>
-        <label><span className={LABEL}>Avg HR (opt.)</span><input className={INPUT} inputMode="numeric" value={hr} onChange={e => setHr(e.target.value)} placeholder="bpm" /></label>
+        <label><span className={LABEL}>Avg HR</span><input className={INPUT} inputMode="numeric" value={hr} onChange={e => setHr(e.target.value)} placeholder="optional" /></label>
       </div>
-      {p.avoidTypes.includes(type) && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{type} is on your programme&apos;s avoid list — choose an allowed type if you can.</p>}
+      {p.avoidTypes.includes(type) && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">! On your avoid list</p>}
       {p.intervals && (
         <div className="mt-2 text-sm">
           {p.intervals.available ? (
@@ -149,17 +159,17 @@ export default function ActivityCard(p: ActivityCardProps) {
       <div className="mt-4 border-t border-[var(--rule-soft)] pt-3">
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[140px] flex-1">
-            <span className={LABEL}>Steps{p.stepsTarget && <> (target {p.stepsTarget})</>}</span>
+            <span className={LABEL}>Steps{p.stepsTarget && <> · {p.stepsTarget}</>}</span>
             <input className={INPUT} inputMode="numeric" value={steps} onChange={e => setSteps(e.target.value)} placeholder="e.g. 8500" />
           </label>
           <button type="button" className={BUTTON_SECONDARY} disabled={busy !== null || steps.trim() === ''} onClick={saveSteps}>{busy === 'steps' ? 'Saving…' : 'Save steps'}</button>
         </div>
         {p.stepsStatus && (
           <p className={`mt-1 text-xs font-semibold ${p.stepsStatus === 'below' ? 'text-amber-800' : 'text-green-700'}`}>
-            {p.stepsStatus === 'below' ? 'Below the daily range' : p.stepsStatus === 'above' ? 'Above the range — great' : 'In range'}
+            {p.stepsStatus === 'below' ? '! Below range' : p.stepsStatus === 'above' ? '✓ Above range' : '✓ In range'}
           </p>
         )}
       </div>
-    </section>
+    </Wrapper>
   )
 }

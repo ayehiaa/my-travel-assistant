@@ -121,8 +121,8 @@ export function buildReminder(type: HealthReminderType, d: ReminderData): Remind
       if (!d.trainingToday || d.trainedToday || !d.trainingTime) return null
       const before = d.cutoff && (hhmmToMinutes(d.trainingTime) ?? 0) < (hhmmToMinutes(d.cutoff) ?? 0)
       return before
-        ? { type, title: 'Pre-training coffee', body: `Training at ${d.trainingTime} — a black coffee now, about 45 minutes before.`, path: '/health?tab=training' }
-        : { type, title: 'No pre-training coffee today', body: `Training at ${d.trainingTime} is after your ${d.cutoff ?? 'caffeine'} cut-off — skip the coffee; sleep matters more than the lift.`, path: '/health?tab=training' }
+        ? { type, title: 'Pre-training coffee', body: `Training at ${d.trainingTime} — a black coffee now, about 45 minutes before.`, path: '/health?tab=train' }
+        : { type, title: 'No pre-training coffee today', body: `Training at ${d.trainingTime} is after your ${d.cutoff ?? 'caffeine'} cut-off — skip the coffee; sleep matters more than the lift.`, path: '/health?tab=train' }
     }
     case 'caffeine_cutoff':
       return d.cutoff ? { type, title: 'Caffeine cut-off soon', body: `Last caffeinated drink before ${d.cutoff} — decaf after that.`, path: '/health' } : null
@@ -151,7 +151,7 @@ export function pushPayload(c: ReminderContent, localDate: string): PushPayload 
 
 export function renderReminderEmail(c: ReminderContent, baseUrl: string): { subject: string; text: string; html: string } {
   const url = `${baseUrl}${c.path}`
-  const settings = `${baseUrl}/health?tab=programme#health-settings`
+  const settings = `${baseUrl}/health?tab=plan&view=settings`
   const text = `${c.title}\n\n${c.body}\n\nOpen: ${url}\n\nTurn reminders off in Health → Programme → Settings: ${settings}\nNot medical advice.`
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(c.title)}</title></head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;">

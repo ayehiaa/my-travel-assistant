@@ -84,8 +84,8 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
         const low = item.confidence === 'low'
         const comps = Object.entries(item.components).filter(([, v]) => v > 0)
         return (
-          <div key={idx} className={`rounded-lg border p-3 ${low ? 'border-amber-300 bg-amber-50' : 'border-[var(--rule)]'}`}>
-            <div className="flex flex-wrap items-center gap-2">
+          <div key={idx} className={`rounded-lg border p-2.5 ${low ? 'border-amber-300 bg-amber-50' : 'border-[var(--rule)]'}`}>
+            <div className="flex items-center gap-1.5">
               <input
                 aria-label="Food name"
                 className={`${INPUT} min-w-0 flex-1`}
@@ -93,10 +93,10 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
                 onChange={e => update(idx, { ...item, name: e.target.value })}
                 placeholder="Food"
               />
-              <label className="flex items-center gap-1 text-sm text-[var(--ink-2)]">
+              <label className="flex shrink-0 items-center gap-1 text-sm text-[var(--ink-2)]">
                 <input
                   aria-label="Quantity in grams"
-                  className={`${INPUT} w-20`}
+                  className={`${INPUT} w-[4.5rem] text-right`}
                   inputMode="decimal"
                   key={`q-${idx}-${item.quantityG}`}
                   defaultValue={item.quantityG}
@@ -108,30 +108,22 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
                 />
                 g
               </label>
-              <button type="button" aria-label={`Remove ${item.name || 'item'}`} className="px-2 text-lg text-[var(--ink-3)]" onClick={() => onChange(items.filter((_, i) => i !== idx))}>×</button>
+              <button type="button" aria-label={`Remove ${item.name || 'item'}`} className="grid h-11 w-9 shrink-0 place-items-center text-lg text-[var(--ink-3)]" onClick={() => onChange(items.filter((_, i) => i !== idx))}>×</button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--ink-2)]">
               <span><strong className="text-[var(--ink)]">{Math.round(item.kcal)}</strong> kcal</span>
-              <span>P {fmtNum(item.proteinG)} g</span>
+              <span>Protein {fmtNum(item.proteinG)} g</span>
               <span>Sat fat {fmtNum(item.satFatG)} g</span>
-              {comps.map(([k, v]) => (
-                <span key={k} className="rounded-full bg-green-50 px-2 py-0.5 text-green-800">
-                  {componentLabels[k]?.name ?? k.replace(/_/g, ' ')} {fmtNum(v)}{componentLabels[k]?.unit === 'servings' ? '' : ` ${componentLabels[k]?.unit ?? ''}`}
-                </span>
-              ))}
-              <span className={`rounded-full px-2 py-0.5 ${item.source === 'ai' ? 'bg-amber-50 text-amber-900' : 'bg-[var(--paper-2)] text-[var(--ink-2)]'}`}>{itemSourceLabel(item.source)}</span>
-              {(item.source === 'ai' || item.source === 'reference') && <span className={low ? 'font-bold text-amber-800' : ''}>{item.confidence === 'low' ? 'portion unsure' : `${item.confidence} confidence`}</span>}
-              {item.isTreat && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-pink-800">treat</span>}
+              {low && <span className="font-bold text-amber-800">! Check portion</span>}
             </div>
             <AssumptionChips assumptions={item.assumptions} onToggle={(key, kept) => update(idx, setAssumptionKept(item, key, kept))} />
             {low && item.baseQuantityG > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-semibold text-amber-900">Portion?</span>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Portion size">
                 {(Object.keys(PORTION_FACTORS) as Array<keyof typeof PORTION_FACTORS>).map(size => (
                   <button
                     key={size}
                     type="button"
-                    className="rounded-full border border-amber-300 bg-white px-3 py-1 font-semibold capitalize text-amber-900"
+                    className="min-h-9 rounded-full border border-amber-300 bg-white px-3 font-semibold capitalize text-amber-900"
                     onClick={() => update(idx, { ...scaleItem(item, Math.round(item.baseQuantityG * PORTION_FACTORS[size])), confidence: 'medium' })}
                   >
                     {size}
@@ -139,36 +131,51 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
                 ))}
               </div>
             )}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <button type="button" className="text-xs font-semibold text-[var(--blue-700)] underline" onClick={() => setOpen(open === idx ? null : idx)}>
-                {open === idx ? 'Hide values' : 'Edit values'}
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <button type="button" className="min-h-9 text-xs font-semibold text-[var(--blue-700)]" aria-expanded={open === idx} onClick={() => setOpen(open === idx ? null : idx)}>
+                {open === idx ? 'Less' : 'More'}
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-[var(--ink-2)]">
-                <input type="checkbox" checked={item.remember} onChange={e => onChange(items.map((it, i) => (i === idx ? { ...it, remember: e.target.checked } : it)))} />
-                Remember in my foods
-              </label>
+              {item.remember && <span className="text-[11px] text-[var(--ink-3)]">Saved to my foods</span>}
             </div>
             {open === idx && (
-              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {NUTRIENTS.map(n => (
-                  <label key={n.key} className="text-[11px] text-[var(--ink-3)]">
-                    {n.label}
-                    <input
-                      className={INPUT}
-                      inputMode="decimal"
-                      key={`${n.key}-${idx}-${item[n.key]}`}
-                      defaultValue={item[n.key]}
-                      onBlur={e => {
-                        const v = Number(e.target.value.replace(',', '.'))
-                        if (v === item[n.key]) return
-                        if (Number.isFinite(v) && v >= 0) update(idx, { ...item, [n.key]: v, source: item.source === 'ai' || item.source === 'reference' ? 'manual' : item.source, refId: item.source === 'reference' ? null : item.refId, confidence: 'high' })
-                      }}
-                    />
+              <div className="mt-1 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  {comps.map(([k, v]) => (
+                    <span key={k} className="rounded-full bg-green-50 px-2 py-0.5 text-green-800">
+                      {componentLabels[k]?.name ?? k.replace(/_/g, ' ')} {fmtNum(v)}{componentLabels[k]?.unit === 'servings' ? '' : ` ${componentLabels[k]?.unit ?? ''}`}
+                    </span>
+                  ))}
+                  <span className={`rounded-full px-2 py-0.5 ${item.source === 'ai' ? 'bg-amber-50 text-amber-900' : 'bg-[var(--paper-2)] text-[var(--ink-2)]'}`}>{itemSourceLabel(item.source)}</span>
+                  {(item.source === 'ai' || item.source === 'reference') && <span className={low ? 'font-bold text-amber-800' : 'text-[var(--ink-3)]'}>{item.confidence === 'low' ? 'portion unsure' : `${item.confidence} confidence`}</span>}
+                  {item.isTreat && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-pink-800">treat</span>}
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {NUTRIENTS.map(n => (
+                    <label key={n.key} className="text-[11px] text-[var(--ink-3)]">
+                      {n.label}
+                      <input
+                        className={INPUT}
+                        inputMode="decimal"
+                        key={`${n.key}-${idx}-${item[n.key]}`}
+                        defaultValue={item[n.key]}
+                        onBlur={e => {
+                          const v = Number(e.target.value.replace(',', '.'))
+                          if (v === item[n.key]) return
+                          if (Number.isFinite(v) && v >= 0) update(idx, { ...item, [n.key]: v, source: item.source === 'ai' || item.source === 'reference' ? 'manual' : item.source, refId: item.source === 'reference' ? null : item.refId, confidence: 'high' })
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex min-h-9 items-center gap-1.5 text-xs text-[var(--ink-2)]">
+                    <input type="checkbox" checked={item.remember} onChange={e => onChange(items.map((it, i) => (i === idx ? { ...it, remember: e.target.checked } : it)))} />
+                    Remember in my foods
                   </label>
-                ))}
-                <label className="col-span-3 flex items-center gap-1.5 text-xs text-[var(--ink-2)] sm:col-span-6">
-                  <input type="checkbox" checked={item.isTreat} onChange={e => update(idx, { ...item, isTreat: e.target.checked })} /> Treat
-                </label>
+                  <label className="flex min-h-9 items-center gap-1.5 text-xs text-[var(--ink-2)]">
+                    <input type="checkbox" checked={item.isTreat} onChange={e => update(idx, { ...item, isTreat: e.target.checked })} /> Treat
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -176,27 +183,29 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
       })}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={BUTTON_SECONDARY} onClick={() => onChange([...items, { ...BLANK, baseQuantityG: 100, remember: true }])}>+ Add item</button>
-        <input
-          aria-label="Search packaged foods"
-          className={`${INPUT} min-w-0 flex-1`}
-          placeholder="Search packaged food (Open Food Facts)"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void search() } }}
-        />
-        <button type="button" className={BUTTON_SECONDARY} disabled={searching || query.trim().length < 2} onClick={search}>{searching ? '…' : 'Search'}</button>
-        <button type="button" className={BUTTON_SECONDARY} onClick={() => setScan(true)}>Scan barcode</button>
+        <button type="button" className={BUTTON_SECONDARY} onClick={() => onChange([...items, { ...BLANK, baseQuantityG: 100, remember: true }])}>+ Item</button>
+        <button type="button" className={BUTTON_SECONDARY} onClick={() => setScan(true)}>Barcode</button>
+        <div className="flex min-w-0 flex-1 basis-48 gap-2">
+          <input
+            aria-label="Search packaged foods"
+            className={`${INPUT} min-w-0 flex-1`}
+            placeholder="Search packaged food"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void search() } }}
+          />
+          <button type="button" className={BUTTON_SECONDARY} disabled={searching || query.trim().length < 2} onClick={search}>{searching ? '…' : 'Find'}</button>
+        </div>
       </div>
       {scan && <BarcodeScanner onAdd={item => onChange([...items, { ...item, baseQuantityG: item.quantityG, remember: true }])} onClose={() => setScan(false)} />}
       {results && (
         <ul className="m-0 max-h-56 list-none overflow-y-auto rounded-lg border border-[var(--rule)] p-0">
-          {results.length === 0 && <li className="p-3 text-sm text-[var(--ink-3)]">No match — add the item by hand.</li>}
+          {results.length === 0 && <li className="p-3 text-sm text-[var(--ink-3)]">No match — add it by hand.</li>}
           {results.map(p => (
             <li key={p.code}>
-              <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--paper-2)]" onClick={() => addProduct(p)}>
+              <button type="button" className="min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-[var(--paper-2)]" onClick={() => addProduct(p)}>
                 <strong>{p.name}</strong>{p.brand ? ` · ${p.brand}` : ''}
-                <span className="block text-xs text-[var(--ink-3)]">per 100 g: {p.per100.kcal} kcal · P {p.per100.proteinG} g · sat fat {p.per100.satFatG} g</span>
+                <span className="block text-xs text-[var(--ink-3)]">per 100 g: {p.per100.kcal} kcal · protein {p.per100.proteinG} g · sat fat {p.per100.satFatG} g</span>
               </button>
             </li>
           ))}
@@ -205,7 +214,7 @@ export default function FoodItemsEditor({ items, onChange, componentLabels }: Pr
 
       {items.length > 0 && (
         <p className="text-sm text-[var(--ink-2)]">
-          Total <strong className="text-[var(--ink)]">{totals.kcal} kcal</strong> ({band.low}–{band.high}, ±15%) · P {fmtNum(totals.proteinG)} g · sat fat {fmtNum(totals.satFatG)} g
+          Total <strong className="text-[var(--ink)]">{totals.kcal} kcal</strong> <span className="text-xs text-[var(--ink-3)]">({band.low}–{band.high})</span> · protein {fmtNum(totals.proteinG)} g · sat fat {fmtNum(totals.satFatG)} g
         </p>
       )}
     </div>
