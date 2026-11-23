@@ -50,7 +50,7 @@ export default async function LifestylePreview({ searchParams }: { searchParams:
           <h1 className="font-display text-2xl font-bold text-[var(--ink)] md:text-3xl">Lifestyle</h1>
           <p className="text-xs text-[var(--ink-4)]">Not medical advice</p>
         </div>
-        <HealthTabs active={tab} />
+        <HealthTabs active={tab} withAddSlot={!player} />
         {body}
         {!player && (
           <LifestyleFab

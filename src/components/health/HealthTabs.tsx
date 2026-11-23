@@ -18,7 +18,7 @@ function TabIcon({ tab }: { tab: HealthTab }) {
 }
 
 /** Lifestyle hub navigation: Today · Food · Train · Progress · Plan — top tabs on desktop, bottom tab bar on phones. */
-export default function HealthTabs({ active }: { active: HealthTab }) {
+export default function HealthTabs({ active, withAddSlot = false }: { active: HealthTab; withAddSlot?: boolean }) {
   return (
     <>
       <nav aria-label="Lifestyle sections" className="mb-5 hidden md:block">
@@ -43,8 +43,10 @@ export default function HealthTabs({ active }: { active: HealthTab }) {
         aria-label="Lifestyle sections"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--rule)] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
-        <ul className="grid grid-cols-5">
-          {HEALTH_TABS.map(tab => (
+        {/* On phones the "+" (LifestyleFab) sits in the 3rd of 6 slots of this bar (LifestyleFab anchors at 2.5/6 = 41.67%), so it never covers page content. */}
+        <ul className={`grid ${withAddSlot ? 'grid-cols-6' : 'grid-cols-5'}`}>
+          {HEALTH_TABS.flatMap((tab, i) => [
+            ...(withAddSlot && i === 2 ? [<li key="add-slot" aria-hidden="true" />] : []),
             <li key={tab}>
               <Link
                 href={healthHref({ tab })}
@@ -54,8 +56,8 @@ export default function HealthTabs({ active }: { active: HealthTab }) {
                 <TabIcon tab={tab} />
                 {HEALTH_TAB_LABELS[tab]}
               </Link>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ul>
       </nav>
     </>

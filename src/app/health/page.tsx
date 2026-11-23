@@ -71,7 +71,7 @@ export default async function HealthPage({
     const inPlayer = tab === 'train' && !!training.session
     body = (
       <>
-        <HealthTabs active={tab} />
+        <HealthTabs active={tab} withAddSlot={!inPlayer} />
         <h2 className="sr-only">{HEALTH_TAB_LABELS[tab]}</h2>
         <Suspense key={suspenseKey} fallback={<HealthTabSkeleton />}>
           {tab === 'today' && <TodayTab userId={user.id} enrolment={enrolment} editCheckin={one(params.checkin) === '1'} />}

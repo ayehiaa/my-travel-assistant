@@ -34,7 +34,7 @@ export default function LifestyleFab({ ctx, links, initialOpen = false }: { ctx:
         type="button"
         aria-label="Add"
         onClick={() => setMenu(true)}
-        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[var(--blue-700)] text-3xl font-light text-white shadow-lg md:bottom-8 md:right-8"
+        className="fixed bottom-[calc(0.25rem+env(safe-area-inset-bottom))] left-[41.6667%] z-50 grid h-12 w-12 -translate-x-1/2 place-items-center rounded-full bg-[var(--blue-700)] text-3xl font-light text-white shadow-lg md:bottom-8 md:left-auto md:right-8 md:h-14 md:w-14 md:translate-x-0"
       >
         +
       </button>
