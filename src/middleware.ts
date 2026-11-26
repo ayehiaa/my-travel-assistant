@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   // Dev-only Lifestyle preview (fixture data, specs/032): reachable without a session outside production only.
-  if (process.env.NODE_ENV !== 'production' && request.nextUrl.pathname === '/dev/lifestyle-preview') {
+  // Same for the My Assistant preview (specs/033).
+  if (process.env.NODE_ENV !== 'production' && (request.nextUrl.pathname === '/dev/lifestyle-preview' || request.nextUrl.pathname === '/dev/assistant-preview')) {
     return NextResponse.next({ request })
   }
 

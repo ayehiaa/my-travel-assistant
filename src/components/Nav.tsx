@@ -6,6 +6,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/context/UserContext'
 import { accessBadge, hasFeature, isAssistant, isMember } from '@/lib/access'
+import AskLauncher from '@/components/assistant/AskLauncher'
+import { SparkleIcon } from '@/components/assistant/icons'
 
 export default function Nav() {
   const user = useUser()
@@ -41,11 +43,13 @@ export default function Nav() {
     ...(isMember(user.access) ? [{ href: '/settings', label: 'Settings' }] : []),
     ...(hasFeature(user.access, 'portfolio') ? [{ href: '/portfolio', label: 'Portfolio' }] : []),
     ...(hasFeature(user.access, 'health') ? [{ href: '/health', label: 'Lifestyle' }] : []),
+    // My Assistant (specs/033): every signed-in user.
+    { href: '/assistant', label: 'My Assistant', sparkle: true },
     ...(user.access.isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
-  ]
+  ] as Array<{ href: string; label: string; sparkle?: boolean }>
 
   // The Portfolio hub owns every /portfolio/* page (tabs, recommendation detail)
-  const isActive = (href: string) => pathname === href || ((href === '/portfolio' || href === '/admin' || href === '/health') && pathname.startsWith(`${href}/`))
+  const isActive = (href: string) => pathname === href || ((href === '/portfolio' || href === '/admin' || href === '/health' || href === '/assistant') && pathname.startsWith(`${href}/`))
 
   const initials = user.displayName
     .split(' ')
@@ -85,16 +89,17 @@ export default function Nav() {
           className="hidden md:flex items-center gap-1 p-1 rounded-full"
           style={{ background: 'rgba(255,255,255,.10)' }}
         >
-          {links.map(({ href, label }) => (
+          {links.map(({ href, label, sparkle }) => (
             <Link
               key={href}
               href={href}
-              className="rounded-full px-4 py-2 text-[13px] font-semibold transition-colors"
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-2 text-[13px] font-semibold transition-colors 2xl:px-4"
               style={isActive(href)
                 ? { background: 'white', color: 'var(--blue-700)' }
                 : { color: 'rgba(255,255,255,.85)' }
               }
             >
+              {sparkle && <SparkleIcon className="h-3.5 w-3.5" />}
               {label}
             </Link>
           ))}
@@ -102,6 +107,7 @@ export default function Nav() {
 
         {/* Right side */}
         <div className="hidden md:flex items-center gap-4 shrink-0">
+          <AskLauncher firstName={firstName} variant="desktop" />
           {isAssistant(user.access) && user.linkedMainAccounts.length > 0 ? (
             <div className="flex items-center gap-2">
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.7 }}>
@@ -131,13 +137,14 @@ export default function Nav() {
               )}
             </div>
           ) : (
-            <span style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>
+            // Hidden below 2xl so the nav fits at 1280 px with every add-on + My Assistant (the avatar keeps a tooltip).
+            <span className="hidden 2xl:inline" style={{ fontSize: 13, color: 'rgba(255,255,255,.85)' }}>
               {firstName} · {accessBadge(user.access)}
             </span>
           )}
 
           {/* Avatar */}
-          <div style={{
+          <div title={`${user.displayName} · ${accessBadge(user.access)}`} style={{
             width: 34, height: 34,
             borderRadius: '50%',
             background: 'var(--yellow)',
@@ -157,7 +164,9 @@ export default function Nav() {
           </button>
         </div>
 
-        {/* Mobile hamburger */}
+        {/* Mobile: Ask + hamburger */}
+        <div className="md:hidden flex items-center gap-1">
+        <AskLauncher firstName={firstName} variant="mobile" />
         <button
           className="md:hidden p-2 rounded text-white/80 hover:text-white hover:bg-white/10"
           onClick={() => setMenuOpen(!menuOpen)}
@@ -171,6 +180,7 @@ export default function Nav() {
             )}
           </svg>
         </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
@@ -179,17 +189,18 @@ export default function Nav() {
           className="md:hidden px-4 py-3 space-y-1"
           style={{ borderTop: '1px solid rgba(255,255,255,.12)', background: 'var(--blue-900)' }}
         >
-          {links.map(({ href, label }) => (
+          {links.map(({ href, label, sparkle }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setMenuOpen(false)}
-              className="block px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
               style={isActive(href)
                 ? { background: 'rgba(255,255,255,.15)', color: 'white' }
                 : { color: 'rgba(255,255,255,.75)' }
               }
             >
+              {sparkle && <SparkleIcon className="h-3.5 w-3.5" />}
               {label}
             </Link>
           ))}
