@@ -13,6 +13,7 @@ export interface ModelPrice {
 }
 
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
+  'claude-opus-5-5':   { input: 4, output: 20, cacheRead: 0.20, cacheWrite: 5 },
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.10, cacheWrite: 2.5 },
   'claude-sonnet-4-6': { input: 3, output: 15, cacheRead: 0.30, cacheWrite: 3.75 },
 }

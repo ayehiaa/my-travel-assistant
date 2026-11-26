@@ -6,6 +6,7 @@
 
 export const AI_MODELS = {
   SONNET_5_5: 'claude-sonnet-5-5',
+  OPUS_5_5:   'claude-opus-5-5',
 } as const
 
 export type AiModelId = (typeof AI_MODELS)[keyof typeof AI_MODELS]
@@ -13,7 +14,7 @@ export type AiModelId = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 /** Effort levels accepted in `output_config.effort`. */
 export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-export type AiRole = 'agent' | 'synthesizer' | 'shariah_reviewer' | 'health_food' | 'health_import' | 'health_ingredients'
+export type AiRole = 'agent' | 'synthesizer' | 'shariah_reviewer' | 'health_food' | 'health_import' | 'health_ingredients' | 'assistant'
 
 export interface AiRoleConfig {
   model: AiModelId
@@ -34,6 +35,9 @@ export const AI_ROLE_CONFIG: Readonly<Record<AiRole, AiRoleConfig>> = {
   health_import:    { model: AI_MODELS.SONNET_5_5, maxTokens: 16000, effort: 'medium' },
   // Meal-plan shopping list fallback (P3): split unknown meal options into ingredients. Small, cached per user.
   health_ingredients: { model: AI_MODELS.SONNET_5_5, maxTokens: 4000, effort: 'low' },
+  // My Assistant (specs/033): streaming chat with read-only tools. Thinking is always on for this model (never send
+  // `thinking: disabled` or a budget); effort is the only depth control. 16k per turn covers thinking + answer.
+  assistant:        { model: AI_MODELS.OPUS_5_5,   maxTokens: 16000, effort: 'medium' },
 }
 
 export function getRoleConfig(role: AiRole): AiRoleConfig {
