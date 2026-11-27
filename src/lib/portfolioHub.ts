@@ -2,6 +2,7 @@ import type { EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { CASH_ROW_KEY, isReservedCashWord } from '@/lib/cashAllocation'
 import type { AlpacaOrderResult, LiveHolding, TargetAllocationItem, TargetHorizon } from '@/types/database'
 import type { ShariahScreeningResult, TickerScreening } from '@/types/shariah'
+import { MIN_HISTORY_DAYS, computeTimeWeightedReturn, type PortfolioHistoryInput } from '@/lib/returnMetrics'
 
 /**
  * Pure helpers for the Portfolio hub (specs/025-portfolio-trading-hub).
@@ -132,19 +133,43 @@ export function computeDayChange(
  * Prefers Alpaca's deposit-adjusted cumulative profit_loss_pct (fraction) at the last point;
  * falls back to last / first positive equity. Null when there is not enough data.
  */
-export function computePeriodReturnPct(
-  equity: Array<number | null>,
-  profitLossPct: Array<number | null> = [],
-): number | null {
-  for (let i = profitLossPct.length - 1; i >= 0; i--) {
-    const v = profitLossPct[i]
-    if (v !== null && Number.isFinite(v)) return v * 100
-  }
-  const values = equity.filter((v): v is number => v !== null && Number.isFinite(v))
-  const first = values.find(v => v > 0)
-  const last = values[values.length - 1]
-  if (first === undefined || last === undefined || values.length < 2) return null
-  return (last / first - 1) * 100
+export interface PeriodPerformance {
+  /** Time-weighted return from the first funded point in the period to the last point, percent. */
+  return_pct: number
+  /** Calendar days actually measured (from funding, if the account was funded during the period). */
+  days: number
+  /** Unix seconds of the first funded point. */
+  start_ts: number
+  /** True when the account was funded after the period began (the measured window is shorter than the period). */
+  funded_in_period: boolean
+  /** The user's target compounded to `days`, percent. */
+  target_pct: number
+  /** 'too_early' below MIN_HISTORY_DAYS — a few days of noise say nothing about a yearly goal. */
+  verdict: 'on_track' | 'behind' | 'too_early'
+}
+
+/**
+ * Period return vs target for the Performance card, measured only over the days the account actually held money.
+ * Uses the same time-weighted method as the AI analysis (computeTimeWeightedReturn). Null without two funded points.
+ */
+export function summarisePeriodPerformance(
+  history: PortfolioHistoryInput,
+  targetPct: number,
+  horizon: TargetHorizon,
+): PeriodPerformance | null {
+  const twr = computeTimeWeightedReturn(history, 0)
+  if (!twr) return null
+  const firstTs = history.timestamp.find(t => Number.isFinite(t))
+  const funded_in_period = firstTs !== undefined && twr.start_ts > firstTs
+  const days = Math.max(1, Math.round(twr.days))
+  const target = proratedTargetPct(targetPct, horizon, days)
+  const verdict = twr.days < MIN_HISTORY_DAYS ? 'too_early' : twr.period_return_pct >= target ? 'on_track' : 'behind'
+  return { return_pct: twr.period_return_pct, days, start_ts: twr.start_ts, funded_in_period, target_pct: target, verdict }
+}
+
+/** Index of the first funded point (equity > 0), so the chart can drop the flat $0 stretch before funding. */
+export function firstFundedIndex(equity: Array<number | null>): number {
+  return Math.max(0, equity.findIndex(v => v !== null && v > 0))
 }
 
 const DAYS_PER_YEAR = 365
