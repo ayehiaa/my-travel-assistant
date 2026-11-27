@@ -5,6 +5,7 @@ import {
   chooseReturnWindow,
   computeHoldingMomentum,
   computeTimeWeightedReturn,
+  excludedCashFlows,
   describeTarget,
   proratedAnnualPct,
   readReturnMetrics,
@@ -76,6 +77,32 @@ describe('computeTimeWeightedReturn', () => {
     const r = computeTimeWeightedReturn(h, T0)
     expect(r?.method).toBe('cash_flows')
     expect(r?.period_return_pct).toBeCloseTo(-0.01857, 5)
+  })
+
+  it('does not subtract the initial deposit when Alpaca dates it after the first funded point', () => {
+    // History starts before funding; $100k shows on day 2 but the CSD activity is dated day 3.
+    const d = (i: number) => new Date((T0 + i * DAY) * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const h = hist([0, 0, 100_000, 99_800, 100_050, 99_901.36], { cash_flows: [{ date: d(3), amount: 100_000 }] })
+    const r = computeTimeWeightedReturn(h, T0)
+    expect(r?.method).toBe('cash_flows')
+    expect(r?.period_return_pct).toBeCloseTo(-0.09864, 4)
+    expect(excludedCashFlows(h)).toBe(0)
+  })
+
+  it('matches a deposit to the day equity jumped even if the activity date is a day late', () => {
+    const d = (i: number) => new Date((T0 + i * DAY) * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const h = hist([1000, 1100, 2100, 2310], { cash_flows: [{ date: d(3), amount: 1000 }] })
+    const r = computeTimeWeightedReturn(h, T0)
+    expect(r?.period_return_pct).toBeCloseTo(21, 9)
+    expect(excludedCashFlows(h)).toBe(1000)
+  })
+
+  it('keeps a real second deposit soon after funding out of the return', () => {
+    const d = (i: number) => new Date((T0 + i * DAY) * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    // Funded 1000 on day 1 (activity dated day 2), +10% day 2, deposit 1000 day 3, +10% day 4.
+    const h = hist([0, 1000, 1100, 2100, 2310], { cash_flows: [{ date: d(2), amount: 1000 }, { date: d(3), amount: 1000 }] })
+    expect(computeTimeWeightedReturn(h, T0)?.period_return_pct).toBeCloseTo(21, 9)
+    expect(excludedCashFlows(h)).toBe(1000)
   })
 
   it('takes a mid-period deposit out of the return', () => {

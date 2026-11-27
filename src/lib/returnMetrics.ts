@@ -107,6 +107,60 @@ export interface TwrResult {
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
+const FLOW_MATCH_DAYS = 4
+
+/**
+ * Assigns each external cash flow to a point in `idx` (by position): the interval within ±FLOW_MATCH_DAYS of the
+ * flow's date whose equity change is closest to the flow amount. Alpaca's activity date can lag the day the money
+ * shows in equity (e.g. the initial deposit is dated the day after the first funded point). A flow that best matches
+ * the starting equity itself (the account was funded at the first point) is part of the base and is dropped —
+ * position 0 is always 0. Pure; exported for tests and for showing "deposits excluded".
+ */
+export function matchCashFlows(history: PortfolioHistoryInput, idx: number[]): number[] {
+  const out = idx.map(() => 0)
+  if (!history.cash_flows || idx.length < 2) return out
+  const dayMs = DAY_SECONDS * 1000
+  const pointDays = idx.map(i => Date.parse(nyDate(history.timestamp[i])))
+  const eq = (k: number) => history.equity[idx[k]] as number
+  // The starting equity can already contain deposits dated a little later; never absorb more than it holds.
+  let baseCapacity = eq(0)
+  const valid = history.cash_flows.filter(f => Number.isFinite(Date.parse(f.date)) && Number.isFinite(f.amount) && f.amount !== 0)
+  for (const f of valid) if (Date.parse(f.date) <= pointDays[0]) baseCapacity -= f.amount // already in the starting equity
+  // Latest first: later flows are matched to their equity jumps before an early one can be taken as the initial funding
+  const flows = valid.filter(f => Date.parse(f.date) > pointDays[0]).sort((x, y) => y.date.localeCompare(x.date))
+  for (const f of flows) {
+    const fDay = Date.parse(f.date)
+    const near = (d: number) => Math.abs(d - fDay) <= FLOW_MATCH_DAYS * dayMs
+    let best = -1
+    let bestErr = Infinity
+    for (let k = 1; k < idx.length; k++) {
+      const byDate = fDay > pointDays[k - 1] && fDay <= pointDays[k]
+      if (!byDate && !near(pointDays[k])) continue
+      const err = Math.abs(eq(k) - eq(k - 1) - out[k] - f.amount) // a day's move can only explain flows once
+      if (err < bestErr) { best = k; bestErr = err }
+    }
+    const intervalMatches = best > 0 && bestErr <= 0.2 * Math.abs(f.amount)
+    if (!intervalMatches && f.amount > 0 && near(pointDays[0]) && baseCapacity >= 0.95 * f.amount) {
+      baseCapacity -= f.amount // no day shows this deposit arriving → it was already in the starting equity
+      continue
+    }
+    if (best > 0) { out[best] += f.amount; continue }
+    const k = pointDays.findIndex((d, j) => j > 0 && d >= fDay)
+    if (k > 0) out[k] += f.amount
+  }
+  return out
+}
+
+/** Total deposits (+) / withdrawals (−) taken out of the return for this history (after the starting point). */
+export function excludedCashFlows(history: PortfolioHistoryInput, startSec = 0): number {
+  const idx: number[] = []
+  for (let i = 0; i < history.timestamp.length; i++) {
+    const eq = history.equity[i]
+    if (history.timestamp[i] >= startSec && isNum(eq) && eq > 0) idx.push(i)
+  }
+  return matchCashFlows(history, idx).reduce((a, b) => a + b, 0)
+}
+
 /**
  * Time-weighted return over the points at or after `startSec` (points with no positive equity — e.g. before the
  * account was funded — are ignored). Null with fewer than two usable points. Pure.
@@ -125,16 +179,17 @@ export function computeTimeWeightedReturn(history: PortfolioHistoryInput, startS
   const end_ts = history.timestamp[last]
   const days = (end_ts - start_ts) / DAY_SECONDS
 
-  // 0. Equity adjusted for actual deposits / withdrawals: r_k = (equity_k − flows in (t_{k−1}, t_k]) / equity_{k−1} − 1
+  // 0. Equity adjusted for actual deposits / withdrawals, each flow matched to the day the equity moved by it
   if (history.cash_flows) {
+    const flows = matchCashFlows(history, idx)
     let growth = 1
+    let plausible = true
     for (let k = 1; k < idx.length; k++) {
-      const prevDate = nyDate(history.timestamp[idx[k - 1]])
-      const date = nyDate(history.timestamp[idx[k]])
-      const flow = history.cash_flows.reduce((sum, f) => (f.date > prevDate && f.date <= date ? sum + f.amount : sum), 0)
-      growth *= ((history.equity[idx[k]] as number) - flow) / (history.equity[idx[k - 1]] as number)
+      const factor = ((history.equity[idx[k]] as number) - flows[k]) / (history.equity[idx[k - 1]] as number)
+      if (!(factor > 0.5 && factor < 2)) plausible = false // a ±50% day on a cash/stock account means a mis-matched flow
+      growth *= factor
     }
-    return { start_ts, end_ts, days, period_return_pct: (growth - 1) * 100, method: 'cash_flows' }
+    if (plausible) return { start_ts, end_ts, days, period_return_pct: (growth - 1) * 100, method: 'cash_flows' }
   }
 
   // 1. Chain daily returns from cumulative P/L and the previous point's equity

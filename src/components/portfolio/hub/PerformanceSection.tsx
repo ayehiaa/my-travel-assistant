@@ -14,6 +14,7 @@ import {
   type ChartPeriod,
 } from '@/lib/portfolioHub'
 import { formatUsd } from '@/lib/portfolioCalculator'
+import { excludedCashFlows } from '@/lib/returnMetrics'
 import type { TargetHorizon } from '@/types/database'
 
 interface Props {
@@ -49,10 +50,7 @@ export default async function PerformanceSection({ userId, period }: Props) {
   const chartValues = history ? history.equity.slice(from) : []
   const firstEquity = chartValues.find(v => v !== null && v > 0) ?? null
   const lastEquity = [...chartValues].reverse().find(v => v !== null) ?? null
-  const startDate = history && perf ? new Date(perf.start_ts * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null
-  const netFlows = history?.cash_flows && startDate
-    ? history.cash_flows.filter(f => f.date > startDate).reduce((sum, f) => sum + f.amount, 0)
-    : 0
+  const netFlows = history?.cash_flows ? excludedCashFlows(history) : 0
   const measuredDays = perf?.days ?? PERIOD_DAYS[period]
   const sinceLabel = perf?.funded_in_period ? ` since funded ${formatDay(perf.start_ts)} (${perf.days} days)` : ''
   const pill = perf === null ? null
