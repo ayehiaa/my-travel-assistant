@@ -1,6 +1,6 @@
 import { fetchLivePortfolio, loadAlpacaCredentials } from '@/lib/alpacaLivePortfolio'
 import { fetchPortfolioHistoryWithFlows } from '@/lib/alpacaClient'
-import { computeTimeWeightedReturn } from '@/lib/returnMetrics'
+import { computeTimeWeightedReturn, excludedCashFlows } from '@/lib/returnMetrics'
 import { normalizeExecution } from '@/lib/tradeExecution'
 import { readShariahScreening } from '@/lib/shariahRules'
 import { readCashTargetPct } from '@/lib/cashAllocation'
@@ -172,7 +172,7 @@ export async function performance(ctx: ToolContext, input: ToolInput<'performanc
     end_equity_usd: r2(last.equity),
     return_pct_deposit_adjusted: twr ? r2(twr.period_return_pct) : null,
     return_method: twr?.method ?? null,
-    deposits_withdrawals_usd: h.cash_flows ? r2(h.cash_flows.filter(f => f.date > first.date && f.date <= last.date).reduce((s, f) => s + f.amount, 0)) : null,
+    deposits_withdrawals_usd: h.cash_flows ? r2(excludedCashFlows(h)) : null,
     best_day: { date: best.date, change_usd: r2(best.change) },
     worst_day: { date: worst.date, change_usd: r2(worst.change) },
     equity_series: points.filter((_, i) => i % step === 0 || i === points.length - 1).map(p => ({ date: p.date, equity_usd: r2(p.equity) })),
