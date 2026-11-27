@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scaleLineChart } from './chartPath'
+import { formatChartValue, nearestPoint, niceTicks, scaleLineChart } from './chartPath'
 
 const box = { width: 100, height: 50, pad: 0 }
 
@@ -37,5 +37,37 @@ describe('scaleLineChart', () => {
   it('returns empty paths with fewer than 2 points', () => {
     expect(scaleLineChart([], box)).toMatchObject({ line: '', area: '', last: null })
     expect(scaleLineChart([null, 7], box)).toMatchObject({ line: '', min: 7, max: 7 })
+  })
+})
+
+describe('niceTicks', () => {
+  it('picks round steps covering the data', () => {
+    const t = niceTicks(99_750.2, 100_210.9, 4)
+    expect(t.step).toBe(200)
+    expect(t.ticks).toEqual([99_600, 99_800, 100_000, 100_200, 100_400])
+    expect(t.min).toBe(99_600)
+    expect(t.max).toBe(100_400)
+  })
+  it('handles a flat series and reversed input', () => {
+    expect(niceTicks(50, 50).ticks.length).toBeGreaterThan(1)
+    expect(niceTicks(10, 0).min).toBe(0)
+  })
+})
+
+describe('nearestPoint', () => {
+  it('returns the closest point by x', () => {
+    const pts = [{ x: 0 }, { x: 10 }, { x: 20 }]
+    expect(nearestPoint(pts, 14)).toBe(1)
+    expect(nearestPoint(pts, 16)).toBe(2)
+    expect(nearestPoint([], 3)).toBe(-1)
+  })
+})
+
+describe('formatChartValue', () => {
+  it('formats by unit and axis step', () => {
+    expect(formatChartValue(99_800, 'usd', 200)).toBe('$99,800')
+    expect(formatChartValue(99_901.36, 'usd')).toBe('$99,901.36')
+    expect(formatChartValue(-12.5, 'usd')).toBe('-$12.50')
+    expect(formatChartValue(22.5, 'kg', 2.5)).toBe('22.5 kg')
   })
 })
