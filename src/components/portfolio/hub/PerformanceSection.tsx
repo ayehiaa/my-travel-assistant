@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import LineChart from './LineChart'
-import { fetchPortfolioHistory } from '@/lib/alpacaClient'
+import { fetchPortfolioHistoryWithFlows } from '@/lib/alpacaClient'
 import { getCredentials, getSettingsRow } from '@/lib/portfolioHubData'
 import {
   CHART_PERIODS,
@@ -34,9 +34,9 @@ export default async function PerformanceSection({ userId, period }: Props) {
   const [creds, settingsRow] = await Promise.all([getCredentials(userId), getSettingsRow(userId)])
   if (!creds) return null
 
-  let history: Awaited<ReturnType<typeof fetchPortfolioHistory>> | null = null
+  let history: Awaited<ReturnType<typeof fetchPortfolioHistoryWithFlows>> | null = null
   try {
-    history = await fetchPortfolioHistory(ALPACA_PERIOD[period], PERIOD_TIMEFRAME[period], creds.keyId, creds.secret, creds.isPaper)
+    history = await fetchPortfolioHistoryWithFlows(ALPACA_PERIOD[period], PERIOD_TIMEFRAME[period], creds.keyId, creds.secret, creds.isPaper)
   } catch {
     history = null
   }
@@ -49,6 +49,10 @@ export default async function PerformanceSection({ userId, period }: Props) {
   const chartValues = history ? history.equity.slice(from) : []
   const firstEquity = chartValues.find(v => v !== null && v > 0) ?? null
   const lastEquity = [...chartValues].reverse().find(v => v !== null) ?? null
+  const startDate = history && perf ? new Date(perf.start_ts * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null
+  const netFlows = history?.cash_flows && startDate
+    ? history.cash_flows.filter(f => f.date > startDate).reduce((sum, f) => sum + f.amount, 0)
+    : 0
   const measuredDays = perf?.days ?? PERIOD_DAYS[period]
   const sinceLabel = perf?.funded_in_period ? ` since funded ${formatDay(perf.start_ts)} (${perf.days} days)` : ''
   const pill = perf === null ? null
@@ -71,6 +75,12 @@ export default async function PerformanceSection({ userId, period }: Props) {
             </p>
           ) : (
             <p className="mt-1 text-sm text-[var(--ink-3)]">Target for this period: {formatSignedPct(proratedTargetPct(target, horizon, PERIOD_DAYS[period]))}</p>
+          )}
+          {perf !== null && firstEquity !== null && lastEquity !== null && (
+            <p className="mt-0.5 font-mono text-xs text-[var(--ink-3)]">
+              {formatUsd(firstEquity)} → {formatUsd(lastEquity)}
+              {netFlows ? ` · ${netFlows > 0 ? 'deposits' : 'withdrawals'} ${formatUsd(Math.abs(netFlows))} excluded` : ''}
+            </p>
           )}
           <p className="mt-0.5 text-xs text-[var(--ink-4)]">
             Target is your {targetPct}% {horizon} goal, compounded to {measuredDays} days{perf?.verdict === 'too_early' ? '; a verdict needs 3+ weeks of history' : ''}.

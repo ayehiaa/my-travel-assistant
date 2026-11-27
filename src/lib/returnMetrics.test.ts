@@ -68,6 +68,25 @@ describe('computeTimeWeightedReturn', () => {
     expect(r?.days).toBe(2)
   })
 
+  it('prefers equity adjusted for real deposits / withdrawals over Alpaca P/L fields', () => {
+    // Funded 100k; P/L fields disagree with equity (Alpaca baseline quirk); no deposits since → equity change only.
+    const h = hist([100_000, 99_800, 100_050, 99_981.43], {
+      profit_loss: [0, -1200, -1400, -1400], profit_loss_pct: [0, -0.012, -0.014, -0.014], cash_flows: [],
+    })
+    const r = computeTimeWeightedReturn(h, T0)
+    expect(r?.method).toBe('cash_flows')
+    expect(r?.period_return_pct).toBeCloseTo(-0.01857, 5)
+  })
+
+  it('takes a mid-period deposit out of the return', () => {
+    // +10% day 1, deposit 1000 on day 2 (equity 2100), +10% day 3 → 21%, not +131%.
+    const dates = [0, 1, 2, 3].map(i => new Date((T0 + i * DAY) * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
+    const h = hist([1000, 1100, 2100, 2310], { cash_flows: [{ date: dates[2], amount: 1000 }] })
+    const r = computeTimeWeightedReturn(h, T0)
+    expect(r?.method).toBe('cash_flows')
+    expect(r?.period_return_pct).toBeCloseTo(21, 9)
+  })
+
   it('prefers the USD P/L chain over profit_loss_pct (which is wrong for accounts funded mid-period)', () => {
     const h = hist([100_000, 99_984.52], { profit_loss: [0, -15.48], profit_loss_pct: [0, -0.0136] })
     const r = computeTimeWeightedReturn(h, T0)
