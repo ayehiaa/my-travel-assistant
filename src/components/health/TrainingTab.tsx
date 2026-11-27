@@ -474,6 +474,8 @@ async function ExerciseHistory({ userId, enrolment, exerciseKey }: { userId: str
           <div className="mt-3 text-[var(--blue-700)]">
             <LineChart
               values={series.map(p => p.value)}
+              unit={unit === 'kg' ? 'kg' : unit === 's' ? 's' : 'number'}
+              pointLabels={series.map(p => fmtDay(p.date))}
               title={`${ex.name} — top set`}
               description={`Top set ${unit === 'kg' ? 'load (kg)' : 'hold (s)'} per session`}
               startLabel={entries[0] ? fmtDay(entries[0].date) : undefined}

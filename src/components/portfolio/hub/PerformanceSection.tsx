@@ -30,6 +30,14 @@ function formatDay(unixSeconds: number | undefined): string | undefined {
   return new Date(unixSeconds * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })
 }
 
+/** Scrub readout label: "Tue 25 Nov" for daily points, "Tue 25 Nov, 14:00" for hourly ones (UK time). */
+function formatPoint(unixSeconds: number, timeframe: '1H' | '1D'): string {
+  const d = new Date(unixSeconds * 1000)
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+  if (timeframe === '1D') return day
+  return `${day}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}`
+}
+
 /** Account value over time + period return vs the user's prorated target. Async: streams in its own Suspense. */
 export default async function PerformanceSection({ userId, period }: Props) {
   const [creds, settingsRow] = await Promise.all([getCredentials(userId), getSettingsRow(userId)])
@@ -106,6 +114,8 @@ export default async function PerformanceSection({ userId, period }: Props) {
       ) : (
         <LineChart
           values={chartValues}
+          unit="usd"
+          pointLabels={history.timestamp.slice(from).map(t => formatPoint(t, PERIOD_TIMEFRAME[period]))}
           baseline={firstEquity}
           className={perf !== null && perf.return_pct < 0 ? 'text-red-600' : 'text-emerald-600'}
           title={`Account value, last ${period}`}
