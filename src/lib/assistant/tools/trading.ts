@@ -1,5 +1,6 @@
 import { fetchLivePortfolio, loadAlpacaCredentials } from '@/lib/alpacaLivePortfolio'
-import { fetchPortfolioHistory } from '@/lib/alpacaClient'
+import { fetchPortfolioHistoryWithFlows } from '@/lib/alpacaClient'
+import { computeTimeWeightedReturn } from '@/lib/returnMetrics'
 import { normalizeExecution } from '@/lib/tradeExecution'
 import { readShariahScreening } from '@/lib/shariahRules'
 import { readCashTargetPct } from '@/lib/cashAllocation'
@@ -147,16 +148,17 @@ export async function performance(ctx: ToolContext, input: ToolInput<'performanc
   const period = input.period ?? '1M'
   let h
   try {
-    h = await fetchPortfolioHistory(period, '1D', creds.keyId, creds.secret, creds.isPaper)
+    h = await fetchPortfolioHistoryWithFlows(period, '1D', creds.keyId, creds.secret, creds.isPaper)
   } catch {
     throw new ToolError('Alpaca did not return performance history — try again shortly.')
   }
   const points = h.timestamp
-    .map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), equity: h.equity[i], pl: h.profit_loss[i] ?? null, plPct: h.profit_loss_pct[i] ?? null }))
-    .filter(p => typeof p.equity === 'number' && p.equity > 0) as Array<{ date: string; equity: number; pl: number | null; plPct: number | null }>
+    .map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), equity: h.equity[i] }))
+    .filter(p => typeof p.equity === 'number' && p.equity > 0) as Array<{ date: string; equity: number }>
   if (points.length < 2) throw new ToolError('Not enough account history for that period yet.')
   const first = points[0]
   const last = points[points.length - 1]
+  const twr = computeTimeWeightedReturn(h, 0)
   const days = points.slice(1).map((p, i) => ({ date: p.date, change: p.equity - points[i].equity }))
   const best = days.reduce((a, b) => (b.change > a.change ? b : a))
   const worst = days.reduce((a, b) => (b.change < a.change ? b : a))
@@ -168,8 +170,9 @@ export async function performance(ctx: ToolContext, input: ToolInput<'performanc
     to: last.date,
     start_equity_usd: r2(first.equity),
     end_equity_usd: r2(last.equity),
-    return_pct_deposit_adjusted: last.plPct !== null ? r2(last.plPct * 100) : null,
-    profit_loss_usd: last.pl !== null ? r2(last.pl) : null,
+    return_pct_deposit_adjusted: twr ? r2(twr.period_return_pct) : null,
+    return_method: twr?.method ?? null,
+    deposits_withdrawals_usd: h.cash_flows ? r2(h.cash_flows.filter(f => f.date > first.date && f.date <= last.date).reduce((s, f) => s + f.amount, 0)) : null,
     best_day: { date: best.date, change_usd: r2(best.change) },
     worst_day: { date: worst.date, change_usd: r2(worst.change) },
     equity_series: points.filter((_, i) => i % step === 0 || i === points.length - 1).map(p => ({ date: p.date, equity_usd: r2(p.equity) })),

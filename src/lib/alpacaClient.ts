@@ -464,6 +464,67 @@ export async function fetchPortfolioHistory(
 }
 
 /**
+ * Portfolio history plus the account's deposits / withdrawals over the same window, so returns can exclude them.
+ * If the activities call fails, `cash_flows` is left out and callers fall back to Alpaca's P/L fields.
+ */
+export async function fetchPortfolioHistoryWithFlows(
+  period: '1W' | '1M' | '3M' | '1A',
+  timeframe: '1H' | '1D',
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<PortfolioHistory & { cash_flows?: Array<{ date: string; amount: number }> }> {
+  const history = await fetchPortfolioHistory(period, timeframe, keyId, secret, isPaper)
+  const firstTs = history.timestamp.find(t => Number.isFinite(t))
+  if (firstTs === undefined) return history
+  const after = new Date((firstTs - 2 * 86_400) * 1000).toISOString().slice(0, 10)
+  try {
+    return { ...history, cash_flows: await fetchCashFlows(after, keyId, secret, isPaper) }
+  } catch {
+    return history
+  }
+}
+
+/** Activity types that move money into or out of the account (deposits, withdrawals, cash journals). */
+const CASH_FLOW_ACTIVITY_TYPES = 'CSD,CSW,JNLC'
+
+/**
+ * External cash flows (deposits +, withdrawals −) since `afterDate` (YYYY-MM-DD), oldest first, from
+ * GET /v2/account/activities. Used to take deposits out of the performance figure. Throws on non-2xx.
+ */
+export async function fetchCashFlows(
+  afterDate: string,
+  keyId: string,
+  secret: string,
+  isPaper: boolean
+): Promise<Array<{ date: string; amount: number }>> {
+  const base = getAlpacaBaseUrl(isPaper)
+  const flows: Array<{ date: string; amount: number }> = []
+  let pageToken: string | null = null
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({ activity_types: CASH_FLOW_ACTIVITY_TYPES, after: afterDate, direction: 'asc', page_size: '100' })
+    if (pageToken) params.set('page_token', pageToken)
+    const response = await fetch(`${base}/v2/account/activities?${params.toString()}`, {
+      headers: alpacaHeaders(keyId, secret),
+      signal: AbortSignal.timeout(10000),
+      cache: 'no-store',
+    })
+    if (!response.ok) throw new Error(`Alpaca activities fetch failed: ${response.status}`)
+    const data = await response.json() as Array<{ id?: string; date?: string; net_amount?: string | number; status?: string }>
+    if (!Array.isArray(data)) break
+    for (const a of data) {
+      const amount = parseOptionalNum(a.net_amount)
+      if (typeof a.date !== 'string' || amount === null || amount === 0) continue
+      if (a.status && a.status !== 'executed') continue
+      flows.push({ date: a.date.slice(0, 10), amount })
+    }
+    if (data.length < 100 || !data[data.length - 1]?.id) break
+    pageToken = data[data.length - 1].id as string
+  }
+  return flows
+}
+
+/**
  * Kill switch: cancel EVERY open order on the account (DELETE /v2/orders).
  * Returns true when Alpaca accepted the request (207 multi-status counts as accepted). Never throws.
  */

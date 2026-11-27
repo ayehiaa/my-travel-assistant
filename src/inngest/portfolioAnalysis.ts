@@ -27,7 +27,7 @@ import {
 import { computeActionList } from '@/lib/portfolioCalculator'
 import { FULL_SCREENING_CONFIG, effectiveScreeningConfig, readScreeningSettings, type EffectiveScreeningConfig } from '@/lib/screeningConfig'
 import { loadAlpacaCredentials, fetchLivePortfolio } from '@/lib/alpacaLivePortfolio'
-import { fetchPortfolioHistory, isTradeableAsset } from '@/lib/alpacaClient'
+import { fetchPortfolioHistoryWithFlows, isTradeableAsset } from '@/lib/alpacaClient'
 import { getStarterUniverse } from '@/lib/starterUniverse'
 import { readAutopilotSettings } from '@/lib/schedule'
 import { buildScheduledRunInfo } from '@/lib/autopilot'
@@ -601,7 +601,7 @@ export const portfolioAnalysis = inngest.createFunction(
         if (!programmeStart) return buildRealReturnMetrics({ ...base, history: null, programmeStart: null })
         const creds = await loadAlpacaCredentials(user_id)
         if (!creds) return buildRealReturnMetrics({ ...base, history: null, programmeStart, unavailableReason: 'No Alpaca account connected' })
-        const history = await fetchPortfolioHistory('3M', '1D', creds.keyId, creds.secret, creds.isPaper)
+        const history = await fetchPortfolioHistoryWithFlows('3M', '1D', creds.keyId, creds.secret, creds.isPaper)
         return buildRealReturnMetrics({ ...base, history, programmeStart })
       } catch {
         return buildRealReturnMetrics({ ...base, history: null, programmeStart: programmeStart ?? now, unavailableReason: 'Account history could not be fetched' })

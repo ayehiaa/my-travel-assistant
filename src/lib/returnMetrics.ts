@@ -7,6 +7,8 @@ import type { TargetHorizon } from '@/types/database'
  * Source: Alpaca GET /v2/account/portfolio/history (period 3M, timeframe 1D), fetched inside the analysis step.
  *
  * Return method (time-weighted, deposits / withdrawals excluded), in order of preference:
+ *  0. `cash_flows` — daily equity change minus the account's actual deposits / withdrawals (Alpaca activities
+ *     CSD/CSW/JNLC). Independent of how Alpaca defines its P/L baseline, and matches the account value the user sees.
  *  1. `profit_loss` — cumulative P/L in USD (excludes deposits / withdrawals). Daily returns are chained from the
  *     first FUNDED point: r_i = (pl_i − pl_{i−1}) / equity_{i−1}; window return = Π(1 + r_i) − 1. Preferred because
  *     Alpaca's `profit_loss_pct` is measured against the period's base value, which is wrong for an account funded
@@ -31,7 +33,7 @@ export const RETURN_WINDOW_MONTHS = 3
 const DAY_SECONDS = 86_400
 const DAYS_PER_YEAR = 365
 
-export type ReturnMethod = 'profit_loss_pct' | 'profit_loss' | 'equity'
+export type ReturnMethod = 'cash_flows' | 'profit_loss_pct' | 'profit_loss' | 'equity'
 export type ReturnWindow = 'programme_start' | 'three_months'
 
 export interface PortfolioHistoryInput {
@@ -40,6 +42,16 @@ export interface PortfolioHistoryInput {
   equity: Array<number | null>
   profit_loss?: Array<number | null>
   profit_loss_pct?: Array<number | null>
+  /**
+   * External deposits (+) / withdrawals (−) by date (YYYY-MM-DD, New York), from Alpaca account activities. When
+   * present (even empty) the return is computed from equity adjusted for these flows — the most reliable method.
+   */
+  cash_flows?: Array<{ date: string; amount: number }>
+}
+
+/** Trading date of a history point (Alpaca timestamps are US market time). */
+function nyDate(sec: number): string {
+  return new Date(sec * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
 
 // ── Target conversion ───────────────────────────────────────────────────────
@@ -112,6 +124,18 @@ export function computeTimeWeightedReturn(history: PortfolioHistoryInput, startS
   const start_ts = history.timestamp[first]
   const end_ts = history.timestamp[last]
   const days = (end_ts - start_ts) / DAY_SECONDS
+
+  // 0. Equity adjusted for actual deposits / withdrawals: r_k = (equity_k − flows in (t_{k−1}, t_k]) / equity_{k−1} − 1
+  if (history.cash_flows) {
+    let growth = 1
+    for (let k = 1; k < idx.length; k++) {
+      const prevDate = nyDate(history.timestamp[idx[k - 1]])
+      const date = nyDate(history.timestamp[idx[k]])
+      const flow = history.cash_flows.reduce((sum, f) => (f.date > prevDate && f.date <= date ? sum + f.amount : sum), 0)
+      growth *= ((history.equity[idx[k]] as number) - flow) / (history.equity[idx[k - 1]] as number)
+    }
+    return { start_ts, end_ts, days, period_return_pct: (growth - 1) * 100, method: 'cash_flows' }
+  }
 
   // 1. Chain daily returns from cumulative P/L and the previous point's equity
   const pl = history.profit_loss ?? []
@@ -291,7 +315,7 @@ const RealReturnMetricsSchema = z.object({
   start_date: z.string().nullable(),
   end_date: z.string().nullable(),
   days: z.number(),
-  method: z.enum(['profit_loss_pct', 'profit_loss', 'equity']).nullable(),
+  method: z.enum(['cash_flows', 'profit_loss_pct', 'profit_loss', 'equity']).nullable(),
   period_return_pct: z.number().nullable(),
   annualised_return_pct: z.number().nullable(),
   basis: z.enum(['annualised', 'period']).nullable(),
