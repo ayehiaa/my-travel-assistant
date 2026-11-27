@@ -6,10 +6,11 @@ import {
   CHART_PERIODS,
   PERIOD_DAYS,
   PERIOD_TIMEFRAME,
-  computePeriodReturnPct,
+  firstFundedIndex,
   formatSignedPct,
   hubHref,
   proratedTargetPct,
+  summarisePeriodPerformance,
   type ChartPeriod,
 } from '@/lib/portfolioHub'
 import { formatUsd } from '@/lib/portfolioCalculator'
@@ -42,36 +43,37 @@ export default async function PerformanceSection({ userId, period }: Props) {
 
   const targetPct = typeof settingsRow?.target_return_pct === 'number' ? settingsRow.target_return_pct : Number(settingsRow?.target_return_pct ?? 10)
   const horizon: TargetHorizon = settingsRow?.target_horizon === 'monthly' ? 'monthly' : 'annual'
-  const periodTarget = proratedTargetPct(Number.isFinite(targetPct) ? targetPct : 10, horizon, PERIOD_DAYS[period])
-  const periodReturn = history ? computePeriodReturnPct(history.equity, history.profit_loss_pct) : null
-  const firstEquity = history?.equity.find(v => v !== null && v > 0) ?? null
-  const lastEquity = history ? [...history.equity].reverse().find(v => v !== null) ?? null : null
-  const onTrack = periodReturn !== null && periodReturn >= periodTarget
+  const target = Number.isFinite(targetPct) ? targetPct : 10
+  const perf = history ? summarisePeriodPerformance(history, target, horizon) : null
+  const from = history ? firstFundedIndex(history.equity) : 0
+  const chartValues = history ? history.equity.slice(from) : []
+  const firstEquity = chartValues.find(v => v !== null && v > 0) ?? null
+  const lastEquity = [...chartValues].reverse().find(v => v !== null) ?? null
+  const measuredDays = perf?.days ?? PERIOD_DAYS[period]
+  const sinceLabel = perf?.funded_in_period ? ` since funded ${formatDay(perf.start_ts)} (${perf.days} days)` : ''
+  const pill = perf === null ? null
+    : perf.verdict === 'on_track' ? { text: 'On track', cls: 'bg-emerald-100 text-emerald-800' }
+    : perf.verdict === 'behind' ? { text: 'Behind target', cls: 'bg-amber-100 text-amber-800' }
+    : { text: 'Too early to tell', cls: 'bg-[var(--paper-2)] text-[var(--ink-3)]' }
 
   return (
     <section className="rounded-xl border border-[var(--rule)] bg-white p-4 md:p-5" aria-labelledby="perf-heading">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="perf-heading" className="text-sm font-semibold text-[var(--ink)]">Performance</h3>
-          {periodReturn !== null ? (
+          {perf !== null && pill !== null ? (
             <p className="mt-1 text-sm text-[var(--ink-2)]">
-              <span className={`font-mono text-base font-bold ${periodReturn >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {formatSignedPct(periodReturn)}
+              <span className={`font-mono text-base font-bold ${perf.return_pct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {formatSignedPct(perf.return_pct)}
               </span>{' '}
-              this period · target {formatSignedPct(periodTarget)}{' '}
-              <span
-                className={`ml-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  onTrack ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                {onTrack ? 'On track' : 'Behind target'}
-              </span>
+              {sinceLabel || 'this period'} · target {formatSignedPct(perf.target_pct)}{' '}
+              <span className={`ml-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${pill.cls}`}>{pill.text}</span>
             </p>
           ) : (
-            <p className="mt-1 text-sm text-[var(--ink-3)]">Target for this period: {formatSignedPct(periodTarget)}</p>
+            <p className="mt-1 text-sm text-[var(--ink-3)]">Target for this period: {formatSignedPct(proratedTargetPct(target, horizon, PERIOD_DAYS[period]))}</p>
           )}
           <p className="mt-0.5 text-xs text-[var(--ink-4)]">
-            Target is your {targetPct}% {horizon} goal, compounded to {PERIOD_DAYS[period]} days.
+            Target is your {targetPct}% {horizon} goal, compounded to {measuredDays} days{perf?.verdict === 'too_early' ? '; a verdict needs 3+ weeks of history' : ''}.
           </p>
         </div>
         <div className="flex rounded-lg bg-[var(--paper-2)] p-0.5" role="group" aria-label="Chart period">
@@ -95,16 +97,16 @@ export default async function PerformanceSection({ userId, period }: Props) {
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Could not load account history from Alpaca.</p>
       ) : (
         <LineChart
-          values={history.equity}
+          values={chartValues}
           baseline={firstEquity}
-          className={periodReturn !== null && periodReturn < 0 ? 'text-red-600' : 'text-emerald-600'}
+          className={perf !== null && perf.return_pct < 0 ? 'text-red-600' : 'text-emerald-600'}
           title={`Account value, last ${period}`}
           description={
             firstEquity !== null && lastEquity !== null
-              ? `Account value moved from ${formatUsd(firstEquity)} to ${formatUsd(lastEquity)}${periodReturn !== null ? `, a return of ${formatSignedPct(periodReturn)}` : ''}. Target for the period: ${formatSignedPct(periodTarget)}.`
+              ? `Account value moved from ${formatUsd(firstEquity)} to ${formatUsd(lastEquity)}${perf !== null ? `, a return of ${formatSignedPct(perf.return_pct)}. Target: ${formatSignedPct(perf.target_pct)}.` : '.'}`
               : 'Not enough data.'
           }
-          startLabel={formatDay(history.timestamp[0])}
+          startLabel={formatDay(history.timestamp[from])}
           endLabel={formatDay(history.timestamp[history.timestamp.length - 1])}
         />
       )}

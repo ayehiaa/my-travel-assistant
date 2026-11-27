@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   computeAllocationDrift,
   computeDayChange,
-  computePeriodReturnPct,
+  firstFundedIndex,
+  summarisePeriodPerformance,
   formatSignedPct,
   formatSignedUsd,
   hubHref,
@@ -93,17 +94,42 @@ describe('computeDayChange', () => {
   })
 })
 
-describe('computePeriodReturnPct', () => {
-  it('prefers the last non-null deposit-adjusted profit_loss_pct', () => {
-    expect(computePeriodReturnPct([100, 200], [0, 0.05, null])).toBeCloseTo(5)
+describe('summarisePeriodPerformance', () => {
+  const DAY = 86_400
+  const T0 = Date.UTC(2026, 7, 28) / 1000
+  const ts = (n: number) => Array.from({ length: n }, (_, i) => T0 + i * DAY)
+
+  it('measures from funding and prorates the target to the funded days, not the whole period', () => {
+    // 80 unfunded days, then $100k funded for 10 days ending at -$15.48; Alpaca's pct against a $0 base is junk.
+    const equity = [...Array(80).fill(0), 100_000, 99_950, 99_901.36, ...Array(7).fill(99_901.36), 99_984.52]
+    const pl = [...Array(80).fill(0), 0, -50, -98.64, ...Array(7).fill(-98.64), -15.48]
+    const pct = [...Array(90).fill(0), -0.0136]
+    const p = summarisePeriodPerformance({ timestamp: ts(91), equity, profit_loss: pl, profit_loss_pct: pct }, 10, 'annual')
+    expect(p?.funded_in_period).toBe(true)
+    expect(p?.days).toBe(10)
+    expect(p?.return_pct).toBeCloseTo(-0.0155, 3)
+    expect(p?.target_pct).toBeCloseTo((Math.pow(1.1, 10 / 365) - 1) * 100, 6) // ≈ 0.26%, not 2.40%
+    expect(p?.verdict).toBe('too_early')
   })
-  it('falls back to last / first positive equity', () => {
-    expect(computePeriodReturnPct([null, 0, 1000, 1100])).toBeCloseTo(10)
+
+  it('gives a verdict once there are 3+ weeks of history', () => {
+    const equity = Array.from({ length: 31 }, (_, i) => 1000 + i)
+    const pl = equity.map(e => e - 1000)
+    const p = summarisePeriodPerformance({ timestamp: ts(31), equity, profit_loss: pl }, 10, 'annual')
+    expect(p?.funded_in_period).toBe(false)
+    expect(p?.return_pct).toBeCloseTo(3, 6)
+    expect(p?.verdict).toBe('on_track')
   })
-  it('returns null without enough data', () => {
-    expect(computePeriodReturnPct([])).toBeNull()
-    expect(computePeriodReturnPct([1000])).toBeNull()
-    expect(computePeriodReturnPct([0, 0])).toBeNull()
+
+  it('is null without two funded points', () => {
+    expect(summarisePeriodPerformance({ timestamp: ts(2), equity: [0, 0] }, 10, 'annual')).toBeNull()
+  })
+})
+
+describe('firstFundedIndex', () => {
+  it('skips leading empty points', () => {
+    expect(firstFundedIndex([null, 0, 0, 500, 600])).toBe(3)
+    expect(firstFundedIndex([0, 0])).toBe(0)
   })
 })
 

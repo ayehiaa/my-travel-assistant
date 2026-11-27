@@ -68,6 +68,13 @@ describe('computeTimeWeightedReturn', () => {
     expect(r?.days).toBe(2)
   })
 
+  it('prefers the USD P/L chain over profit_loss_pct (which is wrong for accounts funded mid-period)', () => {
+    const h = hist([100_000, 99_984.52], { profit_loss: [0, -15.48], profit_loss_pct: [0, -0.0136] })
+    const r = computeTimeWeightedReturn(h, T0)
+    expect(r?.method).toBe('profit_loss')
+    expect(r?.period_return_pct).toBeCloseTo(-0.01548, 5)
+  })
+
   it('excludes a deposit when chaining daily returns from profit_loss', () => {
     // Day 1: +10% on 1000 (pl 100) → 1100. Day 2: deposit 1000 → 2100 (pl unchanged). Day 3: +10% on 2100 → 2310.
     const h = hist([1000, 1100, 2100, 2310], { profit_loss: [0, 100, 100, 310] })

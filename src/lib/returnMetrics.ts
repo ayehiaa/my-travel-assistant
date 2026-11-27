@@ -7,11 +7,12 @@ import type { TargetHorizon } from '@/types/database'
  * Source: Alpaca GET /v2/account/portfolio/history (period 3M, timeframe 1D), fetched inside the analysis step.
  *
  * Return method (time-weighted, deposits / withdrawals excluded), in order of preference:
- *  1. `profit_loss_pct` — Alpaca's cumulative, cash-flow-adjusted return per point (fraction, relative to the start of
- *     the requested period). The window return between points a and b is (1 + c_b) / (1 + c_a) − 1. This is the same
- *     series the hub's Performance chart uses, so the UI and the AI agree.
- *  2. `profit_loss` — cumulative P/L in USD (excludes deposits / withdrawals). Daily returns are chained:
- *     r_i = (pl_i − pl_{i−1}) / equity_{i−1}; window return = Π(1 + r_i) − 1.
+ *  1. `profit_loss` — cumulative P/L in USD (excludes deposits / withdrawals). Daily returns are chained from the
+ *     first FUNDED point: r_i = (pl_i − pl_{i−1}) / equity_{i−1}; window return = Π(1 + r_i) − 1. Preferred because
+ *     Alpaca's `profit_loss_pct` is measured against the period's base value, which is wrong for an account funded
+ *     part-way through the period (base 0). The hub's Performance card uses the same function, so the UI and AI agree.
+ *  2. `profit_loss_pct` — Alpaca's cumulative return per point (fraction). The window return between points a and b
+ *     is (1 + c_b) / (1 + c_a) − 1.
  *  3. `equity` only — last / first − 1. NOT deposit-adjusted; flagged as such (only when Alpaca sends no P/L data).
  *
  * Window: from the later of (the user's first complete recommendation = programme start, today − 3 months) to the
@@ -112,15 +113,7 @@ export function computeTimeWeightedReturn(history: PortfolioHistoryInput, startS
   const end_ts = history.timestamp[last]
   const days = (end_ts - start_ts) / DAY_SECONDS
 
-  // 1. Cumulative cash-flow-adjusted percentage
-  const pct = history.profit_loss_pct ?? []
-  const cFirst = pct[first]
-  const cLast = pct[last]
-  if (isNum(cFirst) && isNum(cLast) && 1 + cFirst > 0) {
-    return { start_ts, end_ts, days, period_return_pct: ((1 + cLast) / (1 + cFirst) - 1) * 100, method: 'profit_loss_pct' }
-  }
-
-  // 2. Chain daily returns from cumulative P/L and the previous point's equity
+  // 1. Chain daily returns from cumulative P/L and the previous point's equity
   const pl = history.profit_loss ?? []
   if (idx.every(i => isNum(pl[i]))) {
     let growth = 1
@@ -130,6 +123,14 @@ export function computeTimeWeightedReturn(history: PortfolioHistoryInput, startS
       growth *= 1 + dayPl / prevEq
     }
     return { start_ts, end_ts, days, period_return_pct: (growth - 1) * 100, method: 'profit_loss' }
+  }
+
+  // 2. Cumulative cash-flow-adjusted percentage
+  const pct = history.profit_loss_pct ?? []
+  const cFirst = pct[first]
+  const cLast = pct[last]
+  if (isNum(cFirst) && isNum(cLast) && 1 + cFirst > 0) {
+    return { start_ts, end_ts, days, period_return_pct: ((1 + cLast) / (1 + cFirst) - 1) * 100, method: 'profit_loss_pct' }
   }
 
   // 3. Equity only (not deposit-adjusted)
